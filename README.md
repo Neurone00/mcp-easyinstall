@@ -1,7 +1,7 @@
 # Adobe MCP — easy install
 
 Let **Claude** and **ChatGPT** drive Adobe Illustrator, After Effects, Premiere Pro,
-Photoshop and InDesign.
+and Photoshop.
 
 One app. Nothing else to install — no Node, no Python, no Homebrew, no terminal.
 
@@ -27,13 +27,13 @@ That's it. The window tells you what's connected and what isn't.
 | | |
 |---|---|
 | **Illustrator, After Effects** | Fully automatic. Installs the panel, opens it, done. |
-| **Photoshop, Premiere, InDesign** | One extra click — see below. |
+| **Photoshop, Premiere** | One extra click — see below. |
 | **Claude Desktop, Claude Code** | Connected for you. |
 | **ChatGPT desktop, Codex CLI, IDE extension** | Connected for you. |
 
 Adobe MCP lives in your **menu bar** (the ✨ icon). Click it → **Open Control Panel**
 to get back to the settings window any time, or **Quit Adobe MCP** to stop it. There's
-also a **⚙** button in the MCP panel inside each Adobe app.
+also a **⚙** button in the Illustrator and After Effects panels.
 
 Keep it running while you work.
 
@@ -49,8 +49,8 @@ out of step with it.
 
 ### The extra click
 
-Adobe only auto-installs plugins that Adobe itself has signed. Photoshop, Premiere
-and InDesign use that newer plugin system, so their panel loads through Adobe's free
+Adobe only auto-installs plugins that Adobe itself has signed. Photoshop and Premiere
+use that newer plugin system, so their panel loads through Adobe's free
 **UXP Developer Tool** (available in Creative Cloud).
 
 Adobe MCP adds the plugin to that tool for you — you press **Load** next to it once.
@@ -64,7 +64,7 @@ so those are fully automatic.
 Open the MCP panel inside the Adobe app and leave it open:
 
 - Illustrator / After Effects → **Window → Extensions → MCP Agent**
-- Photoshop / InDesign → **Plugins → MCP Agent**
+- Photoshop → **Plugins → MCP Agent**
 - Premiere Pro → **Window → MCP Agent**
 
 Then just ask:
@@ -118,6 +118,12 @@ Claude / Codex  ──MCP──▶  Adobe MCP  ──socket.io──▶  panel i
 connect to. The MCP servers themselves are Python, run through a bundled `uv`.
 
 <br>
+
+## What it can do
+
+[**CAPABILITIES.md**](CAPABILITIES.md) lists every tool in both apps, and — just as
+importantly — what Adobe's scripting API cannot reach, so nothing gets promised
+that can't be delivered.
 
 ## Illustrator tools
 

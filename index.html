@@ -17,7 +17,6 @@
   --idle: #b9b9c2;
   --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px rgba(20,20,30,.05);
 }
-:root:not([data-theme="light"]) { }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #131317;
@@ -66,7 +65,7 @@ h2 {
   font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
   color: var(--ink-soft); font-weight: 620; margin: 40px 0 12px;
 }
-h2 .num {
+h2 .num[aria-hidden] {
   display: inline-grid; place-items: center; width: 18px; height: 18px;
   border-radius: 50%; background: var(--accent); color: #fff;
   font-size: 11px; margin-right: 7px; vertical-align: -3px; letter-spacing: 0;
@@ -76,7 +75,10 @@ h2 .num {
         box-shadow: var(--shadow); overflow: hidden; }
 .row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--line); }
 .row:first-child { border-top: 0; }
-.row.off { opacity: .45; }
+/* Was opacity:.45 on the whole row, which put the note at about 1.9:1 —
+   far below the 4.5:1 WCAG asks for. Dim the icon, keep the text readable. */
+.row.off .glyph { opacity: .4; }
+.row.off .name { color: var(--ink-soft); }
 
 .glyph {
   width: 34px; height: 34px; flex: none; border-radius: 8px; display: grid; place-items: center;
@@ -86,9 +88,16 @@ h2 .num {
 .meta .name { font-weight: 560; }
 .meta .note { font-size: 13px; color: var(--ink-soft); }
 
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; }
-.dot.live { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
-.dot.part { background: var(--warn); }
+/* Status was an 8px coloured circle and nothing else: invisible to a screen
+   reader, and green vs amber at that size is not distinguishable for a
+   red/green colourblind user. Now every state carries a word. */
+.pill { display: inline-flex; align-items: center; gap: 6px; flex: none;
+        font-size: 12px; font-weight: 560; color: var(--ink-soft); white-space: nowrap; }
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; }
+.pill.live { color: var(--ok); }
+.pill.live .dot { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.pill.part { color: var(--warn); }
+.pill.part .dot { background: var(--warn); }
 
 button {
   font: inherit; font-size: 13.5px; font-weight: 550; padding: 7px 14px; border-radius: 8px;
@@ -98,9 +107,13 @@ button {
 button:hover:not(:disabled) { border-color: var(--ink-soft); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover:not(:disabled) { filter: brightness(1.08); }
-button:disabled { opacity: .45; cursor: default; }
+button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" the least legible text on the page */
+.acts { display: flex; gap: 6px; flex: none; }
+.consent { margin-top: 8px; font-size: 12.5px; color: var(--ink-soft);
+  background: var(--bg); border-radius: 8px; padding: 9px 11px; }
 button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8px; }
 
+#what-changes { margin-top: 6px; }
 .hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
 .hero .said { color: var(--ink-soft); font-size: 13.5px; }
@@ -123,18 +136,24 @@ footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: 
 #toast.show { transform: translate(-50%, 0); }
 @media (max-width: 520px) {
   .wrap { padding-top: 28px; }
-  .row { flex-wrap: wrap; }
-  .meta { flex-basis: calc(100% - 100px); }
+  /* Wrapping pushed the status and button onto a second line, left-aligned
+     under the icon, which read as broken rather than adapted. */
+  .row { align-items: flex-start; }
+  .row .glyph { width: 28px; height: 28px; font-size: 11px; }
+  .hero { flex-wrap: wrap; }
+}
+button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
 }
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
 
   <header>
     <h1>Adobe MCP</h1>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
-    <div class="banner hidden" id="banner">
+    <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
       <div style="flex:1">
         <b id="banner-title"></b>
         <p id="banner-body"></p>
@@ -145,22 +164,33 @@ footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: 
 
   <div class="hero">
     <button class="primary" id="setup-all">Set everything up</button>
-    <span class="said" id="setup-said">One click. Takes a few seconds.</span>
+    <span class="said" id="setup-said">Installs the panels and connects your assistants.</span>
   </div>
+  <details id="what-changes"><summary>What does this change on my Mac?</summary>
+    <ul class="steps">
+      <li>Copies the MCP panels into <code>~/Library/Application Support/Adobe/CEP/extensions</code></li>
+      <li>Turns on Adobe's <b>PlayerDebugMode</b>, a global Adobe preference, so unsigned
+          panels are allowed to load</li>
+      <li>Adds Adobe MCP's servers to Claude Desktop, Claude Code and Codex config files
+          &mdash; a timestamped backup of each is kept beside it</li>
+      <li>Downloads a small Python runtime on first run</li>
+      <li>It never touches your documents</li>
+    </ul>
+  </details>
 
-  <h2><span class="num">1</span> Your Adobe apps</h2>
+  <h2><span class="num" aria-hidden="true">1</span> Your Adobe apps</h2>
   <div class="list" id="apps"></div>
 
-  <h2><span class="num">2</span> Your AI assistants</h2>
+  <h2><span class="num" aria-hidden="true">2</span> Your AI assistants</h2>
   <div class="list" id="clients"></div>
 
   <footer>
     Adobe MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
     <button class="ghost" id="quit" style="margin-left:6px">Quit</button>
   </footer>
-</div>
+</main>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const TINT = {
@@ -168,9 +198,8 @@ const TINT = {
   illustrator: "#330000,#ff9a00",
   aftereffects:"#00005b,#9999ff",
   premiere:    "#2a0634,#ea77ff",
-  indesign:    "#49021f,#ff3366",
 };
-const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr", indesign:"Id" };
+const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr" };
 
 let state = null;
 
@@ -255,60 +284,62 @@ function escapeHtml(s) {
 
 function appRow(a) {
   const [bg, fg] = TINT[a.key].split(",");
-  const ready = a.live;
   const needsPanel = a.kind === "cep" && a.panelInstalled === false;
 
-  let note, dot, action;
+  // Each state names itself. "Ready" is not a warning; an app that simply
+  // isn't running is not a problem to be fixed.
+  let note, status, tone, action = "";
   if (!a.installed) {
     note = "Not installed on this Mac";
-    dot = "";
-    action = "";
-  } else if (ready) {
-    note = "Connected &middot; " + (a.clients.length ? a.clients.length + " assistant" + (a.clients.length > 1 ? "s" : "") : "no assistant yet");
-    dot = "live";
-    action = `<button class="ghost" data-open="${a.key}">Open app</button>`;
+    status = "Unavailable"; tone = "";
+  } else if (a.live) {
+    note = a.clients.length
+      ? `${a.clients.length} assistant${a.clients.length > 1 ? "s" : ""} can drive it`
+      : "Connect an assistant below to use it";
+    status = "Ready"; tone = "live";
+    action = `<button data-open="${a.key}">Open app</button>`;
   } else if (needsPanel) {
-    note = "Panel not installed yet";
-    dot = "";
+    note = "The panel hasn't been installed yet";
+    status = "Not set up"; tone = "";
     action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
   } else if (a.kind === "cep" && a.panelOpen) {
-    // The panel is showing but hasn't connected — one click, not a mystery.
-    note = "Panel is open but not connected yet";
-    dot = "part";
+    note = "The panel is open but hasn't connected";
+    status = "Idle"; tone = "part";
     action = `<button class="primary" data-connectpanel="${a.key}">Connect</button>`;
   } else if (a.kind === "cep") {
-    note = "Open the panel: " + a.panelMenu;
-    dot = "part";
-    action = `<button data-open="${a.key}">Open app</button>`;
+    note = `Open the panel: ${a.panelMenu}`;
+    status = "Panel closed"; tone = "";
+    action = `<button data-open="${a.key}">Open ${a.label}</button>`;
   } else {
-    note = "Needs Adobe's UXP Developer Tool";
-    dot = "part";
+    note = "Needs one Load click in Adobe's UXP Developer Tool";
+    status = "Not set up"; tone = "";
     action = `<button data-uxp="${a.key}">Set up</button>`;
   }
 
   const row = el(`
     <div class="row ${a.installed ? "" : "off"}">
-      <div class="glyph" style="background:${bg};color:${fg}">${SHORT[a.key]}</div>
+      <div class="glyph" style="background:${bg};color:${fg}" aria-hidden="true">${SHORT[a.key]}</div>
       <div class="meta">
         <div class="name">${a.label}</div>
         <div class="note">${note}</div>
       </div>
-      ${dot ? `<span class="dot ${dot}"></span>` : ""}
+      <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       ${action}
     </div>`);
 
-  if (!ready && a.installed && a.kind === "cep" && !needsPanel) {
+  if (a.installed && a.kind === "cep" && !a.live) {
     row.querySelector(".meta").appendChild(el(
       `<details data-k="where-${a.key}"><summary>Where is the panel?</summary>
         <ul class="steps"><li>In ${a.label}: <b>${a.panelMenu}</b></li>
-        <li>Leave that panel open while you work.</li></ul></details>`));
+        <li>Leave it open &mdash; that panel is the connection.</li></ul></details>`));
   }
-  if (a.installed && a.kind === "uxp" && !ready) {
+  if (a.installed && a.kind === "uxp" && !a.live) {
     row.querySelector(".meta").appendChild(el(
       `<details data-k="uxp-${a.key}"><summary>Why does this one need an extra step?</summary>
         <ul class="steps">
-          <li>Adobe only auto-installs plugins it has signed. ${a.label}'s plugin isn't, so it loads through Adobe's free <b>UXP Developer Tool</b>.</li>
-          <li><b>Set up</b> adds the plugin to that tool for you &mdash; then press <b>Load</b> next to it.</li>
+          <li>Adobe only auto-installs plugins it has signed. ${a.label}'s isn't, so it loads
+          through Adobe's free <b>UXP Developer Tool</b>.</li>
+          <li><b>Set up</b> adds it to that tool for you &mdash; then press <b>Load</b> there.</li>
           <li>In ${a.label}: <b>${a.panelMenu}</b></li>
         </ul></details>`));
   }
@@ -317,64 +348,67 @@ function appRow(a) {
 
 function clientRow(c) {
   const n = c.connected.length;
+  const gpt = c.id === "codex";
+  // Codex connected but sandboxed can't actually reach the apps.
+  const blocked = gpt && n && !state.codexNetwork;
+
+  let status = n ? "Connected" : "Not connected";
+  let tone = n ? "live" : "";
+  let note = n ? `${n} app${n > 1 ? "s" : ""} connected` : c.blurb;
+  if (blocked) { status = "Blocked"; tone = "part"; note = "Connected, but it can't reach your Adobe apps yet"; }
+
   const row = el(`
     <div class="row">
-      <div class="glyph" style="background:${c.id === "codex" ? "#10a37f" : "#d97757"};color:#fff">
-        ${c.id === "codex" ? "GPT" : "C"}
+      <div class="glyph" style="background:${gpt ? "#10a37f" : "#d97757"};color:#fff" aria-hidden="true">
+        ${gpt ? "GPT" : "C"}
       </div>
       <div class="meta">
         <div class="name">${c.label}</div>
-        <div class="note">${n ? n + " app" + (n > 1 ? "s" : "") + " connected" : c.blurb}</div>
+        <div class="note">${note}</div>
       </div>
-      <span class="dot ${n ? "live" : ""}"></span>
-      ${n
-        ? `<button data-disconnect="${c.id}">Disconnect</button>`
-        : `<button class="primary" data-connect="${c.id}">Connect</button>`}
+      <span class="pill ${tone}"><span class="dot"></span>${status}</span>
+      <span class="acts">
+        ${n ? `<button data-disconnect="${c.id}">Disconnect</button>`
+            : `<button class="primary" data-connect="${c.id}">Connect</button>`}
+      </span>
     </div>`);
 
-  if (c.id === "claude-desktop") {
-    const note = row.querySelector(".note");
-    if (state.claudeRunning && n) {
-      note.innerHTML = "Connected \u2014 but Claude Desktop is open and will overwrite this when it quits.";
-      row.querySelector(".dot").className = "dot part";
-    } else if (state.claudeRunning && !n) {
-      note.textContent = "Quit Claude Desktop first, or use the button \u2014 it does it for you.";
-    }
-    if (state.claudeRunning) {
-      row.querySelector("button").replaceWith(
-        el(`<button class="primary" data-restart="1">Quit &amp; reconnect</button>`));
-    }
+  // Extra actions go BESIDE Disconnect. replaceWith() used to destroy it, so
+  // Claude Desktop could not be disconnected without first quitting Claude.
+  const acts = row.querySelector(".acts");
+  if (blocked) {
+    acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-codexnet="1">Allow</button> `);
     row.querySelector(".meta").appendChild(el(
-      `<details data-k="claude-why"><summary>Why does Claude have to be closed?</summary>
+      `<div class="consent">
+         <b>Allow</b> lets ChatGPT and Codex reach your Adobe apps on this Mac. It switches
+         networking on for the whole Codex sandbox, so other Codex tools can reach the
+         network too. Your call &mdash; a backup of the config is kept either way.
+       </div>`));
+  }
+  if (c.id === "claude-desktop" && state.claudeRunning && !n) {
+    acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-restart="1">Quit &amp; connect</button> `);
+  }
+  if (c.id === "claude-desktop" && state.claudeRunning && n) {
+    // Connected AND running is the normal working state, not a warning. It was
+    // permanently amber before, which teaches people to ignore amber.
+    row.querySelector(".meta").appendChild(el(
+      `<details data-k="claude-why"><summary>If Claude stops seeing your apps</summary>
         <ul class="steps">
-          <li>Claude Desktop holds its settings in memory and writes the whole file back when it
-          quits &mdash; erasing anything added while it was open.</li>
-          <li><b>Quit &amp; reconnect</b> closes Claude, connects your apps, and reopens it.</li>
+          <li>Claude Desktop rewrites its own settings when it quits, which can drop these.</li>
+          <li>Adobe MCP puts them back within 30 seconds of Claude closing, so usually you
+          need do nothing.</li>
         </ul></details>`));
   }
-  if (c.id === "codex" && n && !state.codexNetwork) {
-    const note = row.querySelector(".note");
-    note.innerHTML = "Connected \u2014 but ChatGPT can't reach your Adobe apps yet.";
-    row.querySelector(".dot").className = "dot part";
-    row.querySelector("button").replaceWith(
-      el(`<button class="primary" data-codexnet="1">Allow</button>`));
-  }
-
-  if (c.id === "codex") {
+  if (gpt) {
     row.querySelector(".meta").appendChild(el(
       `<details data-k="gpt-which"><summary>Which ChatGPT does this cover?</summary>
         <ul class="steps">
-          ${state.codexNetwork ? "" : `<li><b>Local connections are blocked.</b> ChatGPT and Codex
-          run MCP servers in a sandbox with networking off, so your Adobe apps are
-          unreachable and every request fails. <b>Allow</b> turns networking on for that
-          sandbox &mdash; it also lets any other Codex tool reach the network, so it's
-          your call.</li>`}
-          <li><b>ChatGPT desktop app</b> &mdash; yes. Settings &rarr; MCP servers will already list your Adobe apps.</li>
+          <li><b>ChatGPT desktop app</b> &mdash; yes, in its Codex surface.</li>
           <li><b>Codex CLI</b> and the <b>IDE extension</b> &mdash; yes, same config file.</li>
+          <li><b>ChatGPT in a browser tab</b> &mdash; no. Its connectors only reach the public
+          internet, so they can't see an app on your Mac.</li>
           <li>To check: type <code>/mcp</code> in ChatGPT's composer. Restart it if the list
           looks empty &mdash; it reads the config at launch.</li>
-          <li><b>ChatGPT in the browser</b> &mdash; no. Its connectors only reach servers on the public
-          internet, so they can't see an app on your Mac.</li>
         </ul></details>`));
   }
   return row;
@@ -386,6 +420,11 @@ function render() {
   const open = new Set(
     [...document.querySelectorAll("details[open][data-k]")].map((d) => d.dataset.k)
   );
+  // Open <details> were already preserved; focus was not, so a keyboard user
+  // tabbing through the rows was thrown back to <body> every time an app went
+  // live. Remember the focused control by what it does, not by identity.
+  const act = document.activeElement;
+  const focusKey = act && act.dataset ? JSON.stringify(act.dataset) : null;
 
   renderBanner();
   const apps = document.getElementById("apps");
@@ -398,20 +437,38 @@ function render() {
   for (const d of document.querySelectorAll("details[data-k]")) {
     if (open.has(d.dataset.k)) d.open = true;
   }
+  if (focusKey && focusKey !== "{}") {
+    for (const b of document.querySelectorAll("button")) {
+      if (JSON.stringify(b.dataset) === focusKey) { b.focus(); break; }
+    }
+  }
 
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
+  const anyApp = state.apps.some((a) => a.installed);
   const building = state.python && state.python.building;
+  const ready = live && wired;
   const setupBtn = document.getElementById("setup-all");
+  const said = document.getElementById("setup-said");
 
   // Setup can't finish before Python exists, so don't invite the click.
-  setupBtn.disabled = !!building;
-  setupBtn.textContent = building ? "Setting up Python…" : "Set everything up";
+  setupBtn.disabled = !!building || !anyApp;
+  setupBtn.textContent = building ? "Setting up Python…"
+    : ready ? "Check everything again" : "Set everything up";
+  // Once it works, this is no longer the thing to reach for.
+  setupBtn.classList.toggle("primary", !ready);
 
-  document.getElementById("setup-said").textContent =
-    building ? "First run downloads a small Python runtime — about a minute."
-    : live && wired ? `${live} app${live > 1 ? "s" : ""} live, ${wired} assistant${wired > 1 ? "s" : ""} connected.`
-    : "Installs the panels and connects your assistants.";
+  if (!anyApp) {
+    said.textContent = "No Adobe apps found in /Applications — there's nothing to set up yet.";
+  } else if (building) {
+    said.textContent = "First run downloads a small Python runtime — about a minute.";
+  } else if (ready) {
+    said.textContent =
+      `Ready — ${live} app${live > 1 ? "s" : ""} and ${wired} assistant${wired > 1 ? "s" : ""} connected. ` +
+      `Now just ask Claude or ChatGPT for something.`;
+  } else {
+    said.textContent = "Installs the panels and connects your assistants.";
+  }
 }
 
 /* --------------------------------------------------------------- actions -- */

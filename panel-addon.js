@@ -42,10 +42,15 @@ async function mcpCompactDocument(getInfo) {
 
   var APP = (document.title || "this app").replace(/ MCP Agent$/, "");
 
+  // CEP's createProcess returns {err, data} rather than throwing, so the catch
+  // never fired and this always claimed success — meaning the browser fallback
+  // below was unreachable and a user without the desktop app clicked the most
+  // prominent button in the panel and got nothing at all.
   function openApp(name) {
     try {
-      window.cep.process.createProcess("/usr/bin/open", "-a", name);
-      return true;
+      var r = window.cep.process.createProcess("/usr/bin/open", "-a", name);
+      if (r && typeof r.err !== "undefined") return r.err === 0;
+      return !!r;
     } catch (e) {
       return false;
     }
@@ -62,16 +67,19 @@ async function mcpCompactDocument(getInfo) {
   var css = document.createElement("style");
   css.textContent = [
     ".mcp-ask{display:flex;gap:8px;margin:0 0 10px}",
+    ":root{--mcp-btn:#2b2b31;--mcp-btn-b:#4a4a52;--mcp-ink:#e8e8ec;--mcp-soft:#8a8a94}",
+    "@media (prefers-color-scheme: light){:root{--mcp-btn:#f1f1f3;--mcp-btn-b:#c9c9d0;",
+    "  --mcp-ink:#1d1d20;--mcp-soft:#61616b}}",
     ".mcp-ask button{flex:1;padding:9px 6px;font-size:12px;font-weight:600;",
-    "  border-radius:6px;border:1px solid #4a4a52;background:#2b2b31;color:#e8e8ec;",
+    "  border-radius:6px;border:1px solid var(--mcp-btn-b);background:var(--mcp-btn);color:var(--mcp-ink);",
     "  cursor:pointer;transition:.12s}",
-    ".mcp-ask button:hover{background:#35353c;border-color:#666}",
+    ".mcp-ask button:hover{border-color:var(--mcp-soft)}",
     ".mcp-ask button.go{background:#d97757;border-color:#d97757;color:#fff}",
     ".mcp-ask button.go:hover{filter:brightness(1.1)}",
     ".mcp-ask button.cog{flex:0 0 34px;font-size:14px}",
-    ".mcp-hint{font-size:10.5px;line-height:1.45;color:#8a8a94;margin:0 0 6px}",
-    ".mcp-guide{margin:0 0 10px;font-size:11px;color:#b4b4bc}",
-    ".mcp-guide summary{cursor:pointer;color:#8a8a94;padding:3px 0;user-select:none}",
+    ".mcp-hint{font-size:10.5px;line-height:1.45;color:var(--mcp-soft);margin:0 0 6px}",
+    ".mcp-guide{margin:0 0 10px;font-size:11px;color:var(--mcp-ink)}",
+    ".mcp-guide summary{cursor:pointer;color:var(--mcp-soft);padding:3px 0;user-select:none}",
     ".mcp-guide summary:hover{color:#c8c8d0}",
     ".mcp-guide ol,.mcp-guide ul{margin:4px 0 6px;padding-left:16px;line-height:1.5}",
     ".mcp-guide li{margin:3px 0}",

@@ -93,12 +93,10 @@ const APPS = {
         appGlob: "Adobe Premiere Pro",
         panelMenu: "Window → MCP Agent",
     },
-    indesign: {
-        label: "InDesign",
-        kind: "uxp", uxp: "id", mcp: "id-mcp.py",
-        appGlob: "Adobe InDesign",
-        panelMenu: "Plugins → MCP Agent",
-    },
+    // InDesign is deliberately absent. Its server exposes exactly one tool,
+    // create_document, and no scripting escape hatch — it can make an empty
+    // document and nothing else. Listing it promised a capability that does
+    // not exist, and cost the user the UXP Developer Tool dance for no payoff.
 };
 
 // Adobe installs each app inside its own folder — /Applications/Adobe Illustrator
@@ -127,9 +125,8 @@ function appBundle(glob) {
     return null;
 }
 
-function appInstalled(glob) {
-    return !!appBundle(glob);
-}
+// Apps do not appear and disappear while the panel is open.
+const appInstalled = memo((glob) => !!appBundle(glob), 30000);
 
 function panelInstalled(key) {
     const a = APPS[key];
@@ -137,6 +134,28 @@ function panelInstalled(key) {
     // UXP plugins are loaded through Adobe's UXP Developer Tool, which keeps no
     // predictable on-disk marker. A live socket connection is the real signal.
     return null;
+}
+
+/* ------------------------------------------------------------- caching -- */
+
+// /api/status is polled every two seconds by every open tab, and it was doing
+// all of this synchronously on each call: pgrep, up to three `defaults` reads,
+// five scans of /Applications, and a parse of ~/.claude.json, which is often
+// several megabytes. All of that blocks the event loop, so an Adobe command
+// arriving mid-poll waited behind it. None of these change second to second.
+// Cached per argument — a single shared slot would have made all five apps
+// share whichever answer was computed first.
+function memo(fn, ms) {
+    const cache = new Map();
+    return (...args) => {
+        const key = args.length ? JSON.stringify(args) : "";
+        const hit = cache.get(key);
+        const now = Date.now();
+        if (hit && now - hit.at <= ms) return hit.value;
+        const value = fn(...args);
+        cache.set(key, { value, at: now });
+        return value;
+    };
 }
 
 /* --------------------------------------------------- panels: open vs live -- */
@@ -406,14 +425,14 @@ function disconnectClient(clientId) {
 // Claude Desktop keeps its config in memory and writes the whole file back when
 // it quits, silently undoing anything we wrote while it was open. So the write
 // has to happen while it is closed.
-function claudeRunning() {
+const claudeRunning = memo(() => {
     try {
         execFileSync("/usr/bin/pgrep", ["-x", "Claude"], { stdio: ["ignore", "pipe", "ignore"] });
         return true;
     } catch {
         return false;
     }
-}
+}, 3000);
 
 /* ------------------------------------------------------- panel installing -- */
 
@@ -436,7 +455,7 @@ function installPanel(key) {
     }
 }
 
-function debugModeOn() {
+const debugModeOn = memo(() => {
     return ["11", "12", "13"].some((v) => {
         try {
             return execFileSync("/usr/bin/defaults", ["read", `com.adobe.CSXS.${v}`, "PlayerDebugMode"], {
@@ -447,7 +466,7 @@ function debugModeOn() {
             return false;
         }
     });
-}
+}, 30000)
 
 // First `uv run` downloads Python and the PyPI deps. Do it now, in the
 // background, so the first thing the user asks Claude doesn't time out.
@@ -551,14 +570,57 @@ function refreshPanels() {
 // Every client config records the absolute path of the bundled `uv` and engine.
 // Moving the app (say, from Downloads to Applications) silently breaks all of
 // them, so re-point anything that has drifted.
+// Apps we used to ship. Their entries linger in config files pointing at a
+// server we no longer maintain, so they are removed rather than left to rot.
+const RETIRED = ["indesign"];
+
+function removeRetired(id) {
+    const c = CLIENTS[id];
+    if (!fs.existsSync(c.file)) return false;
+    try {
+        if (c.format === "json") {
+            const cfg = readJSON(c.file, {});
+            const servers = cfg[c.key];
+            if (!servers) return false;
+            const gone = RETIRED.filter((k) => servers[k]);
+            if (!gone.length) return false;
+            gone.forEach((k) => delete servers[k]);
+            writeJSON(c.file, cfg);
+            return true;
+        }
+
+        // Line-based, NOT a regex. A first attempt used [^\[]* to run to the
+        // next table header, which stops dead on the "[" inside args = [...]
+        // and left a fragment behind that Codex could not parse. A TOML table
+        // ends at the next line starting with "[", full stop.
+        const lines = fs.readFileSync(c.file, "utf8").split("\n");
+        const headers = RETIRED.map((k) => `[${c.key}.${k}]`);
+        const keep = [];
+        let dropping = false;
+        for (const line of lines) {
+            const isHeader = /^\s*\[/.test(line);
+            if (isHeader) dropping = headers.includes(line.trim());
+            if (!dropping) keep.push(line);
+        }
+        if (keep.length === lines.length) return false;
+        fs.copyFileSync(c.file, `${c.file}.adobe-mcp-backup-${Date.now()}`);
+        fs.writeFileSync(c.file, keep.join("\n"));
+        return true;
+    } catch (e) {
+        console.log(`⚠ could not tidy ${c.label}: ${e.message}`);
+        return false;
+    }
+}
+
 function repairClientPaths() {
     const want = serverDef(Object.keys(APPS)[0]);
     if (!want) return;
     for (const id of Object.keys(CLIENTS)) {
-        const connected = connectedApps(id);
-        if (!connected.length) continue;
         // Claude Desktop would overwrite us while it is open — leave it alone.
         if (id === "claude-desktop" && claudeRunning()) continue;
+        if (removeRetired(id)) console.log(`✓ removed retired servers from ${CLIENTS[id].label}`);
+        const connected = connectedApps(id);
+        if (!connected.length) continue;
         // This runs on a 30s timer: anything thrown here is an uncaught
         // exception that kills the hub, so the read is inside the try too.
         let stale = false;
@@ -799,8 +861,22 @@ const applicationClients = {}; // app name -> Set of socket ids
 
 io.on("connection", (socket) => {
     socket.on("register", ({ application }) => {
+        // Unvalidated, this took the whole hub down: registering as
+        // "__proto__" made ||= skip the assignment (Object.prototype is
+        // truthy) and .add() then threw out of a socket handler. Any web page
+        // could do it. Only the apps we know about are accepted.
+        if (!Object.prototype.hasOwnProperty.call(APPS, application)) {
+            console.log(`⚠ refused a panel claiming to be "${application}"`);
+            return socket.emit("registration_response", {
+                type: "registration", status: "error",
+                message: `Unknown application "${application}".`,
+            });
+        }
         socket.data.application = application;
-        (applicationClients[application] ||= new Set()).add(socket.id);
+        if (!Object.prototype.hasOwnProperty.call(applicationClients, application)) {
+            applicationClients[application] = new Set();
+        }
+        applicationClients[application].add(socket.id);
         socket.emit("registration_response", {
             type: "registration",
             status: "success",
@@ -816,8 +892,33 @@ io.on("connection", (socket) => {
     socket.on("command_packet", ({ application, command }) => {
         const packet = { senderId: socket.id, application, command };
         const clients = applicationClients[application];
-        if (!clients) return console.log(`⚠ no panel open for ${application}`);
-        clients.forEach((id) => io.to(id).emit("command_packet", packet));
+        const label = APPS[application] ? APPS[application].label : application;
+
+        // The hub knows instantly that nothing is listening, but used to say
+        // nothing and let the Python side sit out its timeout before reporting
+        // a generic "Connection Timed Out". Answer now, and say what to do.
+        if (!clients || clients.size === 0) {
+            console.log(`⚠ no panel open for ${application}`);
+            return socket.emit("packet_response", {
+                senderId: socket.id,
+                application,
+                status: "FAILURE",
+                message: APPS[application]
+                    ? `The ${label} panel isn't connected. In ${label}: ${APPS[application].panelMenu}. ` +
+                      `Adobe MCP's window has a Connect button when the panel is open but idle.`
+                    : `Nothing is connected for "${application}".`,
+            });
+        }
+
+        // Broadcasting meant two open panels — Photoshop 2025 and 2026, or a
+        // stale socket — ran every command TWICE against the document, and the
+        // duplicate was invisible because Python takes the first reply. Send to
+        // the most recently registered panel only.
+        const ids = [...clients];
+        if (ids.length > 1) {
+            console.log(`⚠ ${ids.length} ${label} panels connected; using the newest`);
+        }
+        io.to(ids[ids.length - 1]).emit("command_packet", packet);
     });
 
     socket.on("disconnect", () => {
@@ -871,6 +972,7 @@ app.get("/api/status", (_req, res) => {
 });
 
 app.post("/api/panel/:key", (req, res) => {
+    if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
     try {
         installPanel(req.params.key);
         res.json({ ok: true });
@@ -880,8 +982,11 @@ app.post("/api/panel/:key", (req, res) => {
 });
 
 app.post("/api/client/:id", (req, res) => {
+    if (!CLIENTS[req.params.id]) return res.status(404).json({ error: "Unknown assistant." });
     try {
         const keys = registerableApps();
+        // Used to reach serverDef(undefined) and put a raw TypeError in a toast.
+        if (!keys.length) throw new Error("No Adobe apps found in /Applications, so there's nothing to connect.");
         if (!serverDef(keys[0])) throw new Error("Engine or uv not found — run Setup first.");
         connectClient(req.params.id, keys);
         res.json({ ok: true, connected: keys });
@@ -891,6 +996,7 @@ app.post("/api/client/:id", (req, res) => {
 });
 
 app.delete("/api/client/:id", (req, res) => {
+    if (!CLIENTS[req.params.id]) return res.status(404).json({ error: "Unknown assistant." });
     try {
         disconnectClient(req.params.id);
         res.json({ ok: true });
@@ -942,7 +1048,7 @@ app.post("/api/reveal", (req, res) => {
 const UDT_WORKSPACE = path.join(
     HOME, "Library", "Application Support", "Adobe", "Adobe UXP Developer Tool", "plugins_workspace.json"
 );
-const UDT_HOST = { photoshop: "PS", premiere: "premierepro", indesign: "ID" };
+const UDT_HOST = { photoshop: "PS", premiere: "premierepro" };
 
 // Register a UXP plugin in Adobe's Developer Tool so the user only has to press
 // "Load". Adobe rejects unsigned .ccx packages outright (UPIA status -267), so
@@ -970,6 +1076,7 @@ function setupUxp(key) {
 }
 
 app.post("/api/uxp/:key", (req, res) => {
+    if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
     try {
         res.json(setupUxp(req.params.key));
     } catch (e) {
@@ -1075,12 +1182,25 @@ app.post("/api/rebuild-python", (_req, res) => {
     res.json({ ok: true });
 });
 
+// Quitting the hub alone was pointless: the menu bar app restarted it two
+// seconds later while the page claimed it had stopped. Ask the parent to quit,
+// which terminates us properly on its way out.
 app.post("/api/quit", (_req, res) => {
     res.json({ ok: true });
-    setTimeout(() => process.exit(0), 200);
+    setTimeout(() => {
+        execFile("/usr/bin/osascript",
+            ["-e", 'tell application id "com.moskitodesign.adobemcp" to quit'],
+            (err) => { if (err) process.exit(0); });   // no wrapper (dev run): just stop
+        setTimeout(() => process.exit(0), 3000);
+    }, 200);
 });
 
 app.use(express.static(HERE));
+
+// This is a background daemon whose only supervisor gives up after five
+// restarts, so an unhandled rejection must not be the thing that kills it.
+process.on("unhandledRejection", (e) => console.log("⚠ unhandled rejection: " + (e && e.message)));
+process.on("uncaughtException", (e) => console.log("⚠ uncaught: " + ((e && e.stack) || e)));
 
 const URL = `http://localhost:${PORT}`;
 
@@ -1094,8 +1214,11 @@ server.on("error", (e) => {
 
 // If the menu bar app is force-quit or crashes, this process is reparented to
 // launchd and would sit on port 3001 forever, blocking the next launch.
+// Only when the menu bar app started us. The bash fallback launcher execs node
+// directly, so ITS parent is launchd and ppid is 1 from the first second —
+// which made that build quit itself about five seconds after every launch.
 setInterval(() => {
-    if (process.ppid === 1) {
+    if (process.env.ADOBE_MCP_SUPERVISED === "1" && process.ppid === 1) {
         console.log("Parent app is gone \u2014 shutting down.");
         process.exit(0);
     }
