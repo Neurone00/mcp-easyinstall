@@ -75,8 +75,8 @@ h2 {
         box-shadow: var(--shadow); overflow: hidden; }
 .row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--line); }
 .row:first-child { border-top: 0; }
-/* Was opacity:.45 on the whole row, which put the note at about 1.9:1 —
-   far below the 4.5:1 WCAG asks for. Dim the icon, keep the text readable. */
+/* Was opacity:.45 on the whole row, which took the text to about 1.9:1 —
+   far below the 4.5:1 WCAG asks for. Dim the icon, keep the name readable. */
 .row.off .glyph { opacity: .4; }
 .row.off .name { color: var(--ink-soft); }
 
@@ -89,7 +89,6 @@ h2 {
 .glyph img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .meta { flex: 1 1 auto; min-width: 0; }
 .meta .name { font-weight: 560; }
-.meta .note { font-size: 13px; color: var(--ink-soft); }
 
 /* Status was an 8px coloured circle and nothing else: invisible to a screen
    reader, and green vs amber at that size is not distinguishable for a
@@ -123,7 +122,6 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
 .acts { display: flex; gap: 6px; flex: none; }
 .consent { margin-top: 8px; font-size: 12.5px; color: var(--ink-soft);
   background: var(--bg); border-radius: 8px; padding: 9px 11px; }
-button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8px; }
 
 .titlerow { display: flex; align-items: flex-start; gap: 12px; }
 .titlerow h1 { flex: 1 1 auto; }
@@ -168,7 +166,6 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
 #wizard .wz-foot { display: flex; gap: 8px; align-items: center; padding: 16px 20px 18px; }
 #wizard .wz-foot .sp { flex: 1; }
 
-footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: center; }
 #toast {
   position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 90px);
   background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px;
@@ -233,10 +230,6 @@ button:focus-visible {
   <h2>Your AI assistants</h2>
   <div class="list" id="clients"></div>
 
-  <footer>
-    Moskito Easy MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
-    <button class="ghost" id="quit" style="margin-left:6px">Quit</button>
-  </footer>
 </main>
 
 <dialog id="wizard" aria-labelledby="wz-title"></dialog>
@@ -394,30 +387,22 @@ function appRow(a) {
 
   // Each state names itself. "Ready" is not a warning; an app that simply
   // isn't running is not a problem to be fixed.
-  let note, status, tone, action = "";
+  let status, tone, action = "";
   if (!a.installed) {
-    note = "Not installed on this Mac";
     status = "Unavailable"; tone = "";
   } else if (a.live) {
-    note = a.clients.length
-      ? `${a.clients.length} assistant${a.clients.length > 1 ? "s" : ""} can drive it`
-      : "Connect an assistant below to use it";
     status = "Ready"; tone = "live";
     action = `<button class="quiet" data-open="${a.key}">Open app</button>`;
   } else if (needsPanel) {
-    note = "The panel hasn't been installed yet";
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
   } else if (a.kind === "cep" && a.panelOpen) {
-    note = `The panel is open but hasn't connected — ${a.panelMenu}`;
     status = "Idle"; tone = "part";
     action = `<button class="primary" data-connectpanel="${a.key}">Connect</button>`;
   } else if (a.kind === "cep") {
-    note = `Open the panel: ${a.panelMenu}`;
     status = "Panel closed"; tone = "";
     action = `<button class="suggest" data-open="${a.key}">Open ${a.label}</button>`;
   } else {
-    note = "Not connected yet";
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
   }
@@ -430,7 +415,6 @@ function appRow(a) {
       </div>
       <div class="meta">
         <div class="name">${a.label}</div>
-        <div class="note">${note}</div>
       </div>
       <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       ${action}
@@ -447,8 +431,7 @@ function clientRow(c) {
 
   let status = n ? "Connected" : "Not connected";
   let tone = n ? "live" : "";
-  let note = n ? `${n} app${n > 1 ? "s" : ""} connected` : c.blurb;
-  if (blocked) { status = "Blocked"; tone = "part"; note = "Connected, but it can't reach your Adobe apps yet"; }
+  if (blocked) { status = "Blocked"; tone = "part"; }
 
   const row = el(`
     <div class="row">
@@ -457,7 +440,6 @@ function clientRow(c) {
       </div>
       <div class="meta">
         <div class="name">${c.label}</div>
-        <div class="note">${note}</div>
       </div>
       <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       <span class="acts">
@@ -481,10 +463,6 @@ function clientRow(c) {
   if (c.id === "claude-desktop" && state.claudeRunning && !n) {
     acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-restart="1">Quit &amp; connect</button> `);
   }
-  if (gpt) {
-    row.querySelector(".note").insertAdjacentHTML("beforeend",
-      ' \u00b7 Desktop app, Codex CLI and IDE extension. Not a browser tab.');
-  }
   return row;
 }
 
@@ -501,7 +479,6 @@ function render() {
   apps.replaceChildren(...state.apps.map(appRow));
   clients.replaceChildren(...state.clients.map(clientRow));
 
-  document.getElementById("ver").textContent = state.version ? "v" + state.version : "";
 
   if (focusKey && focusKey !== "{}") {
     for (const b of document.querySelectorAll("button")) {
@@ -576,8 +553,13 @@ document.addEventListener("click", async (e) => {
           sub: "The panel connects by itself." },
       ]);
     } else if (b.dataset.open) {
+      const a = state.apps.find((x) => x.key === b.dataset.open);
       await api("POST", "/api/open/" + b.dataset.open);
-      toast("Opening…");
+      // The one thing the second line carried alone was where the panel is.
+      // It arrives when you press Open now, not before.
+      toast(a && a.kind === "cep" && !a.live
+        ? `Opening — then ${a.panelMenu}`
+        : "Opening…");
     } else if (b.dataset.connect) {
       b.textContent = "Connecting…";
       const r = await api("POST", "/api/client/" + b.dataset.connect);
@@ -608,12 +590,6 @@ document.addEventListener("click", async (e) => {
       const open = panel.hidden;
       panel.hidden = !open;
       b.setAttribute("aria-expanded", String(open));
-      return;
-    } else if (b.id === "quit") {
-      await api("POST", "/api/quit");
-      document.body.innerHTML =
-        '<div class="wrap"><h1>Moskito Easy MCP stopped</h1>' +
-        '<p class="sub">Your apps are disconnected until you open it again.</p></div>';
       return;
     } else if (b.id === "setup-all") {
       b.textContent = "Setting up…";
