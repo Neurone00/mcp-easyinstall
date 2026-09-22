@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // First run: show the panel so setup isn't hidden behind the menu bar.
         if !UserDefaults.standard.bool(forKey: "hasLaunched") {
             UserDefaults.standard.set(true, forKey: "hasLaunched")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.openPanel() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.openPanel() }
         }
     }
 
@@ -60,6 +60,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func openPanel() {
         NSWorkspace.shared.open(dashboardURL)
+    }
+
+    // Double-clicking the app while it is already running should show the panel
+    // rather than do nothing.
+    func applicationShouldHandleReopen(_ app: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        openPanel()
+        return true
     }
 
     @objc func quit() {

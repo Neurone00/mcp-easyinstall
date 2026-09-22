@@ -335,6 +335,34 @@ function refreshPanels() {
     }
 }
 
+// Every client config records the absolute path of the bundled `uv` and engine.
+// Moving the app (say, from Downloads to Applications) silently breaks all of
+// them, so re-point anything that has drifted.
+function repairClientPaths() {
+    const want = serverDef(Object.keys(APPS)[0]);
+    if (!want) return;
+    for (const id of Object.keys(CLIENTS)) {
+        const connected = connectedApps(id);
+        if (!connected.length) continue;
+        // Claude Desktop would overwrite us while it is open — leave it alone.
+        if (id === "claude-desktop" && claudeRunning()) continue;
+        let stale = false;
+        if (CLIENTS[id].format === "json") {
+            const servers = readJSON(CLIENTS[id].file, {})[CLIENTS[id].key] || {};
+            stale = connected.some((k) => servers[k] && servers[k].command !== want.command);
+        } else {
+            stale = !fs.readFileSync(CLIENTS[id].file, "utf8").includes(want.command);
+        }
+        if (!stale) continue;
+        try {
+            connectClient(id, connected);
+            console.log(`\u2713 repaired ${CLIENTS[id].label} \u2014 the app had moved`);
+        } catch (e) {
+            console.log(`\u26a0 could not repair ${CLIENTS[id].label}: ${e.message}`);
+        }
+    }
+}
+
 /* ------------------------------------------------------------- updates -- */
 
 // "1.2.0" > "1.10.0" is false — compare numerically, segment by segment.
@@ -657,9 +685,9 @@ const URL = `http://localhost:${PORT}`;
 
 server.on("error", (e) => {
     if (e.code !== "EADDRINUSE") throw e;
-    // Already running (or the old adb-mcp proxy has the port). Just show the window.
-    console.log("Adobe MCP is already running \u2014 opening the dashboard.");
-    execFile("/usr/bin/open", [URL]);
+    // Already running (or the old adb-mcp proxy has the port). Exit quietly —
+    // opening a browser tab here meant every stray launch popped one up.
+    console.log("Port 3001 is already in use \u2014 another copy is running. Exiting.");
     process.exit(0);
 });
 
@@ -673,9 +701,11 @@ setInterval(() => {
 }, 5000).unref();
 
 server.listen(PORT, () => {
+    // The menu bar app decides when to show the panel — first run, its menu
+    // item, or reopening the app. The hub never opens a tab on its own.
     console.log(`Adobe MCP ${VERSION}  \u2192  ${URL}`);
     refreshPanels();
+    repairClientPaths();
     checkForUpdate();
     setInterval(checkForUpdate, 6 * 3600 * 1000);
-    execFile("/usr/bin/open", [URL]);
 });
