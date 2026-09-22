@@ -193,8 +193,8 @@ const CLIENTS = {
         key: "mcpServers",
     },
     codex: {
-        label: "ChatGPT (Codex CLI)",
-        blurb: "OpenAI's Codex CLI. The only ChatGPT surface that can reach a local app.",
+        label: "ChatGPT",
+        blurb: "Desktop app, Codex CLI and the IDE extension \u2014 they share one config file.",
         file: path.join(HOME, ".codex", "config.toml"),
         format: "toml",
         key: "mcp_servers",

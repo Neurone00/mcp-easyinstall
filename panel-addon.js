@@ -53,8 +53,10 @@
 
   var gpt = document.createElement("button");
   gpt.textContent = "ChatGPT ↗";
-  gpt.title = "Opens ChatGPT in your browser";
-  gpt.onclick = function () { openUrl("https://chatgpt.com/"); };
+  gpt.title = "Opens the ChatGPT desktop app, which can also control " + APP;
+  gpt.onclick = function () {
+    if (!openApp("ChatGPT")) openUrl("https://chatgpt.com/");
+  };
 
   bar.appendChild(claude);
   bar.appendChild(gpt);

@@ -311,11 +311,12 @@ function clientRow(c) {
   }
   if (c.id === "codex") {
     row.querySelector(".meta").appendChild(el(
-      `<details><summary>What about ChatGPT itself?</summary>
+      `<details><summary>Which ChatGPT does this cover?</summary>
         <ul class="steps">
-          <li>ChatGPT's own connectors only reach servers on the public internet, so it can't see an app on your Mac.</li>
-          <li><b>Codex CLI</b> is OpenAI's local agent &mdash; it talks to your Adobe apps directly. Install once with
-          <code>npm i -g @openai/codex</code>, then press Connect.</li>
+          <li><b>ChatGPT desktop app</b> &mdash; yes. Settings &rarr; MCP servers will already list your Adobe apps.</li>
+          <li><b>Codex CLI</b> and the <b>IDE extension</b> &mdash; yes, same config file.</li>
+          <li><b>ChatGPT in the browser</b> &mdash; no. Its connectors only reach servers on the public
+          internet, so they can't see an app on your Mac.</li>
         </ul></details>`));
   }
   return row;

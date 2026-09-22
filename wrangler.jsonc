@@ -1,0 +1,6 @@
+{
+  // Static landing page for Adobe MCP. Deploy with: npx wrangler deploy
+  "name": "adobe-mcp",
+  "compatibility_date": "2026-09-22",
+  "assets": { "directory": "./site" }
+}

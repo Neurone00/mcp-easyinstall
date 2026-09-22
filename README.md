@@ -24,7 +24,8 @@ That's it. The window tells you what's connected and what isn't.
 |---|---|
 | **Illustrator, After Effects** | Fully automatic. Installs the panel, opens it, done. |
 | **Photoshop, Premiere, InDesign** | One extra click — see below. |
-| **Claude Desktop, Claude Code, Codex CLI** | Connected for you. |
+| **Claude Desktop, Claude Code** | Connected for you. |
+| **ChatGPT desktop, Codex CLI, IDE extension** | Connected for you. |
 
 Keep Adobe MCP running while you work. It sits in the background with no dock icon;
 use **Quit** in its window to stop it.
@@ -59,13 +60,12 @@ Then just ask:
 
 ## About ChatGPT
 
-ChatGPT's own connectors only reach servers on the public internet, so **ChatGPT in
-the browser cannot see an app running on your Mac**. Two options:
+The **ChatGPT desktop app**, **Codex CLI** and the **Codex IDE extension** all run
+local MCP servers and share one config file, so Adobe MCP connects all three at once.
+In the desktop app they appear under Settings → MCP servers.
 
-- **Codex CLI** — OpenAI's local agent. `npm i -g @openai/codex`, then press Connect.
-  Adobe MCP wires it up automatically.
-- **ChatGPT in the browser** — possible, but it means publishing a tunnel from your
-  Mac to the internet. Not included here yet; see [issues](../../issues).
+**ChatGPT in a browser tab cannot** — its connectors only reach servers on the public
+internet, so they can't see an app on your Mac. Use the desktop app.
 
 <br>
 
