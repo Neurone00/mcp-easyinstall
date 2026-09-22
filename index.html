@@ -133,7 +133,7 @@ button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8
 .titlerow { display: flex; align-items: flex-start; gap: 12px; }
 .titlerow h1 { flex: 1 1 auto; }
 .gearbtn { border-color: transparent; background: transparent; color: var(--ink-soft);
-  font-size: 18px; line-height: 1; padding: 6px 9px; margin-top: 2px; }
+  font-size: 32px; line-height: 1; padding: 6px 11px; margin-top: 2px; }
 .gearbtn:hover:not(:disabled) { background: var(--card); color: var(--ink); }
 .gearbtn[aria-expanded="true"] { background: var(--card); color: var(--ink);
   border-color: var(--line); }
@@ -146,22 +146,32 @@ button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8
 .settings h3 { margin: 0 0 4px; font-size: 14px; font-weight: 620; }
 .settings-what { margin: 10px 0 2px; font-size: 13px; color: var(--ink-soft); }
 .settings > button { margin-bottom: 4px; }
-.hero:empty { display: none; }
 .hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
+/* When everything is set up the button moves into Settings and the line is
+   blank, so the row has nothing left to show. */
+.hero:not(:has(button)):has(.said:empty) { display: none; }
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
 .hero .said { color: var(--ink-soft); font-size: 13.5px; }
 
-.howto { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink-soft);
-  line-height: 1.55; }
-.howto li { margin: 2px 0; }
-.howto b { color: var(--ink); font-weight: 600; }
-details { margin-top: 10px; }
-summary { cursor: pointer; color: var(--ink-soft); font-size: 13px; padding: 6px 2px; }
-summary::marker { color: var(--idle); }
 .steps { margin: 6px 0 4px; padding-left: 20px; color: var(--ink-soft); font-size: 13.5px; }
 .steps li { margin: 5px 0; }
 code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
        background: var(--bg); padding: 1.5px 5px; border-radius: 4px; }
+
+#wizard {
+  border: none; border-radius: 16px; padding: 0; width: min(420px, calc(100vw - 32px));
+  background: var(--card); color: var(--ink); box-shadow: var(--shadow);
+}
+#wizard::backdrop { background: rgba(16, 18, 27, .42); }
+#wizard .wz-head { display: flex; align-items: center; gap: 10px; padding: 18px 20px 0; }
+#wizard .wz-head .glyph { width: 30px; height: 30px; border-radius: 7px; }
+#wizard .wz-head .name { font-weight: 600; flex: 1 1 auto; }
+#wizard .wz-head .of { font-size: 12.5px; color: var(--ink-soft); }
+#wizard .wz-body { padding: 16px 20px 4px; font-size: 15px; line-height: 1.5; }
+#wizard .wz-body b { font-weight: 640; }
+#wizard .wz-sub { margin-top: 8px; font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+#wizard .wz-foot { display: flex; gap: 8px; align-items: center; padding: 16px 20px 18px; }
+#wizard .wz-foot .sp { flex: 1; }
 
 footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: center; }
 #toast {
@@ -179,7 +189,7 @@ footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: 
   .row .glyph { width: 28px; height: 28px; font-size: 11px; }
   .hero { flex-wrap: wrap; }
 }
-button:focus-visible, summary:focus-visible {
+button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 </style>
@@ -234,6 +244,7 @@ button:focus-visible, summary:focus-visible {
   </footer>
 </main>
 
+<dialog id="wizard" aria-labelledby="wz-title"></dialog>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -254,6 +265,62 @@ function toast(msg) {
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+// The UXP steps used to sit in an accordion above the button, so the reader had
+// to take them in before doing anything. Now they arrive one at a time, after
+// Set up, each confirmed before the next appears. <dialog> gives us the focus
+// trap, the Esc key and the backdrop for free.
+const wizEl = document.getElementById("wizard");
+
+function wizard(a, steps) {
+  let i = 0;
+  const [bg, fg] = TINT[a.key].split(",");
+
+  function draw() {
+    const st = steps[i];
+    const last = i === steps.length - 1;
+    wizEl.replaceChildren(el(`
+      <form method="dialog">
+        <div class="wz-head">
+          <div class="glyph" style="background:${bg};color:${fg}" aria-hidden="true">
+            <img src="/api/icon/${a.key}" alt="" width="30" height="30"
+                 onerror="this.replaceWith(document.createTextNode('${SHORT[a.key]}'))">
+          </div>
+          <div class="name" id="wz-title">Set up ${a.label}</div>
+          <div class="of">Step ${i + 1} of ${steps.length}</div>
+        </div>
+        <div class="wz-body">
+          <div>${st.text}</div>
+          ${st.sub ? `<div class="wz-sub">${st.sub}</div>` : ""}
+        </div>
+        <div class="wz-foot">
+          <button class="quiet" type="button" data-wz="back" ${i ? "" : "disabled"}>Back</button>
+          <span class="sp"></span>
+          <button class="quiet" type="submit" value="cancel">Close</button>
+          <button class="primary" type="button" data-wz="next">${last ? "Done" : st.ok}</button>
+        </div>
+      </form>`));
+    wizEl.querySelector('[data-wz="next"]').focus();
+  }
+
+  wizEl.onclick = (e) => {
+    const b = e.target.closest("[data-wz]");
+    if (!b) return;
+    if (b.dataset.wz === "back") { i--; draw(); return; }
+    if (i < steps.length - 1) { i++; draw(); return; }
+    wizEl.close();
+    // Confirm it actually worked rather than assuming the last click landed.
+    refresh().then(() => {
+      const now = state && state.apps.find((x) => x.key === a.key);
+      toast(now && now.live
+        ? `${a.label} is ready.`
+        : `${a.label} isn't connected. Press Set up to run through it again.`);
+    });
+  };
+
+  draw();
+  wizEl.showModal();
 }
 
 async function api(method, path, body) {
@@ -355,7 +422,7 @@ function appRow(a) {
     status = "Panel closed"; tone = "";
     action = `<button class="suggest" data-open="${a.key}">Open ${a.label}</button>`;
   } else {
-    note = "Three steps, once — press Set up to begin";
+    note = "Not connected yet";
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
   }
@@ -373,21 +440,6 @@ function appRow(a) {
       <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       ${action}
     </div>`);
-
-  // Spell it out. "Load it in the UXP Developer Tool" assumes the reader knows
-  // what that is, where it is, and what Load means. These are the actual
-  // clicks, in order, with the exact words they will see on screen.
-  if (a.installed && a.kind === "uxp" && !a.live) {
-    row.querySelector(".meta").appendChild(el(
-      `<details data-k="steps-${a.key}"><summary>Show the steps</summary>
-         <ol class="howto">
-           <li><b>Set up</b> (the button here) — adds it and opens Adobe's UXP Developer Tool</li>
-           <li>In that window, find the row called <b>Moskito Easy MCP</b></li>
-           <li>Click <b>Load</b> at the end of that row</li>
-           <li>Back in ${a.label}: <b>${a.panelMenu}</b></li>
-         </ol>
-       </details>`));
-  }
 
   return row;
 }
@@ -434,41 +486,17 @@ function clientRow(c) {
   if (c.id === "claude-desktop" && state.claudeRunning && !n) {
     acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-restart="1">Quit &amp; connect</button> `);
   }
-  if (c.id === "claude-desktop" && state.claudeRunning && n) {
-    // Connected AND running is the normal working state, not a warning. It was
-    // permanently amber before, which teaches people to ignore amber.
-    row.querySelector(".meta").appendChild(el(
-      `<details data-k="claude-why"><summary>If Claude stops seeing your apps</summary>
-        <ul class="steps">
-          <li>Claude Desktop rewrites its own settings when it quits, which can drop these.</li>
-          <li>Moskito Easy MCP puts them back within 30 seconds of Claude closing, so usually you
-          need do nothing.</li>
-        </ul></details>`));
-  }
   if (gpt) {
-    row.querySelector(".meta").appendChild(el(
-      `<details data-k="gpt-which"><summary>Which ChatGPT does this cover?</summary>
-        <ul class="steps">
-          <li><b>ChatGPT desktop app</b> &mdash; yes, in its Codex surface.</li>
-          <li><b>Codex CLI</b> and the <b>IDE extension</b> &mdash; yes, same config file.</li>
-          <li><b>ChatGPT in a browser tab</b> &mdash; no. Its connectors only reach the public
-          internet, so they can't see an app on your Mac.</li>
-          <li>To check: type <code>/mcp</code> in ChatGPT's composer. Restart it if the list
-          looks empty &mdash; it reads the config at launch.</li>
-        </ul></details>`));
+    row.querySelector(".note").insertAdjacentHTML("beforeend",
+      ' \u00b7 Desktop app, Codex CLI and IDE extension. Not a browser tab.');
   }
   return row;
 }
 
 function render() {
-  // The 2s poll rebuilds these rows, which would slam every open <details>
-  // shut while you are reading it. Remember what was open and restore it.
-  const open = new Set(
-    [...document.querySelectorAll("details[open][data-k]")].map((d) => d.dataset.k)
-  );
-  // Open <details> were already preserved; focus was not, so a keyboard user
-  // tabbing through the rows was thrown back to <body> every time an app went
-  // live. Remember the focused control by what it does, not by identity.
+  // The 2s poll rebuilds these rows, which threw a keyboard user back to <body>
+  // every time an app went live. Remember the focused control by what it does,
+  // not by identity, since the element itself is replaced.
   const act = document.activeElement;
   const focusKey = act && act.dataset ? JSON.stringify(act.dataset) : null;
 
@@ -480,9 +508,6 @@ function render() {
 
   document.getElementById("ver").textContent = state.version ? "v" + state.version : "";
 
-  for (const d of document.querySelectorAll("details[data-k]")) {
-    if (open.has(d.dataset.k)) d.open = true;
-  }
   if (focusKey && focusKey !== "{}") {
     for (const b of document.querySelectorAll("button")) {
       if (JSON.stringify(b.dataset) === focusKey) { b.focus(); break; }
@@ -520,9 +545,7 @@ function render() {
   } else if (building) {
     said.textContent = "First run downloads a small Python runtime — about a minute.";
   } else if (ready) {
-    said.textContent =
-      `Ready — ${live} app${live > 1 ? "s" : ""} and ${wired} assistant${wired > 1 ? "s" : ""} connected. ` +
-      `Now just ask Claude or ChatGPT for something.`;
+    said.textContent = "";
   } else {
     said.textContent = "Installs the panels and connects your assistants.";
   }
@@ -545,8 +568,18 @@ document.addEventListener("click", async (e) => {
       await api("POST", "/api/connect-panel/" + b.dataset.connectpanel);
       toast("Connected \u2014 and set to connect by itself from now on.");
     } else if (b.dataset.uxp) {
+      const a = state.apps.find((x) => x.key === b.dataset.uxp);
       await api("POST", "/api/uxp/" + b.dataset.uxp);
-      toast("Added to the UXP Developer Tool — press Load next to it there.");
+      wizard(a, [
+        { text: "In the <b>UXP Developer Tool</b> window, find the row <b>Moskito Easy MCP</b>.",
+          sub: "Opening now. Check the Dock if it isn't in front.",
+          ok: "Found it" },
+        { text: "Click <b>Load</b> at the end of that row.",
+          sub: "Its status changes to Loaded.",
+          ok: "Done" },
+        { text: `In ${a.label}, open <b>${a.panelMenu}</b>.`,
+          sub: "The panel connects by itself." },
+      ]);
     } else if (b.dataset.open) {
       await api("POST", "/api/open/" + b.dataset.open);
       toast("Opening…");

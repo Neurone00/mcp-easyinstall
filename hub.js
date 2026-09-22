@@ -1088,6 +1088,19 @@ io.on("connection", (socket) => {
         console.log(`✓ ${application} panel connected`);
     });
 
+    // Which assistants can actually reach this app. The panel greys out the
+    // button for one that can't. It asks over the socket rather than
+    // /api/status because a CEP panel is a file:// origin, and opening the
+    // HTTP API to that would open it to every web page too.
+    socket.on("amcp_clients", () => {
+        const key = socket.data.application;
+        if (!key) return;
+        socket.emit("amcp_clients", {
+            claude: connectedApps("claude-desktop").includes(key),
+            chatgpt: connectedApps("codex").includes(key) && codexNetworkAllowed(),
+        });
+    });
+
     // Requests from a panel, over the channel we already trust.
     socket.on("app_request", (req) => {
         const key = req && req.application;

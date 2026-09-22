@@ -86,8 +86,6 @@
     ".amcp-act b{color:var(--a-ink);font-weight:600}",
     ".amcp-act .spin{width:7px;height:7px;border-radius:50%;background:var(--a-ok);flex:none}",
 
-    ".amcp-hint{font-size:11px;line-height:1.45;color:var(--a-soft);margin:0 0 10px}",
-
     // Footer: help, settings, and the rarely-wanted things behind one menu.
     // At the top, not the bottom: these are how you reach everything that is
     // not one of the two main actions, so they should be found before them.
@@ -171,16 +169,10 @@
   bar.appendChild(claude);
   bar.appendChild(gpt);
 
-  var hint = document.createElement("p");
-  hint.className = "amcp-hint";
-  hint.textContent = "Both can drive " + APP + " — use the desktop apps. " +
-                     "A ChatGPT browser tab can't reach it.";
-
   var activity = document.createElement("div");
   activity.className = "amcp-act";
 
   ui.appendChild(bar);
-  ui.appendChild(hint);
   ui.appendChild(activity);
 
   /* ------------------------------------------------- auto-connect default -- */
@@ -414,8 +406,27 @@
       var fn = r && r.id && pending[r.id];
       if (fn) { delete pending[r.id]; fn(r); }
     });
+    socket.on("amcp_clients", function (c) {
+      setAsk(claude, !!(c && c.claude), "Claude");
+      setAsk(gpt, !!(c && c.chatgpt), "ChatGPT");
+    });
   }
   setInterval(bindSocketOnce, 1000);
+
+  // An assistant that isn't wired to this app would open and then not see it,
+  // which looks like our bug. Say so on the button instead.
+  function setAsk(btn, ok, name) {
+    btn.disabled = !ok;
+    btn.title = ok
+      ? "Open the " + name + " desktop app, which can drive " + APP
+      : name + " isn't connected to " + APP + ". Set it up in Moskito Easy MCP.";
+  }
+
+  function pollClients() {
+    if (typeof socket !== "undefined" && socket && socket.connected) socket.emit("amcp_clients");
+  }
+  setInterval(pollClients, 3000);
+  pollClients();
 
   /* ----------------------------------------------------- status mirroring -- */
 
