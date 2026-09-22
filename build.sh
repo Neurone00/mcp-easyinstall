@@ -231,8 +231,31 @@ PLIST
 
 [ -f "$HERE/app.icns" ] && cp "$HERE/app.icns" "$RES/app.icns"
 
-# Ad-hoc signature. Not notarized, so first launch needs right-click → Open.
-codesign --force --deep --sign - "$APP" 2>/dev/null || true
+# Sign with the self-signed identity if this machine has one (see
+# scripts/setup-signing.sh). It is not Apple notarisation — Gatekeeper still
+# asks for the Privacy & Security step on first open — but it gives the app a
+# STABLE code identity across rebuilds. With an ad-hoc signature the identity is
+# the binary's hash, so every update invalidated the Accessibility permission
+# the user had granted and "Arrange windows" silently stopped working.
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+  | grep "Moskito Easy MCP Signing" | head -1 | awk '{print $2}')"
+
+if [ -n "$IDENTITY" ]; then
+  say "Signing with the stable identity"
+  # Inside out: nested code first, the bundle last. --deep is deprecated.
+  for bin in "$RES/runtime/node" "$RES/runtime/uv" "$APP/Contents/MacOS/AdobeMCP"; do
+    codesign --force --timestamp=none --options runtime --sign "$IDENTITY" "$bin" 2>/dev/null \
+      || codesign --force --timestamp=none --sign "$IDENTITY" "$bin"
+  done
+  codesign --force --timestamp=none --sign "$IDENTITY" "$APP"
+  codesign --verify --deep --strict "$APP" 2>/dev/null \
+    && say "Signature verified" \
+    || echo "  warning: the signature did not verify"
+else
+  echo "  No signing identity found — falling back to ad-hoc."
+  echo "  Run ./scripts/setup-signing.sh once so Accessibility permission survives updates."
+  codesign --force --deep --sign - "$APP" 2>/dev/null || true
+fi
 xattr -cr "$APP" 2>/dev/null || true
 
 say "Built: $APP  v$VER  ($(du -sh "$APP" | cut -f1))"

@@ -107,6 +107,24 @@ together and packs them into `dist/Moskito Easy MCP.app`. The result is universa
 same build runs on Apple Silicon and Intel, whichever Mac you build it on. The
 build refuses to continue if any bundled binary is not universal.
 
+### Signing
+
+Run `./scripts/setup-signing.sh` once on the build machine. It creates a
+self-signed code-signing certificate so the app has a **stable identity across
+rebuilds**.
+
+This matters for one specific reason: macOS Accessibility permission (used by
+**Arrange windows**) is matched against the app's code identity. With an ad-hoc
+signature that identity is the binary's hash, so every update silently
+invalidated the permission the user had already granted.
+
+It is not Apple notarisation — the Privacy & Security step on first open stays.
+The certificate lives only on the build machine; **people who receive the app
+install nothing**, because the signature travels inside the `.app`.
+
+When the first build asks for your keychain password, click **Always Allow**.
+Clicking *Allow* makes it ask on every build.
+
 ### How it fits together
 
 ```

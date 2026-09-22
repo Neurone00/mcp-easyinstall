@@ -132,6 +132,10 @@ button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
 .hero .said { color: var(--ink-soft); font-size: 13.5px; }
 
+.howto { margin: 8px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--ink-soft);
+  line-height: 1.55; }
+.howto li { margin: 2px 0; }
+.howto b { color: var(--ink); font-weight: 600; }
 details { margin-top: 10px; }
 summary { cursor: pointer; color: var(--ink-soft); font-size: 13px; padding: 6px 2px; }
 summary::marker { color: var(--idle); }
@@ -326,9 +330,7 @@ function appRow(a) {
     status = "Panel closed"; tone = "";
     action = `<button class="suggest" data-open="${a.key}">Open ${a.label}</button>`;
   } else {
-    // Was an accordion explaining Adobe's signing rules. Nobody needs the
-    // reason; they need the next action and where the panel lives.
-    note = `Load it once in Adobe's UXP Developer Tool, then ${a.panelMenu}`;
+    note = "Three steps, once — press Set up to begin";
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
   }
@@ -343,6 +345,19 @@ function appRow(a) {
       <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       ${action}
     </div>`);
+
+  // Spell it out. "Load it in the UXP Developer Tool" assumes the reader knows
+  // what that is, where it is, and what Load means. These are the actual
+  // clicks, in order, with the exact words they will see on screen.
+  if (a.installed && a.kind === "uxp" && !a.live) {
+    row.querySelector(".meta").appendChild(el(
+      `<ol class="howto">
+         <li><b>Set up</b> (the button here) — adds it and opens Adobe's UXP Developer Tool</li>
+         <li>In that window, find the row called <b>Moskito Easy MCP</b></li>
+         <li>Click <b>Load</b> at the end of that row</li>
+         <li>Back in ${a.label}: <b>${a.panelMenu}</b></li>
+       </ol>`));
+  }
 
   return row;
 }
