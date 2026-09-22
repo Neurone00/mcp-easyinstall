@@ -5,6 +5,38 @@
  * Injected into the adb-mcp CEP panels at build time — see build.sh. Uses CEP's
  * own APIs, so it needs nothing from the panel's own code.
  */
+// Trim the state blob that the panel attaches to every single response.
+//
+// main.js appends a full getActiveDocumentInfo() — every layer, every item
+// count, blend modes, layer colours — to the result of EVERY command, asked for
+// or not. Measured at 47% of a simple response, and it grows with the layer
+// count. In an agent loop each tool result stays in context for the rest of the
+// conversation, so twenty calls means twenty copies. That is paid for in tokens
+// on every turn. Keep only what actually helps a model orient itself.
+//
+// Defined here and called from main.js, which build.sh rewrites to use it.
+async function mcpCompactDocument(getInfo) {
+  try {
+    let d = await getInfo();
+    if (d && d.content && d.content[0] && typeof d.content[0].text === "string") {
+      d = JSON.parse(d.content[0].text);
+    } else if (typeof d === "string") {
+      d = JSON.parse(d);
+    }
+    if (!d || typeof d !== "object") return null;
+    return {
+      name: d.name,
+      width: d.width,
+      height: d.height,
+      artboards: d.numArtboards,
+      layers: d.numLayers,
+      saved: d.saved,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 (function () {
   "use strict";
 

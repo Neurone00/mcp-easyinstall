@@ -76,6 +76,13 @@ fi
 say "Adding the Ask buttons to the panels"
 for panel in "$HERE"/engine/cep/*/; do
   cp "$HERE/panel-addon.js" "$panel/panel-addon.js"
+  # Shrink the state blob attached to every response (see panel-addon.js).
+  /usr/bin/sed -i '' \
+    's|out\.document = await getActiveDocumentInfo();|out.document = await mcpCompactDocument(getActiveDocumentInfo);|' \
+    "$panel/main.js"
+  /usr/bin/sed -i '' \
+    's|out\.projectInfo = await getProjectInfo();|out.projectInfo = await mcpCompactDocument(getProjectInfo);|' \
+    "$panel/main.js"
   if ! grep -q "panel-addon.js" "$panel/index.html"; then
     /usr/bin/sed -i '' 's|</body>|    <script src="panel-addon.js"></script>\
 </body>|' "$panel/index.html"
