@@ -92,11 +92,13 @@
     ".amcp-hint{font-size:11px;line-height:1.45;color:var(--a-soft);margin:0 0 10px}",
 
     // Footer: help, settings, and the rarely-wanted things behind one menu.
-    ".amcp-foot{display:flex;align-items:center;gap:4px;margin:10px 0 0;",
-    "  padding-top:9px;border-top:1px solid var(--a-line)}",
+    // At the top, not the bottom: these are how you reach everything that is
+    // not one of the two main actions, so they should be found before them.
+    ".amcp-foot{display:flex;align-items:center;gap:6px;margin:0 0 10px;",
+    "  padding-bottom:9px;border-bottom:1px solid var(--a-line)}",
     ".amcp-foot button{border-color:transparent;background:transparent;color:var(--a-soft);",
-    "  padding:6px 9px;font-weight:600;font-size:12px;min-width:30px}",
-    ".amcp-foot button:first-child{font-size:14px}",
+    "  padding:7px 10px;font-weight:600;font-size:15px;min-width:38px;line-height:1}",
+    ".amcp-foot button:hover{color:var(--a-ink);background:var(--a-bg)}",
     ".amcp-foot button:hover{color:var(--a-ink);background:var(--a-bg)}",
     ".amcp-foot .sp{flex:1}",
     ".amcp-badge{display:inline-block;min-width:15px;padding:0 4px;margin-left:5px;",
@@ -171,14 +173,6 @@
   bar.appendChild(claude);
   bar.appendChild(gpt);
 
-  // --- arrange windows
-  var arrangeRow = document.createElement("div");
-  arrangeRow.className = "amcp-row";
-  var arrange = document.createElement("button");
-  arrange.innerHTML = "▥&nbsp; Arrange windows";
-  arrange.title = APP + " on the left, your assistant on the right";
-  arrangeRow.appendChild(arrange);
-
   var hint = document.createElement("p");
   hint.className = "amcp-hint";
   hint.textContent = "Both can drive " + APP + " — use the desktop apps. " +
@@ -188,36 +182,20 @@
   activity.className = "amcp-act";
 
   ui.appendChild(bar);
-  ui.appendChild(arrangeRow);
   ui.appendChild(hint);
   ui.appendChild(activity);
 
-  /* -------------------------------------------------- first-run auto-connect */
+  /* ------------------------------------------------- auto-connect default -- */
 
-  // A one-time preference was permanent furniture. Show it once, default on,
-  // then keep it in the menu.
-  var FIRST_RUN_KEY = "amcpSeenAutoConnect";
-  var firstRun = !window.localStorage.getItem(FIRST_RUN_KEY);
-  if (firstRun && autoChk) {
+  // Auto-connect is on by default and explained in the menu rather than by a
+  // card the user has to dismiss. A one-time card that reappears whenever the
+  // panel reloads is worse than no card at all.
+  if (autoChk && !window.localStorage.getItem("amcpSeenAutoConnect")) {
+    window.localStorage.setItem("amcpSeenAutoConnect", "1");
     if (!autoChk.checked) {
       autoChk.checked = true;
-      autoChk.dispatchEvent(new Event("change"));   // let main.js persist it
+      autoChk.dispatchEvent(new Event("change"));
     }
-    var intro = document.createElement("div");
-    intro.className = "amcp-sheet";
-    intro.innerHTML =
-      "<h4>Connecting automatically</h4>" +
-      "This panel will connect itself whenever " + APP + " opens. " +
-      "You can change that later under ⋯.";
-    var dismiss = document.createElement("button");
-    dismiss.className = "menuitem";
-    dismiss.textContent = "Got it";
-    dismiss.onclick = function () {
-      window.localStorage.setItem(FIRST_RUN_KEY, "1");
-      intro.parentNode.removeChild(intro);
-    };
-    intro.appendChild(dismiss);
-    ui.appendChild(intro);
   }
   if (autoChk) {
     var grp = autoChk.closest ? autoChk.closest(".checkbox-group") : null;
@@ -279,11 +257,11 @@
     });
   };
 
-  foot.appendChild(helpBtn);
-  foot.appendChild(logBtn);
-  foot.appendChild(spacer);
   foot.appendChild(gear);
   foot.appendChild(more);
+  foot.appendChild(spacer);
+  foot.appendChild(logBtn);
+  foot.appendChild(helpBtn);
 
   function toggle(which) {
     [helpSheet, logSheet, moreSheet].forEach(function (s) {
@@ -403,7 +381,7 @@
     }
   }
 
-  /* ------------------------------------------------- arrange (over socket) */
+  /* --------------------------------------------- requests to the hub -- */
 
   var pending = {};
   var reqId = 0;
@@ -431,46 +409,6 @@
     });
   }
   setInterval(bindSocketOnce, 1000);
-
-  arrange.onclick = function () {
-    bindSocketOnce();
-    arrange.disabled = true;
-    arrange.innerHTML = "Arranging…";
-    var assistant = "Claude";
-    hubRequest({ type: "arrange", assistant: assistant, split: 0.8 }, function (r) {
-      arrange.disabled = false;
-      arrange.innerHTML = "▥&nbsp; Arrange windows";
-      if (r.ok) {
-        var missing = /missing:|nowindow:/.test(String(r.assistant || ""));
-        flash(missing
-          ? APP + " resized — open " + assistant + " and try again for the split"
-          : "Windows arranged " + (r.layout || "80/20"));
-        return;
-      }
-      if (r.needsAccessibility) {
-        toggle(helpSheet);
-        helpSheet.hidden = true;
-        moreSheet.hidden = true;
-        showAccessibility(r.error);
-        return;
-      }
-      flash(r.error || "Couldn't arrange the windows", "warn");
-    });
-  };
-
-  var axSheet = sheet();
-  ui.appendChild(axSheet);
-  function showAccessibility(msg) {
-    axSheet.hidden = false;
-    axSheet.innerHTML = "<h4>One permission needed</h4>" +
-      "<p>" + msg + "</p>";
-    var open = menuItem("Open Accessibility settings", function () {
-      hubRequest({ type: "open_accessibility" }, function () {});
-    });
-    var close = menuItem("Close", function () { axSheet.hidden = true; });
-    axSheet.appendChild(open);
-    axSheet.appendChild(close);
-  }
 
   /* ----------------------------------------------------- status mirroring -- */
 
@@ -501,7 +439,9 @@
 
   /* --------------------------------------------------------------- mount -- */
 
-  ui.appendChild(foot);
+  // The icon row goes FIRST in the panel, but it is built further down, so it
+  // is inserted rather than appended.
+  ui.insertBefore(foot, ui.firstChild);
   ui.appendChild(helpSheet);
   ui.appendChild(logSheet);
   ui.appendChild(moreSheet);
