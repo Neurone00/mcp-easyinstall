@@ -128,6 +128,9 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
 button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8px; }
 
 #what-changes { margin-top: 6px; }
+/* Tucked away: the button inside the disclosure sits above the explanation. */
+#what-changes.tucked > button { margin: 4px 0 10px; }
+.hero:empty { display: none; }
 .hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
 .hero .said { color: var(--ink-soft); font-size: 13.5px; }
@@ -351,12 +354,14 @@ function appRow(a) {
   // clicks, in order, with the exact words they will see on screen.
   if (a.installed && a.kind === "uxp" && !a.live) {
     row.querySelector(".meta").appendChild(el(
-      `<ol class="howto">
-         <li><b>Set up</b> (the button here) — adds it and opens Adobe's UXP Developer Tool</li>
-         <li>In that window, find the row called <b>Moskito Easy MCP</b></li>
-         <li>Click <b>Load</b> at the end of that row</li>
-         <li>Back in ${a.label}: <b>${a.panelMenu}</b></li>
-       </ol>`));
+      `<details data-k="steps-${a.key}"><summary>Show the steps</summary>
+         <ol class="howto">
+           <li><b>Set up</b> (the button here) — adds it and opens Adobe's UXP Developer Tool</li>
+           <li>In that window, find the row called <b>Moskito Easy MCP</b></li>
+           <li>Click <b>Load</b> at the end of that row</li>
+           <li>Back in ${a.label}: <b>${a.panelMenu}</b></li>
+         </ol>
+       </details>`));
   }
 
   return row;
@@ -473,6 +478,20 @@ function render() {
     : ready ? "Check everything again" : "Set everything up";
   // Once it works, this is no longer the thing to reach for.
   setupBtn.classList.toggle("primary", !ready);
+
+  // Once everything is working, the setup controls stop being the point and
+  // start reading as a warning that something needs doing. Tuck them into the
+  // disclosure; the state line alone is enough.
+  const tuck = document.getElementById("what-changes");
+  const heroRow = document.querySelector(".hero");
+  if (ready && setupBtn.parentElement === heroRow) {
+    tuck.appendChild(setupBtn);
+    tuck.querySelector("summary").textContent = "Setup options";
+  } else if (!ready && setupBtn.parentElement === tuck) {
+    heroRow.insertBefore(setupBtn, heroRow.firstChild);
+    tuck.querySelector("summary").textContent = "What does this change on my Mac?";
+  }
+  tuck.classList.toggle("tucked", !!ready);
 
   if (!anyApp) {
     said.textContent = "No Adobe apps found in /Applications — there's nothing to set up yet.";
