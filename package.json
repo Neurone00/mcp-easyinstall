@@ -1,6 +1,6 @@
 {
   "name": "adobe-mcp-hub",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "private": true,
   "description": "One-click control panel for driving Adobe apps from Claude and ChatGPT",
   "main": "hub.js",

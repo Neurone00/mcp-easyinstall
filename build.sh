@@ -243,9 +243,12 @@ IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
 if [ -n "$IDENTITY" ]; then
   say "Signing with the stable identity"
   # Inside out: nested code first, the bundle last. --deep is deprecated.
+  # NOT --options runtime. The hardened runtime blocks JIT without the
+  # com.apple.security.cs.allow-jit entitlement, which killed Node's V8: the
+  # app launched, the menu bar icon appeared, and the hub never started. We are
+  # not notarising, so the hardened runtime buys nothing here anyway.
   for bin in "$RES/runtime/node" "$RES/runtime/uv" "$APP/Contents/MacOS/AdobeMCP"; do
-    codesign --force --timestamp=none --options runtime --sign "$IDENTITY" "$bin" 2>/dev/null \
-      || codesign --force --timestamp=none --sign "$IDENTITY" "$bin"
+    codesign --force --timestamp=none --sign "$IDENTITY" "$bin"
   done
   codesign --force --timestamp=none --sign "$IDENTITY" "$APP"
   codesign --verify --deep --strict "$APP" 2>/dev/null \
