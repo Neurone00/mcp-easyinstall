@@ -289,11 +289,25 @@ function clientRow(c) {
         : `<button class="primary" data-connect="${c.id}">Connect</button>`}
     </div>`);
 
-  if (c.id === "claude-desktop" && n) {
+  if (c.id === "claude-desktop") {
+    const note = row.querySelector(".note");
+    if (state.claudeRunning && n) {
+      note.innerHTML = "Connected \u2014 but Claude Desktop is open and will overwrite this when it quits.";
+      row.querySelector(".dot").className = "dot part";
+    } else if (state.claudeRunning && !n) {
+      note.textContent = "Quit Claude Desktop first, or use the button \u2014 it does it for you.";
+    }
+    if (state.claudeRunning) {
+      row.querySelector("button").replaceWith(
+        el(`<button class="primary" data-restart="1">Quit &amp; reconnect</button>`));
+    }
     row.querySelector(".meta").appendChild(el(
-      `<details><summary>Not seeing the tools in Claude?</summary>
-        <ul class="steps"><li>Claude Desktop only reads this on launch.
-        <button data-restart="1" style="margin-left:6px">Restart Claude</button></li></ul></details>`));
+      `<details><summary>Why does Claude have to be closed?</summary>
+        <ul class="steps">
+          <li>Claude Desktop holds its settings in memory and writes the whole file back when it
+          quits &mdash; erasing anything added while it was open.</li>
+          <li><b>Quit &amp; reconnect</b> closes Claude, connects your apps, and reopens it.</li>
+        </ul></details>`));
   }
   if (c.id === "codex") {
     row.querySelector(".meta").appendChild(el(

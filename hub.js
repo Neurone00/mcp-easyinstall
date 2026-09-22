@@ -258,6 +258,18 @@ function disconnectClient(clientId) {
     fs.writeFileSync(c.file, toml);
 }
 
+// Claude Desktop keeps its config in memory and writes the whole file back when
+// it quits, silently undoing anything we wrote while it was open. So the write
+// has to happen while it is closed.
+function claudeRunning() {
+    try {
+        execFileSync("/usr/bin/pgrep", ["-x", "Claude"], { stdio: ["ignore", "pipe", "ignore"] });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 /* ------------------------------------------------------- panel installing -- */
 
 function installPanel(key) {
@@ -364,6 +376,7 @@ app.get("/api/status", (_req, res) => {
         engine,
         uv,
         debugMode: debugModeOn(),
+        claudeRunning: claudeRunning(),
         apps: Object.entries(APPS).map(([key, a]) => ({
             key,
             label: a.label,
@@ -422,9 +435,25 @@ app.post("/api/open/:key", (req, res) => {
     res.json({ ok: true });
 });
 
+// Quit Claude, write the config while it is closed, then reopen it. This is the
+// only reliable way to connect Claude Desktop — see claudeRunning() above.
 app.post("/api/restart-claude", (_req, res) => {
     execFile("/usr/bin/osascript", ["-e", 'tell application "Claude" to quit'], () => {
-        setTimeout(() => execFile("/usr/bin/open", ["-a", "Claude"]), 1500);
+        let waited = 0;
+        const finish = () => {
+            try {
+                connectClient("claude-desktop", registerableApps());
+            } catch (e) {
+                console.log("\u26a0 could not write Claude config: " + e.message);
+            }
+            execFile("/usr/bin/open", ["-a", "Claude"]);
+        };
+        const poll = () => {
+            if (!claudeRunning() || waited > 15000) return finish();
+            waited += 500;
+            setTimeout(poll, 500);
+        };
+        setTimeout(poll, 500);
     });
     res.json({ ok: true });
 });
