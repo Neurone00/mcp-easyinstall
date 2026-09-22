@@ -105,6 +105,21 @@ add_engine() {   # $1 = server file, $2 = addon file
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
 
+# Route the raw-script tool's result through our error check too, so a thrown
+# script fails instead of returning a SUCCESS with an error object inside.
+for f in "$HERE"/engine/mcp/ai-mcp.py "$HERE"/engine/mcp/ae-mcp.py; do
+  "$HERE/runtime/node" -e '
+    const fs = require("fs"); const file = process.argv[1];
+    let s = fs.readFileSync(file, "utf8");
+    const needle = "\"scriptString\": script_string\n    })\n    return sendCommand(command)";
+    const fixed  = "\"scriptString\": script_string\n    })\n    return _raise_on_script_error(sendCommand(command))";
+    if (s.includes(needle)) { fs.writeFileSync(file, s.replace(needle, fixed)); }
+    else if (!s.includes("_raise_on_script_error(sendCommand")) {
+      console.error("WARNING: could not wrap execute_extend_script in " + file);
+    }
+  ' "$f"
+done
+
 # Upstream crashes with a raw TypeError if the panel drops mid-command:
 # send_message_blocking legitimately returns None, and core.py dereferences it.
 # Done with node, not sed — sed collapsed the replacement onto one line and

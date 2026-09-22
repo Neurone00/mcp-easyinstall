@@ -162,6 +162,29 @@ def _run(body: str):
     return parsed
 
 
+
+def _raise_on_script_error(result):
+    """
+    Upstream's execute_extend_script returns a thrown script as a normal
+    SUCCESS carrying {error, line}, so a broken script looked like a working
+    one and only a careful model would notice. build.sh routes that tool's
+    return value through here.
+    """
+    try:
+        text = result["response"]["content"][0]["text"]
+    except Exception:
+        return result
+    try:
+        parsed = _json.loads(text) if isinstance(text, str) else text
+        if isinstance(parsed, str):
+            parsed = _json.loads(parsed)
+    except Exception:
+        return result
+    if isinstance(parsed, dict) and "error" in parsed:
+        where = f" (line {parsed.get('line')})" if parsed.get("line") else ""
+        raise RuntimeError(f"The script failed: {parsed['error']}{where}")
+    return result
+
 # ===========================================================================
 # Orientation
 # ===========================================================================
