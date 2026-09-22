@@ -345,6 +345,38 @@ async function connectPanel(key) {
     });
 }
 
+/* --------------------------------------------------------------- icons -- */
+
+// Use each Adobe app's own icon rather than a hand-drawn "Ai" square. They are
+// in the app bundle; sips turns the .icns into a PNG. Cached, because this
+// shells out and /api/status is polled constantly.
+const ICON_DIR = path.join(SUPPORT, "icons");
+
+function appIconPath(key) {
+    const a = APPS[key];
+    if (!a) return null;
+    const dest = path.join(ICON_DIR, `${key}.png`);
+    if (fs.existsSync(dest)) return dest;
+
+    const bundle = appBundle(a.appGlob);
+    if (!bundle) return null;
+    try {
+        let name = execFileSync("/usr/libexec/PlistBuddy",
+            ["-c", "Print CFBundleIconFile", path.join(bundle, "Contents", "Info.plist")],
+            { encoding: "utf8" }).trim();
+        if (!name) return null;
+        if (!name.endsWith(".icns")) name += ".icns";
+        const icns = path.join(bundle, "Contents", "Resources", name);
+        if (!fs.existsSync(icns)) return null;
+        fs.mkdirSync(ICON_DIR, { recursive: true });
+        execFileSync("/usr/bin/sips", ["-s", "format", "png", icns, "--out", dest, "-Z", "128"],
+            { stdio: "ignore", timeout: 20000 });
+        return fs.existsSync(dest) ? dest : null;
+    } catch {
+        return null;
+    }
+}
+
 /* ------------------------------------------------------------ json helper -- */
 
 // Missing file -> fallback. Unreadable or malformed file -> throw, never the
@@ -593,7 +625,13 @@ function installPanel(key) {
     const src = path.join(engine, "cep", a.cep);
     if (!fs.existsSync(src)) throw new Error(`Panel source missing: ${src}`);
     fs.mkdirSync(CEP_DIR, { recursive: true });
-    fs.cpSync(src, path.join(CEP_DIR, a.cep), { recursive: true, force: true });
+    const dest = path.join(CEP_DIR, a.cep);
+    fs.cpSync(src, dest, { recursive: true, force: true });
+
+    // The panel shows the host app's own icon; a CEP panel can only load files
+    // sitting next to it, so put a copy there.
+    const icon = appIconPath(key);
+    if (icon) fs.copyFileSync(icon, path.join(dest, "appicon.png"));
 
     // Adobe refuses to load unsigned panels unless debug mode is on.
     for (const v of ["10", "11", "12", "13"]) {
@@ -1368,8 +1406,12 @@ app.post("/api/codex-network", (_req, res) => {
     }
 });
 
-// A half-built environment used to be unrecoverable without deleting a folder
-// by hand, so make rebuilding it an action in the UI.
+app.get("/api/icon/:key", (req, res) => {
+    const file = appIconPath(req.params.key);
+    if (!file) return res.status(404).end();
+    res.type("png").sendFile(file);
+});
+
 app.post("/api/connect-panel/:key", async (req, res) => {
     const key = req.params.key;
     if (!APPS[key]) return res.status(404).json({ error: "Unknown app." });
@@ -1380,6 +1422,8 @@ app.post("/api/connect-panel/:key", async (req, res) => {
     }
 });
 
+// A half-built environment used to be unrecoverable without deleting a folder
+// by hand, so make rebuilding it an action in the UI.
 app.post("/api/rebuild-python", (_req, res) => {
     try {
         fs.rmSync(VENV, { recursive: true, force: true });

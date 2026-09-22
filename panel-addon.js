@@ -99,8 +99,8 @@
     ".amcp-foot button{border-color:transparent;background:transparent;color:var(--a-soft);",
     "  padding:7px 10px;font-weight:600;font-size:15px;min-width:38px;line-height:1}",
     ".amcp-foot button:hover{color:var(--a-ink);background:var(--a-bg)}",
-    ".amcp-foot button:hover{color:var(--a-ink);background:var(--a-bg)}",
     ".amcp-foot .sp{flex:1}",
+    ".amcp-appicon{width:22px;height:22px;border-radius:5px;flex:none;margin-right:2px}",
     ".amcp-badge{display:inline-block;min-width:15px;padding:0 4px;margin-left:5px;",
     "  border-radius:8px;background:var(--a-warn);color:#1d1d20;font-size:10px;",
     "  font-weight:700;text-align:center}",
@@ -233,6 +233,15 @@
 
   var foot = document.createElement("div");
   foot.className = "amcp-foot";
+
+  // The host app's own icon, copied in beside the panel by the hub. Makes it
+  // obvious at a glance which app this panel is driving.
+  var appIcon = document.createElement("img");
+  appIcon.className = "amcp-appicon";
+  appIcon.src = "appicon.png";
+  appIcon.alt = "";
+  appIcon.onerror = function () { appIcon.style.display = "none"; };
+  foot.appendChild(appIcon);
 
   function footBtn(label, title) {
     var b = document.createElement("button");

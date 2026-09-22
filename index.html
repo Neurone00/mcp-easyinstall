@@ -87,8 +87,11 @@ h2 .num[aria-hidden] {
 
 .glyph {
   width: 34px; height: 34px; flex: none; border-radius: 8px; display: grid; place-items: center;
-  font-weight: 700; font-size: 12px; letter-spacing: .02em; color: #fff;
+  font-weight: 700; font-size: 12px; letter-spacing: .02em; color: #fff; overflow: hidden;
 }
+/* The real app icon fills the tile; the tinted letter stays as a fallback for
+   an app whose icon we could not read. */
+.glyph img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .meta { flex: 1 1 auto; min-width: 0; }
 .meta .name { font-weight: 560; }
 .meta .note { font-size: 13px; color: var(--ink-soft); }
@@ -359,7 +362,10 @@ function appRow(a) {
 
   const row = el(`
     <div class="row ${a.installed ? "" : "off"}">
-      <div class="glyph" style="background:${bg};color:${fg}" aria-hidden="true">${SHORT[a.key]}</div>
+      <div class="glyph" style="background:${bg};color:${fg}" aria-hidden="true">
+        <img src="/api/icon/${a.key}" alt="" width="34" height="34"
+             onerror="this.replaceWith(document.createTextNode('${SHORT[a.key]}'))">
+      </div>
       <div class="meta">
         <div class="name">${a.label}</div>
         <div class="note">${note}</div>
