@@ -11,9 +11,9 @@ NODE_VERSION="22.14.0"
 ADB_MCP="https://github.com/mikechambers/adb-mcp/archive/refs/heads/main.zip"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-ARCH="$(uname -m)"   # arm64 | x86_64
-NODE_ARCH=$([ "$ARCH" = "arm64" ] && echo arm64 || echo x64)
-UV_ARCH=$([ "$ARCH" = "arm64" ] && echo aarch64 || echo x86_64)
+# Universal, always. Building thin for whatever Mac happened to run this script
+# meant an Intel colleague downloaded an app that could not launch at all.
+ARCH="universal"
 VER="$(/usr/bin/sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$HERE/package.json" | head -1)"
 APP="$HERE/dist/Adobe MCP.app"
 RES="$APP/Contents/Resources"
@@ -21,19 +21,41 @@ RES="$APP/Contents/Resources"
 say() { printf '\033[1m→\033[0m %s\n' "$1"; }
 
 # ---------------------------------------------------------------- runtimes --
+# Both slices are fetched and lipo'd together, so one download serves every Mac.
 mkdir -p "$HERE/runtime"
+
 if [ ! -x "$HERE/runtime/node" ]; then
-  say "Downloading Node $NODE_VERSION ($NODE_ARCH)"
-  curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-darwin-$NODE_ARCH.tar.gz" \
-    | tar -xz -C "$HERE/runtime" --strip-components=2 "node-v$NODE_VERSION-darwin-$NODE_ARCH/bin/node"
+  for slice in arm64 x64; do
+    say "Downloading Node $NODE_VERSION ($slice)"
+    curl -fsSL "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-darwin-$slice.tar.gz" \
+      | tar -xz -C "$HERE/runtime" --strip-components=2 "node-v$NODE_VERSION-darwin-$slice/bin/node"
+    mv "$HERE/runtime/node" "$HERE/runtime/node-$slice"
+  done
+  lipo -create "$HERE/runtime/node-arm64" "$HERE/runtime/node-x64" -output "$HERE/runtime/node"
+  rm -f "$HERE/runtime/node-arm64" "$HERE/runtime/node-x64"
 fi
+
 if [ ! -x "$HERE/runtime/uv" ]; then
-  say "Downloading uv ($UV_ARCH)"
-  curl -fsSL "https://github.com/astral-sh/uv/releases/latest/download/uv-$UV_ARCH-apple-darwin.tar.gz" \
-    | tar -xz -C "$HERE/runtime" --strip-components=1
-  rm -f "$HERE/runtime/uvx"
+  for slice in aarch64 x86_64; do
+    say "Downloading uv ($slice)"
+    curl -fsSL "https://github.com/astral-sh/uv/releases/latest/download/uv-$slice-apple-darwin.tar.gz" \
+      | tar -xz -C "$HERE/runtime" --strip-components=1
+    rm -f "$HERE/runtime/uvx"
+    mv "$HERE/runtime/uv" "$HERE/runtime/uv-$slice"
+  done
+  lipo -create "$HERE/runtime/uv-aarch64" "$HERE/runtime/uv-x86_64" -output "$HERE/runtime/uv"
+  rm -f "$HERE/runtime/uv-aarch64" "$HERE/runtime/uv-x86_64"
 fi
 chmod +x "$HERE/runtime/node" "$HERE/runtime/uv"
+
+# A thin binary here would silently ship a broken app to half the audience.
+for bin in node uv; do
+  slices="$(lipo -archs "$HERE/runtime/$bin")"
+  case "$slices" in
+    *arm64*x86_64*|*x86_64*arm64*) ;;
+    *) echo "runtime/$bin is not universal (got: $slices). Delete it and re-run."; exit 1 ;;
+  esac
+done
 
 # ------------------------------------------------------------------ engine --
 # adb-mcp by Mike Chambers (MIT) does the actual talking to the Adobe apps.
@@ -77,7 +99,11 @@ cp -R "$HERE/node_modules" "$HERE/runtime" "$HERE/engine" "$RES/"
 # launcher (works, but invisible once the tab is shut).
 if command -v swiftc >/dev/null 2>&1; then
   say "Compiling the menu bar app"
-  swiftc -O -target "$ARCH-apple-macos12" -o "$APP/Contents/MacOS/AdobeMCP" "$HERE/menubar.swift"
+  # swiftc emits one architecture per invocation, so build both and lipo them.
+  swiftc -O -target arm64-apple-macos12  -o "$HERE/dist/.mb-arm64" "$HERE/menubar.swift"
+  swiftc -O -target x86_64-apple-macos12 -o "$HERE/dist/.mb-x64"   "$HERE/menubar.swift"
+  lipo -create "$HERE/dist/.mb-arm64" "$HERE/dist/.mb-x64" -output "$APP/Contents/MacOS/AdobeMCP"
+  rm -f "$HERE/dist/.mb-arm64" "$HERE/dist/.mb-x64"
 else
   say "No swiftc — building without the menu bar icon"
   cat > "$APP/Contents/MacOS/AdobeMCP" <<'LAUNCH'

@@ -205,7 +205,9 @@ function el(html) {
 function renderBanner() {
   const b = document.getElementById("banner");
   const act = document.getElementById("banner-action");
-  let title, body, action = null, news = false;
+  // actionKind tells the click handler which endpoint the banner button hits —
+  // it used to be hardwired to the updater.
+  let title, body, action = null, news = false, actionKind = "update";
 
   if (!state.engine) {
     title = "Can't find the Adobe MCP engine";
@@ -213,6 +215,17 @@ function renderBanner() {
   } else if (!state.uv) {
     title = "Missing the Python runner";
     body = "The bundled <code>uv</code> runtime wasn't found. Re-download Adobe MCP.";
+  } else if (state.python && state.python.building) {
+    news = true;
+    title = "Setting up Python…";
+    body = "First run only — this downloads a small Python runtime and takes about a " +
+           "minute. Everything else can wait until it finishes.";
+  } else if (state.python && state.python.error) {
+    title = "Python setup didn't finish";
+    body = escapeHtml(state.python.error) +
+           " Your apps aren't connected, so nothing will fail silently later.";
+    action = "Try again";
+    actionKind = "rebuild-python";
   } else if (state.update) {
     news = true;
     title = `Version ${state.update.version} is available`;
@@ -223,11 +236,21 @@ function renderBanner() {
   b.classList.toggle("hidden", !title);
   b.classList.toggle("news", news);
   act.classList.toggle("hidden", !action);
-  if (action) act.textContent = action;
+  if (action) {
+    act.textContent = action;
+    act.dataset.kind = actionKind;
+  }
   if (title) {
     document.getElementById("banner-title").textContent = title;
     document.getElementById("banner-body").innerHTML = body;
   }
+}
+
+// Error text comes from the server and can contain anything a filesystem or uv
+// error put in it, so it is never trusted as markup.
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 function appRow(a) {
@@ -373,9 +396,17 @@ function render() {
 
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
+  const building = state.python && state.python.building;
+  const setupBtn = document.getElementById("setup-all");
+
+  // Setup can't finish before Python exists, so don't invite the click.
+  setupBtn.disabled = !!building;
+  setupBtn.textContent = building ? "Setting up Python…" : "Set everything up";
+
   document.getElementById("setup-said").textContent =
-    live && wired ? `${live} app${live > 1 ? "s" : ""} live, ${wired} assistant${wired > 1 ? "s" : ""} connected.`
-                  : "One click. Takes a few seconds.";
+    building ? "First run downloads a small Python runtime — about a minute."
+    : live && wired ? `${live} app${live > 1 ? "s" : ""} live, ${wired} assistant${wired > 1 ? "s" : ""} connected.`
+    : "Installs the panels and connects your assistants.";
 }
 
 /* --------------------------------------------------------------- actions -- */
@@ -410,6 +441,10 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.restart) {
       await api("POST", "/api/restart-claude");
       toast("Restarting Claude…");
+    } else if (b.id === "banner-action" && b.dataset.kind === "rebuild-python") {
+      b.textContent = "Rebuilding\u2026";
+      await api("POST", "/api/rebuild-python");
+      toast("Rebuilding the Python environment\u2026");
     } else if (b.id === "banner-action") {
       b.textContent = "Downloading\u2026";
       await api("POST", "/api/update");
@@ -448,8 +483,13 @@ async function refresh() {
     lastJSON = json;
     state = next;
     render();
+    // Clearing this on failure below is what makes recovery possible: without
+    // it, a hub that came back with an identical status would match lastJSON,
+    // skip render(), and leave "Lost contact" on screen forever.
   } catch {
-    document.getElementById("setup-said").textContent = "Lost contact with the Adobe MCP app.";
+    lastJSON = "";
+    document.getElementById("setup-said").textContent =
+      "Lost contact with the Adobe MCP app — retrying…";
   }
 }
 refresh();

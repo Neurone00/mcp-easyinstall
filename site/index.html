@@ -90,7 +90,7 @@ footer a{color:var(--soft)}
       Download for Mac
     </a>
     <p class="fine">
-      Apple Silicon &middot; macOS 12+ &middot; free &middot;
+      Apple Silicon &amp; Intel &middot; macOS 12+ &middot; free &middot;
       <a href="https://github.com/Neurone00/mcp-easyinstall">source on GitHub</a>
     </p>
 
@@ -112,9 +112,13 @@ footer a{color:var(--soft)}
     </p>
     <ol class="steps">
       <li><b>Download and drag to Applications.</b>
-          <span>No Node, no Python, no terminal. It's all inside the app.</span></li>
-      <li><b>Right-click &rarr; Open.</b>
-          <span>Only the first time &mdash; macOS asks this of any app not from the App Store.</span></li>
+          <span>No Node, no Python, no terminal. First run downloads a small Python
+          runtime, so it needs the internet once.</span></li>
+      <li><b>Double-click it. macOS will refuse the first time &mdash; that's expected.</b>
+          <span>Then go to <b>System Settings &rarr; Privacy &amp; Security</b>, scroll down, and click
+          <b>Open Anyway</b> next to Adobe MCP. Only needed once.
+          <br><small>(Right-click &rarr; Open no longer works: Apple removed that shortcut in
+          macOS&nbsp;15. The app isn't signed by Apple, which costs &euro;99/year.)</small></span></li>
       <li><b>Press &ldquo;Set everything up&rdquo;.</b>
           <span>It installs the panels and connects Claude and ChatGPT for you.</span></li>
     </ol>
@@ -183,7 +187,12 @@ footer a{color:var(--soft)}
 fetch("https://api.github.com/repos/Neurone00/mcp-easyinstall/releases/latest")
   .then((r) => r.ok ? r.json() : Promise.reject())
   .then((d) => {
-    const zip = (d.assets || []).find((a) => a.name.endsWith(".zip"));
+    // Prefer the universal build; never hand someone a zip that names the
+    // other architecture.
+    const zips = (d.assets || []).filter((a) => a.name.endsWith(".zip"));
+    const zip = zips.find((a) => /universal/i.test(a.name)) ||
+                zips.find((a) => !/arm64|aarch64|x64|x86_64|intel/i.test(a.name)) ||
+                zips[0];
     if (zip) document.getElementById("dl").href = zip.browser_download_url;
   })
   .catch(() => {});

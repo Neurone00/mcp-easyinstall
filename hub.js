@@ -30,7 +30,11 @@ const SETTINGS = path.join(HERE, "settings.json");
 
 // Where the adb-mcp checkout lives. Remembered in settings.json once found.
 function findEngine() {
-    const saved = readJSON(SETTINGS, {}).enginePath;
+    // Our own settings file — a malformed one should not stop the app booting.
+    let saved;
+    try {
+        saved = readJSON(SETTINGS, {}).enginePath;
+    } catch { saved = undefined; }
     const candidates = [
         saved,
         path.join(HERE, "engine"),
@@ -137,18 +141,54 @@ function panelInstalled(key) {
 
 /* ------------------------------------------------------------ json helper -- */
 
+// Missing file -> fallback. Unreadable or malformed file -> throw, never the
+// fallback: callers merge into this and write it back, so returning {} for a
+// config we simply failed to parse would replace the whole thing.
 function readJSON(file, fallback) {
+    if (!fs.existsSync(file)) return fallback;
+    let raw;
     try {
-        return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch {
-        return fallback;
+        raw = fs.readFileSync(file, "utf8");
+    } catch (e) {
+        throw new Error(`Can't read ${path.basename(file)}: ${e.message}`);
+    }
+    if (raw.trim() === "") return fallback;
+    try {
+        return JSON.parse(raw);
+    } catch (e) {
+        throw new Error(
+            `${path.basename(file)} isn't valid JSON, so it wasn't touched. ` +
+            `Fix or remove it, then try again. (${e.message})`
+        );
     }
 }
 
 function writeJSON(file, data) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
-    if (fs.existsSync(file)) fs.copyFileSync(file, file + ".adobe-mcp-backup");
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+    if (fs.existsSync(file)) {
+        // Timestamped: a single backup slot gets clobbered by the next write,
+        // and repairClientPaths runs every 30s.
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        fs.copyFileSync(file, `${file}.adobe-mcp-backup-${stamp}`);
+        pruneBackups(file);
+    }
+    // Write-then-rename, so an interrupted write can't truncate the real file.
+    const tmp = `${file}.adobe-mcp-tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+    fs.renameSync(tmp, file);
+}
+
+// Keep the five most recent backups of a file; drop the rest.
+function pruneBackups(file) {
+    const dir = path.dirname(file);
+    const prefix = path.basename(file) + ".adobe-mcp-backup-";
+    try {
+        fs.readdirSync(dir)
+            .filter((n) => n.startsWith(prefix))
+            .sort()
+            .slice(0, -5)
+            .forEach((n) => fs.rmSync(path.join(dir, n), { force: true }));
+    } catch { /* best effort */ }
 }
 
 /* --------------------------------------------------------- mcp server defs -- */
@@ -202,15 +242,22 @@ const CLIENTS = {
     },
 };
 
+// Read-only, and called from /api/status every couple of seconds — a config we
+// can't parse must not take the whole status endpoint down. connectClient is the
+// one that has to be strict, because it writes.
 function connectedApps(clientId) {
     const c = CLIENTS[clientId];
     if (!fs.existsSync(c.file)) return [];
-    if (c.format === "json") {
-        const servers = readJSON(c.file, {})[c.key] || {};
-        return Object.keys(APPS).filter((k) => servers[k]);
+    try {
+        if (c.format === "json") {
+            const servers = readJSON(c.file, {})[c.key] || {};
+            return Object.keys(APPS).filter((k) => servers[k]);
+        }
+        const toml = fs.readFileSync(c.file, "utf8");
+        return Object.keys(APPS).filter((k) => toml.includes(`[${c.key}.${k}]`));
+    } catch {
+        return [];
     }
-    const toml = fs.readFileSync(c.file, "utf8");
-    return Object.keys(APPS).filter((k) => toml.includes(`[${c.key}.${k}]`));
 }
 
 function connectClient(clientId, keys) {
@@ -311,27 +358,76 @@ function debugModeOn() {
 // First `uv run` downloads Python and the PyPI deps. Do it now, in the
 // background, so the first thing the user asks Claude doesn't time out.
 const PY_DEPS = ["fonttools", "python-socketio", "mcp", "requests", "websocket-client", "pillow"];
-let venvReady = fs.existsSync(path.join(VENV, "bin", "mcp"));
+let venvReady = false;        // proven by venvWorks(), never assumed
 let venvBuilding = false;
-function ensureVenv(done) {
-    if (venvReady || venvBuilding) return done && done();
+let venvError = null;
+const venvWaiters = [];       // callbacks parked while a build is in flight
+// `mcp` existing is not proof the environment works: a half-finished
+// `uv pip install` leaves the binary behind, and latching on existsSync alone
+// meant a broken venv was treated as ready forever, with no way to retry.
+function venvWorks() {
+    const py = path.join(VENV, "bin", "python");
+    if (!fs.existsSync(py) || !fs.existsSync(path.join(VENV, "bin", "mcp"))) return false;
+    try {
+        execFileSync(py, ["-c", "import mcp, socketio, requests, PIL, fontTools, websocket"],
+            { timeout: 30000, stdio: "ignore" });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function ensureVenv(done = () => {}) {
+    if (venvReady) return done();
+    if (venvBuilding) return venvWaiters.push(done);
+    // Already built by a previous run — don't rebuild it every launch.
+    if (venvWorks()) {
+        venvReady = true;
+        venvError = null;
+        return done();
+    }
+
     const uv = findUv();
-    if (!uv) return done && done();
+    if (!uv) {
+        venvError = "The bundled uv runtime is missing \u2014 reinstall Adobe MCP.";
+        return done(new Error(venvError));
+    }
+
     venvBuilding = true;
-    console.log("Building the Python environment (first run only)\u2026");
+    venvError = null;
+    console.log("Building the Python environment (first run only, needs the internet)\u2026");
+
+    const finish = (err) => {
+        venvBuilding = false;
+        venvReady = !err && venvWorks();
+        if (!venvReady && !err) err = new Error("The Python environment did not come out working.");
+        venvError = err ? err.message : null;
+        console.log(venvReady ? "\u2713 Python environment ready" : "\u26a0 " + venvError);
+        const waiters = venvWaiters.splice(0);
+        done(venvReady ? null : err);
+        waiters.forEach((w) => w(venvReady ? null : err));
+    };
+
+    // uv's failures are many lines of command echo. Show the one line that says
+    // what went wrong; the whole thing goes to the log.
+    const why = (e) => {
+        console.log(e.message);
+        const line = String(e.message)
+            .split("\n")
+            .map((l) => l.trim())
+            .filter((l) => /^(error|cause):/i.test(l))
+            .pop();
+        return line ? line.replace(/^(error|cause):\s*/i, "") : "see the log for details";
+    };
+
     execFile(uv, ["venv", VENV], { timeout: 300000 }, (e1) => {
-        if (e1) {
-            venvBuilding = false;
-            console.log("\u26a0 venv failed: " + e1.message);
-            return done && done();
-        }
+        if (e1) return finish(new Error("Couldn't create the Python environment — " + why(e1)));
         execFile(uv, ["pip", "install", "--python", path.join(VENV, "bin", "python"), ...PY_DEPS],
             { timeout: 600000 }, (e2) => {
-                venvBuilding = false;
-                venvReady = !e2 && fs.existsSync(path.join(VENV, "bin", "mcp"));
-                console.log(venvReady ? "\u2713 Python environment ready"
-                                      : "\u26a0 venv deps failed: " + (e2 && e2.message));
-                done && done();
+                finish(e2
+                    ? new Error("Couldn't download the Python packages — " + why(e2) +
+                                ". Check your internet connection.")
+                    : null);
             });
     });
 }
@@ -361,15 +457,22 @@ function repairClientPaths() {
         if (!connected.length) continue;
         // Claude Desktop would overwrite us while it is open — leave it alone.
         if (id === "claude-desktop" && claudeRunning()) continue;
+        // This runs on a 30s timer: anything thrown here is an uncaught
+        // exception that kills the hub, so the read is inside the try too.
         let stale = false;
-        if (CLIENTS[id].format === "json") {
-            const servers = readJSON(CLIENTS[id].file, {})[CLIENTS[id].key] || {};
-            stale = connected.some((k) => servers[k] &&
-                (servers[k].command !== want.command ||
-                 !(servers[k].env || {}).PYTHONDONTWRITEBYTECODE));
-        } else {
-            const toml = fs.readFileSync(CLIENTS[id].file, "utf8");
-            stale = !toml.includes(want.command) || !toml.includes("PYTHONDONTWRITEBYTECODE");
+        try {
+            if (CLIENTS[id].format === "json") {
+                const servers = readJSON(CLIENTS[id].file, {})[CLIENTS[id].key] || {};
+                stale = connected.some((k) => servers[k] &&
+                    (servers[k].command !== want.command ||
+                     !(servers[k].env || {}).PYTHONDONTWRITEBYTECODE));
+            } else {
+                const toml = fs.readFileSync(CLIENTS[id].file, "utf8");
+                stale = !toml.includes(want.command) || !toml.includes("PYTHONDONTWRITEBYTECODE");
+            }
+        } catch (e) {
+            console.log(`⚠ could not check ${CLIENTS[id].label}: ${e.message}`);
+            continue;
         }
         if (!stale) continue;
         try {
@@ -463,7 +566,15 @@ async function checkForUpdate() {
         if (!r.ok) return update;
         const d = await r.json();
         const latest = String(d.tag_name || "").replace(/^v/, "");
-        const asset = (d.assets || []).find((a) => a.name.endsWith(".zip"));
+        // Taking the first .zip handed some Macs a build they cannot execute.
+        // Prefer a universal asset, then one naming this machine's architecture.
+        const zips = (d.assets || []).filter((a) => a.name.endsWith(".zip"));
+        const mine = process.arch === "arm64" ? /arm64|aarch64/i : /x64|x86_64|intel/i;
+        const asset = zips.find((a) => /universal/i.test(a.name)) ||
+                      zips.find((a) => mine.test(a.name)) ||
+                      // Only fall back to an unlabelled zip; never to one that
+                      // explicitly names the other architecture.
+                      zips.find((a) => !/arm64|aarch64|x64|x86_64|intel/i.test(a.name));
         update = (latest && asset && isNewer(latest, VERSION))
             ? { version: latest, url: asset.browser_download_url, notes: d.body || "" }
             : null;
@@ -482,7 +593,10 @@ async function applyUpdate() {
 
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "adobe-mcp-"));
     const zip = path.join(tmp, "update.zip");
-    const r = await fetch(update.url, { redirect: "follow" });
+    const r = await fetch(update.url, {
+        redirect: "follow",
+        signal: AbortSignal.timeout(10 * 60 * 1000),   // a stalled download used to hang forever
+    });
     if (!r.ok) throw new Error(`Download failed (${r.status}).`);
     fs.writeFileSync(zip, Buffer.from(await r.arrayBuffer()));
 
@@ -490,15 +604,40 @@ async function applyUpdate() {
     const fresh = fs.readdirSync(tmp).find((n) => n.endsWith(".app"));
     if (!fresh) throw new Error("That download didn't contain an app.");
 
+    // Check it before trusting it: an app for the wrong architecture is exactly
+    // what the old first-zip-wins picker used to hand out.
+    const freshBin = path.join(tmp, fresh, "Contents", "MacOS", "AdobeMCP");
+    if (!fs.existsSync(freshBin)) throw new Error("That download isn't a working Adobe MCP app.");
+    try {
+        const archs = execFileSync("/usr/bin/lipo", ["-archs", freshBin], { encoding: "utf8" });
+        if (!archs.includes(process.arch === "arm64" ? "arm64" : "x86_64")) {
+            throw new Error(`That build is for ${archs.trim()}, which this Mac can't run.`);
+        }
+    } catch (e) {
+        if (/can't run/.test(e.message)) throw e;   // our own check — surface it
+        /* lipo unavailable: fall through rather than block the update */
+    }
+
+    // Move the old app aside rather than deleting it, and put it back if the
+    // copy fails. The previous version removed it first, so a failed copy left
+    // the user with no app at all and no message.
     const script = path.join(tmp, "swap.sh");
+    const q = JSON.stringify;
     fs.writeFileSync(script, [
         "#!/bin/bash",
         `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.3; done`,
-        `rm -rf ${JSON.stringify(bundle)}`,
-        `/usr/bin/ditto ${JSON.stringify(path.join(tmp, fresh))} ${JSON.stringify(bundle)}`,
-        `/usr/bin/xattr -cr ${JSON.stringify(bundle)}`,
-        `/usr/bin/open ${JSON.stringify(bundle)}`,
-        `rm -rf ${JSON.stringify(tmp)}`,
+        `OLD=${q(bundle + ".old")}`,
+        `rm -rf "$OLD"`,
+        `mv ${q(bundle)} "$OLD" || exit 1`,
+        `if /usr/bin/ditto ${q(path.join(tmp, fresh))} ${q(bundle)}; then`,
+        `  /usr/bin/xattr -cr ${q(bundle)}`,
+        `  rm -rf "$OLD"`,
+        `else`,
+        `  rm -rf ${q(bundle)}`,
+        `  mv "$OLD" ${q(bundle)}`,   // put the working version back
+        `fi`,
+        `/usr/bin/open ${q(bundle)}`,
+        `rm -rf ${q(tmp)}`,
     ].join("\n"));
     fs.chmodSync(script, 0o755);
     execFile("/bin/bash", [script], { detached: true, stdio: "ignore" }).unref();
@@ -509,10 +648,49 @@ async function applyUpdate() {
 
 const app = express();
 app.use(express.json());
+
+// This server can rewrite the user's AI config files and drive their open Adobe
+// documents, so it is for this machine and this page only.
+//
+// Bound to loopback below (see server.listen) — it used to bind every interface,
+// which put all of that on the local Wi-Fi. Loopback alone is not enough though:
+// any web page can still POST here, because our own requests are body-less with
+// no Content-Type and so are "simple requests" that skip the CORS preflight. So
+// reject a cross-origin Origin outright.
+const ALLOWED_ORIGINS = new Set([
+    `http://localhost:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
+    `http://[::1]:${PORT}`,
+]);
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    // No Origin at all is a same-origin navigation or curl, which is fine.
+    if (!origin || ALLOWED_ORIGINS.has(origin)) return next();
+    console.log(`⚠ refused a request from ${origin}`);
+    res.status(403).json({ error: "Adobe MCP only accepts requests from its own window." });
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
     transports: ["websocket", "polling"],
     maxHttpBufferSize: 50 * 1024 * 1024,
+    // Browsers don't apply CORS to WebSocket handshakes, so without this a page
+    // could register as "photoshop" and intercept commands meant for the panel.
+    // The Adobe panels are CEP/UXP and send no Origin, so they are unaffected.
+    // The socket carries Adobe commands, so it has to admit the panels as well
+    // as our own page. CEP panels connect with Origin "file://"; some UXP hosts
+    // send "null" or nothing. A remote web page cannot forge either of those —
+    // it is always stuck with its own http(s) origin, which is what we refuse.
+    // The dangerous endpoints (config rewrites) are on the HTTP side, which
+    // stays strict.
+    allowRequest: (req, done) => {
+        const origin = req.headers.origin;
+        const ok = !origin || origin === "null" || origin.startsWith("file://") ||
+                   ALLOWED_ORIGINS.has(origin);
+        if (!ok) console.log(`⚠ refused a socket from ${origin}`);
+        done(null, ok);
+    },
 });
 
 const applicationClients = {}; // app name -> Set of socket ids
@@ -564,6 +742,7 @@ app.get("/api/status", (_req, res) => {
         debugMode: debugModeOn(),
         claudeRunning: claudeRunning(),
         codexNetwork: codexNetworkAllowed(),
+        python: { ready: venvReady, building: venvBuilding, error: venvError },
         version: VERSION,
         update,
         apps: Object.entries(APPS).map(([key, a]) => ({
@@ -695,11 +874,22 @@ app.post("/api/uxp/:key", (req, res) => {
 
 // The single button: install what can be installed, wire up every AI client
 // that is actually present on this machine.
-app.post("/api/setup", (_req, res) => {
+// The Python environment has to exist BEFORE the client configs are written to
+// point at it. This used to fire ensureVenv() without awaiting and reply
+// "Ready", so a fresh Mac got five configs aimed at a binary that was still
+// minutes from existing, and every request failed with no explanation.
+app.post("/api/setup", async (_req, res) => {
     const done = [];
     const todo = [];
     const failed = [];
     try {
+        await new Promise((resolve) => ensureVenv(() => resolve()));
+        if (!venvReady) {
+            return res.status(500).json({
+                error: (venvError || "The Python environment isn't ready.") +
+                       " Nothing was connected, so you won't get silent failures later.",
+            });
+        }
         for (const [key, a] of Object.entries(APPS)) {
             if (!appInstalled(a.appGlob)) continue;
             try {
@@ -714,8 +904,6 @@ app.post("/api/setup", (_req, res) => {
                 failed.push(`${a.label} (${e.message})`);
             }
         }
-        ensureVenv();
-
         const keys = registerableApps();
         const wired = [];
         for (const id of Object.keys(CLIENTS)) {
@@ -758,6 +946,20 @@ app.post("/api/codex-network", (_req, res) => {
     }
 });
 
+// A half-built environment used to be unrecoverable without deleting a folder
+// by hand, so make rebuilding it an action in the UI.
+app.post("/api/rebuild-python", (_req, res) => {
+    try {
+        fs.rmSync(VENV, { recursive: true, force: true });
+    } catch (e) {
+        return res.status(500).json({ error: "Couldn't remove the old environment: " + e.message });
+    }
+    venvReady = false;
+    venvError = null;
+    ensureVenv(() => repairClientPaths());
+    res.json({ ok: true });
+});
+
 app.post("/api/quit", (_req, res) => {
     res.json({ ok: true });
     setTimeout(() => process.exit(0), 200);
@@ -784,7 +986,10 @@ setInterval(() => {
     }
 }, 5000).unref();
 
-server.listen(PORT, () => {
+// "127.0.0.1", not the default of every interface: this is a local control
+// surface, and binding publicly also triggers the macOS incoming-connections
+// prompt, which a colleague who clicks Deny can never recover from.
+server.listen(PORT, "127.0.0.1", () => {
     // The menu bar app decides when to show the panel — first run, its menu
     // item, or reopening the app. The hub never opens a tab on its own.
     console.log(`Adobe MCP ${VERSION}  \u2192  ${URL}`);

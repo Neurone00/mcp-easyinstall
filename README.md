@@ -10,8 +10,12 @@ One app. Nothing else to install — no Node, no Python, no Homebrew, no termina
 ## Install
 
 1. **[Download Adobe MCP](../../releases/latest)** and drag it to your Applications folder.
-2. Right-click it → **Open** → **Open**. *(Only the first time. macOS asks this for
-   any app not bought from the App Store.)*
+2. Double-click it. **macOS will refuse the first time — that's expected.** Then open
+   **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**
+   next to Adobe MCP. Only needed once.
+
+   *(Right-click → Open no longer works — Apple removed that shortcut in macOS 15.
+   The app isn't signed by Apple, which costs €99/year.)*
 3. A window opens. Press **Set everything up**.
 
 That's it. The window tells you what's connected and what isn't.
@@ -94,9 +98,10 @@ cd mcp-easyinstall
 ./build.sh --zip
 ```
 
-`build.sh` downloads Node, uv and the adb-mcp engine, then packs them into
-`dist/Adobe MCP.app`. Apple Silicon and Intel Macs both work; the app you build
-runs on the architecture you built it on.
+`build.sh` downloads Node, uv and the adb-mcp engine, lipos both architectures
+together and packs them into `dist/Adobe MCP.app`. The result is universal: the
+same build runs on Apple Silicon and Intel, whichever Mac you build it on. The
+build refuses to continue if any bundled binary is not universal.
 
 ### How it fits together
 
