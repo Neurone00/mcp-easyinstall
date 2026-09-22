@@ -140,7 +140,6 @@ summary::marker { color: var(--idle); }
 code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
        background: var(--bg); padding: 1.5px 5px; border-radius: 4px; }
 
-.legend { color: var(--ink-soft); font-size: 12.5px; margin: 10px 2px 0; }
 footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: center; }
 #toast {
   position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 90px);
@@ -166,7 +165,7 @@ button:focus-visible, summary:focus-visible {
 <main class="wrap">
 
   <header>
-    <h1><img src="brand/mark.svg" alt="" width="30" height="30"
+    <h1><img src="brand/mark-animated.svg" alt="" width="30" height="30"
          style="vertical-align:-6px;margin-right:9px;border-radius:7px">Moskito&nbsp;Easy&nbsp;MCP</h1>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
     <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
@@ -196,9 +195,6 @@ button:focus-visible, summary:focus-visible {
 
   <h2><span class="num" aria-hidden="true">1</span> Your Adobe apps</h2>
   <div class="list" id="apps"></div>
-
-  <p class="legend">Blue buttons are what's needed to get working. Outlined ones are
-     suggestions. Grey ones are optional.</p>
 
   <h2><span class="num" aria-hidden="true">2</span> Your AI assistants</h2>
   <div class="list" id="clients"></div>

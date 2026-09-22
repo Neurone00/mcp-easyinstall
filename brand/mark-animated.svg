@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The EYE mark, alive.
+
+  A compound eye that is watching: the pupil drifts as though tracking
+  something, and blinks now and then. Motion is slow and low-amplitude so it
+  reads as ambient rather than as a spinner demanding attention, and it stops
+  entirely for anyone who has asked the system to reduce motion.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1406.44 1406.44" width="1024" height="1024">
+  <style>
+    .ground { fill: #010101; }
+    .eye    { fill: #ffffff; transform-origin: 705px 704px; animation: blink 5.4s infinite; }
+    .pupil  { fill: #010101; transform-origin: 783px 869px; animation: look 9s ease-in-out infinite; }
+
+    /* Two quick closes, then a long rest — the rhythm of an actual blink. */
+    @keyframes blink {
+      0%, 88%, 100% { transform: scaleY(1); }
+      91%           { transform: scaleY(0.05); }
+      93.5%         { transform: scaleY(1); }
+      95.5%         { transform: scaleY(0.05); }
+      98%           { transform: scaleY(1); }
+    }
+    /* Uneven drifts with pauses, so it never looks like a loop. Amplitudes are
+       large in viewBox units on purpose: the mark is usually drawn at ~30px, so
+       anything subtler than this rounds away to nothing on screen. The pupil
+       still stays well inside the eye — it has roughly ±200 units of room. */
+    @keyframes look {
+      0%, 13%   { transform: translate(0, 0); }
+      22%, 34%  { transform: translate(135px, -70px); }
+      44%, 54%  { transform: translate(-110px, 45px); }
+      64%, 76%  { transform: translate(60px, 100px); }
+      86%, 100% { transform: translate(0, 0); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .eye, .pupil { animation: none; }
+    }
+  </style>
+  <rect class="ground" width="1406.44" height="1406.44" rx="316"/>
+  <path class="eye" d="M793.25,1111.71c-236,29.67-484.81-135.55-518.16-398.01-33.09-262.47,141.04-386.64,377.54-416.23,236.08-30.07,444.76,45.85,477.69,308.13,33.37,262.78-100.42,476.28-337.07,506.11"/>
+  <path class="pupil" d="M742.1,670.08c-110.34,11.34-190.01,109.95-178.81,219.75,11.03,110.08,109.62,190.23,219.92,178.83,109.69-11.47,190.03-109.93,178.54-219.81-11.51-110.12-109.67-190.14-219.66-178.76"/>
+</svg>
