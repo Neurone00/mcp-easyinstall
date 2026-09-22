@@ -4,7 +4,9 @@
   "private": true,
   "description": "One-click control panel for driving Adobe apps from Claude and ChatGPT",
   "main": "hub.js",
-  "scripts": { "start": "node hub.js" },
+  "scripts": {
+    "start": "node hub.js"
+  },
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1"

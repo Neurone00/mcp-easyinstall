@@ -47,6 +47,18 @@ if [ ! -f "$HERE/engine/mcp/core.py" ]; then
   rm -rf "$tmp" "$HERE/engine/mcp/__pycache__"
 fi
 
+# ------------------------------------------------------- panel Ask buttons --
+# Inject our "Ask Claude / ChatGPT" row into the CEP panels. Done by appending a
+# script tag rather than editing their markup, so an engine update can't break it.
+say "Adding the Ask buttons to the panels"
+for panel in "$HERE"/engine/cep/*/; do
+  cp "$HERE/panel-addon.js" "$panel/panel-addon.js"
+  if ! grep -q "panel-addon.js" "$panel/index.html"; then
+    /usr/bin/sed -i '' 's|</body>|    <script src="panel-addon.js"></script>\
+</body>|' "$panel/index.html"
+  fi
+done
+
 [ -d "$HERE/node_modules" ] || { say "Installing hub dependencies"; npm install --silent; }
 
 # ----------------------------------------------------------------- bundle ---
