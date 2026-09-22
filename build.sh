@@ -67,6 +67,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$RES"
 cp "$HERE/hub.js" "$HERE/index.html" "$RES/"
+# A stray .venv from running the engine locally would double the app's size.
+rm -rf "$HERE/engine/mcp/.venv" "$HERE/engine/mcp/__pycache__"
 cp -R "$HERE/node_modules" "$HERE/runtime" "$HERE/engine" "$RES/"
 
 cat > "$APP/Contents/MacOS/AdobeMCP" <<'LAUNCH'
