@@ -139,6 +139,100 @@ function panelInstalled(key) {
     return null;
 }
 
+/* --------------------------------------------------- panels: open vs live -- */
+
+// A panel can be open in the Adobe app and still not connected to us, and the
+// control panel could not tell that apart from "not open" — both showed the
+// same unhelpful message. It cost us three debugging detours in one day, and
+// it will cost a colleague more.
+//
+// CEP exposes each panel on a local DevTools port (declared in the panel's
+// .debug file, which our build points at the right extension id). If a port
+// answers, the panel is open — and we can click its Connect button for the
+// user through the same channel.
+
+function cepDebugPort(key) {
+    const engine = findEngine();
+    const a = APPS[key];
+    if (!engine || a.kind !== "cep") return null;
+    try {
+        const xml = fs.readFileSync(path.join(engine, "cep", a.cep, ".debug"), "utf8");
+        const m = xml.match(/Port="(\d+)"/);
+        return m ? parseInt(m[1], 10) : null;
+    } catch {
+        return null;
+    }
+}
+
+// Refreshed in the background: /api/status is polled every 2s and is already
+// doing too much synchronous work to add network probes to it.
+const panelOpen = {};
+
+async function cdpTarget(key) {
+    const port = cepDebugPort(key);
+    if (!port) return null;
+    try {
+        const r = await fetch(`http://127.0.0.1:${port}/json`, {
+            signal: AbortSignal.timeout(1500),
+        });
+        if (!r.ok) return null;
+        const targets = await r.json();
+        return targets.find((t) => t.webSocketDebuggerUrl) || null;
+    } catch {
+        return null;   // nothing listening: the panel is not open
+    }
+}
+
+async function refreshPanelOpen() {
+    for (const key of Object.keys(APPS)) {
+        if (APPS[key].kind !== "cep") continue;
+        if (applicationClients[key]) { panelOpen[key] = true; continue; }  // already talking to us
+        panelOpen[key] = !!(await cdpTarget(key));
+    }
+}
+
+// Click the panel's own Connect button, and tick "connect automatically" so it
+// does not need doing twice.
+async function connectPanel(key) {
+    const target = await cdpTarget(key);
+    if (!target) {
+        throw new Error(
+            `The ${APPS[key].label} panel isn't open. In ${APPS[key].label}: ${APPS[key].panelMenu}.`
+        );
+    }
+    const WebSocket = require("ws");
+    const ws = new WebSocket(target.webSocketDebuggerUrl);
+
+    const expression = `(function(){
+        var btn = document.getElementById("btnConnect");
+        var status = document.getElementById("statusText");
+        var before = status ? status.textContent : "?";
+        if (btn && before !== "Connected") { btn.click(); }
+        var chk = document.getElementById("chkConnectOnLaunch");
+        if (chk && !chk.checked) { chk.checked = true; chk.dispatchEvent(new Event("change")); }
+        return before;
+    })()`;
+
+    return new Promise((resolve, reject) => {
+        const done = setTimeout(() => { ws.close(); reject(new Error("The panel did not respond.")); }, 8000);
+        ws.on("open", () => ws.send(JSON.stringify({
+            id: 1, method: "Runtime.evaluate",
+            params: { expression, returnByValue: true },
+        })));
+        ws.on("message", (raw) => {
+            let msg;
+            try { msg = JSON.parse(raw); } catch { return; }
+            if (msg.id !== 1) return;
+            clearTimeout(done);
+            ws.close();
+            const err = msg.result && msg.result.exceptionDetails;
+            if (err) return reject(new Error("The panel refused: " + (err.text || "unknown")));
+            resolve({ ok: true, was: msg.result && msg.result.result && msg.result.result.value });
+        });
+        ws.on("error", (e) => { clearTimeout(done); reject(new Error("Couldn't reach the panel: " + e.message)); });
+    });
+}
+
 /* ------------------------------------------------------------ json helper -- */
 
 // Missing file -> fallback. Unreadable or malformed file -> throw, never the
@@ -761,6 +855,9 @@ app.get("/api/status", (_req, res) => {
             installed: appInstalled(a.appGlob),
             panelInstalled: panelInstalled(key),
             live: !!applicationClients[key],
+            // open but not live means "the panel is showing, it just hasn't
+            // connected" — a one-click fix rather than a mystery.
+            panelOpen: a.kind === "cep" ? !!panelOpen[key] : null,
             clients: Object.keys(CLIENTS).filter((c) => wired[c].includes(key)),
         })),
         clients: Object.entries(CLIENTS).map(([id, c]) => ({
@@ -956,6 +1053,16 @@ app.post("/api/codex-network", (_req, res) => {
 
 // A half-built environment used to be unrecoverable without deleting a folder
 // by hand, so make rebuilding it an action in the UI.
+app.post("/api/connect-panel/:key", async (req, res) => {
+    const key = req.params.key;
+    if (!APPS[key]) return res.status(404).json({ error: "Unknown app." });
+    try {
+        res.json(await connectPanel(key));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post("/api/rebuild-python", (_req, res) => {
     try {
         fs.rmSync(VENV, { recursive: true, force: true });
@@ -1007,6 +1114,8 @@ server.listen(PORT, "127.0.0.1", () => {
     // Claude Desktop is skipped while it is open, so keep checking: the moment
     // it closes, its config gets fixed without the user doing anything.
     setInterval(repairClientPaths, 30000).unref();
+    refreshPanelOpen();
+    setInterval(refreshPanelOpen, 5000).unref();
     checkForUpdate();
     setInterval(checkForUpdate, 6 * 3600 * 1000);
 });

@@ -37,6 +37,10 @@ also a **⚙** button in the MCP panel inside each Adobe app.
 
 Keep it running while you work.
 
+If a panel is open in an Adobe app but hasn't connected, the control panel says so
+and offers a **Connect** button that presses the panel's own Connect for you — and
+sets it to connect by itself from then on.
+
 ### Updates
 
 The app checks for a new version on launch and offers a one-click update. The Adobe

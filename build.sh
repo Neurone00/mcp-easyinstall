@@ -102,6 +102,18 @@ add_engine() {   # $1 = server file, $2 = addon file
     cat "$HERE/$2" >> "$target"
   fi
 }
+# Illustrator's .debug names the AFTER EFFECTS extension id — a copy-paste in
+# the upstream engine. CEP therefore never enables remote debugging for the
+# Illustrator panel, and the control panel's Connect button depends on it.
+# Point each .debug at its own manifest's bundle id.
+say "Fixing the CEP debug descriptors"
+for panel in "$HERE"/engine/cep/*/; do
+  [ -f "$panel/.debug" ] || continue
+  id="$(/usr/bin/sed -n 's/.*ExtensionBundleId="\([^"]*\)".*/\1/p' "$panel/CSXS/manifest.xml" | head -1)"
+  [ -n "$id" ] || continue
+  /usr/bin/sed -i '' "s|<Extension Id=\"[^\"]*\">|<Extension Id=\"$id\">|" "$panel/.debug"
+done
+
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
 

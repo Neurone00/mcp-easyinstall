@@ -1,6 +1,6 @@
 {
   "name": "adobe-mcp-hub",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "description": "One-click control panel for driving Adobe apps from Claude and ChatGPT",
   "main": "hub.js",
@@ -10,6 +10,7 @@
   "dependencies": {
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.3"
+    "socket.io-client": "^4.8.3",
+    "ws": "^8.21.3"
   }
 }

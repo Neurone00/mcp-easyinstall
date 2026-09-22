@@ -271,8 +271,13 @@ function appRow(a) {
     note = "Panel not installed yet";
     dot = "";
     action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
+  } else if (a.kind === "cep" && a.panelOpen) {
+    // The panel is showing but hasn't connected — one click, not a mystery.
+    note = "Panel is open but not connected yet";
+    dot = "part";
+    action = `<button class="primary" data-connectpanel="${a.key}">Connect</button>`;
   } else if (a.kind === "cep") {
-    note = "Panel installed &middot; open it in " + a.label;
+    note = "Open the panel: " + a.panelMenu;
     dot = "part";
     action = `<button data-open="${a.key}">Open app</button>`;
   } else {
@@ -421,6 +426,10 @@ document.addEventListener("click", async (e) => {
       b.textContent = "Installing…";
       await api("POST", "/api/panel/" + b.dataset.panel);
       toast("Panel installed. Now open the app and show the MCP panel.");
+    } else if (b.dataset.connectpanel) {
+      b.textContent = "Connecting\u2026";
+      await api("POST", "/api/connect-panel/" + b.dataset.connectpanel);
+      toast("Connected \u2014 and set to connect by itself from now on.");
     } else if (b.dataset.uxp) {
       await api("POST", "/api/uxp/" + b.dataset.uxp);
       toast("Added to the UXP Developer Tool — press Load next to it there.");
