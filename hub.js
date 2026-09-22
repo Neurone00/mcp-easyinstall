@@ -357,7 +357,15 @@ function debugModeOn() {
 
 // First `uv run` downloads Python and the PyPI deps. Do it now, in the
 // background, so the first thing the user asks Claude doesn't time out.
-const PY_DEPS = ["fonttools", "python-socketio", "mcp", "requests", "websocket-client", "pillow"];
+// Pinned deliberately.
+//   [cli]  pulls typer, which `mcp run` needs; plain "mcp" leaves a fresh
+//          environment unable to start a server at all.
+//   <2     the engine is MCP v1 code. mcp 2.x renamed FastMCP to MCPServer,
+//          so an unpinned install now fails on `from mcp.server.fastmcp
+//          import FastMCP` — which broke every new install the day 2.0
+//          shipped, while existing venvs carried on working.
+const PY_DEPS = ["fonttools", "python-socketio", "mcp[cli]<2", "requests",
+                 "websocket-client", "pillow"];
 let venvReady = false;        // proven by venvWorks(), never assumed
 let venvBuilding = false;
 let venvError = null;

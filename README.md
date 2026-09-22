@@ -115,6 +115,28 @@ connect to. The MCP servers themselves are Python, run through a bundled `uv`.
 
 <br>
 
+## Illustrator tools
+
+Upstream exposes five tools, only one of which can change artwork, so every
+action made the model write an ExtendScript program — expensive, error-prone,
+and the reason simple requests showed up as hundreds of "lines of code" in
+usage dashboards.
+
+Adobe MCP adds thirteen more, built at build time and dispatched through the
+existing script bridge (the panel needs no changes):
+
+`get_instructions`, `list_artboards`, `list_items`, `create_rectangle`,
+`create_ellipse`, `create_text`, `create_artboard`, `set_fill`, `move_item`,
+`resize_item`, `align_item`, `duplicate_item`, `delete_item`.
+
+Coordinates are pixels from the **top-left of an artboard, y downward** — not
+Illustrator's y-up document space — with `center=true` to skip the maths.
+Colours are hex; CMYK documents are converted automatically. `execute_extend_script`
+remains for anything the tools don't cover.
+
+After Effects still has only `execute_extend_script`, but now ships real
+guidance telling the model so, with orientation and undo-group advice.
+
 ## Credits
 
 The engine that actually talks to the Adobe apps is

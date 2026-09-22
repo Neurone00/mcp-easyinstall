@@ -89,6 +89,50 @@ for panel in "$HERE"/engine/cep/*/; do
   fi
 done
 
+# ------------------------------------------------- engine tools + guidance --
+# Append our extra MCP tools and real instructions to the vendored servers.
+# Additive and marker-guarded, like the panel injection above, so re-running the
+# build or updating the engine cannot duplicate or clobber them.
+say "Adding Illustrator tools and instructions to the engine"
+add_engine() {   # $1 = server file, $2 = addon file
+  local target="$HERE/engine/mcp/$1"
+  [ -f "$target" ] || { echo "Missing engine server: $1"; exit 1; }
+  if ! grep -q "Adobe MCP additions" "$target"; then
+    printf '\n' >> "$target"
+    cat "$HERE/$2" >> "$target"
+  fi
+}
+add_engine ai-mcp.py engine-addon-ai.py
+add_engine ae-mcp.py engine-addon-ae.py
+
+# Upstream crashes with a raw TypeError if the panel drops mid-command:
+# send_message_blocking legitimately returns None, and core.py dereferences it.
+# Done with node, not sed — sed collapsed the replacement onto one line and
+# produced a core.py that would not parse.
+"$HERE/runtime/node" -e '
+  const fs = require("fs");
+  const f = process.argv[1];
+  let s = fs.readFileSync(f, "utf8");
+  const needle = "    logger.log(f\"Final response: {response[\x27status\x27]}\")";
+  if (!s.includes("Lost the connection to the Adobe app")) {
+    if (!s.includes(needle)) { console.error("core.py: anchor not found"); process.exit(1); }
+    s = s.replace(needle,
+      "    if response is None:\n" +
+      "        raise RuntimeError(\"Lost the connection to the Adobe app. Is the MCP Agent panel still open?\")\n" +
+      needle);
+    fs.writeFileSync(f, s);
+  }
+' "$HERE/engine/mcp/core.py"
+
+# 20s covers connect AND execution, which is not enough for exports or renders.
+/usr/bin/sed -i '' 's|^PROXY_TIMEOUT = 20$|PROXY_TIMEOUT = int(os.environ.get("ADOBE_MCP_TIMEOUT", "120"))|' \
+  "$HERE"/engine/mcp/*-mcp.py
+for f in "$HERE"/engine/mcp/*-mcp.py; do
+  grep -q "^import os$" "$f" || /usr/bin/sed -i '' '1i\
+import os
+' "$f"
+done
+
 [ -d "$HERE/node_modules" ] || { say "Installing hub dependencies"; npm install --silent; }
 
 # ----------------------------------------------------------------- bundle ---
