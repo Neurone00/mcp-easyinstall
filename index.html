@@ -324,10 +324,23 @@ function clientRow(c) {
           <li><b>Quit &amp; reconnect</b> closes Claude, connects your apps, and reopens it.</li>
         </ul></details>`));
   }
+  if (c.id === "codex" && n && !state.codexNetwork) {
+    const note = row.querySelector(".note");
+    note.innerHTML = "Connected \u2014 but ChatGPT can't reach your Adobe apps yet.";
+    row.querySelector(".dot").className = "dot part";
+    row.querySelector("button").replaceWith(
+      el(`<button class="primary" data-codexnet="1">Allow</button>`));
+  }
+
   if (c.id === "codex") {
     row.querySelector(".meta").appendChild(el(
       `<details data-k="gpt-which"><summary>Which ChatGPT does this cover?</summary>
         <ul class="steps">
+          ${state.codexNetwork ? "" : `<li><b>Local connections are blocked.</b> ChatGPT and Codex
+          run MCP servers in a sandbox with networking off, so your Adobe apps are
+          unreachable and every request fails. <b>Allow</b> turns networking on for that
+          sandbox &mdash; it also lets any other Codex tool reach the network, so it's
+          your call.</li>`}
           <li><b>ChatGPT desktop app</b> &mdash; yes. Settings &rarr; MCP servers will already list your Adobe apps.</li>
           <li><b>Codex CLI</b> and the <b>IDE extension</b> &mdash; yes, same config file.</li>
           <li>To check: type <code>/mcp</code> in ChatGPT's composer. Restart it if the list
@@ -391,6 +404,9 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.disconnect) {
       await api("DELETE", "/api/client/" + b.dataset.disconnect);
       toast("Disconnected.");
+    } else if (b.dataset.codexnet) {
+      await api("POST", "/api/codex-network");
+      toast("Done. Restart ChatGPT or Codex to pick it up.");
     } else if (b.dataset.restart) {
       await api("POST", "/api/restart-claude");
       toast("Restarting Claude…");

@@ -40,6 +40,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    var quitting = false
+
     func startHub() {
         guard let res = Bundle.main.resourcePath else { return }
         let log = FileManager.default.homeDirectoryForCurrentUser
@@ -53,6 +55,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             handle.seekToEndOfFile()
             p.standardOutput = handle
             p.standardError = handle
+        }
+        // If the hub dies the menu bar icon would still be there doing nothing,
+        // so bring it back — with a pause, so a crash loop doesn't spin.
+        p.terminationHandler = { [weak self] _ in
+            guard let self, !self.quitting else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.startHub() }
         }
         try? p.run()
         hub = p
@@ -76,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // The hub holds port 3001; leaving it running after a quit would block the
     // next launch and keep the Adobe panels talking to a ghost.
     func applicationWillTerminate(_ note: Notification) {
+        quitting = true
         hub?.terminate()
     }
 }

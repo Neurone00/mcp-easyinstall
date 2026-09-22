@@ -20,6 +20,8 @@ const { execFile, execFileSync } = require("child_process");
 const PORT = 3001;
 const HOME = os.homedir();
 const REPO = "Neurone00/mcp-easyinstall";
+const SUPPORT = path.join(HOME, "Library", "Application Support", "AdobeMCP");
+const VENV = path.join(SUPPORT, "venv");
 const VERSION = require("./package.json").version;
 const HERE = __dirname;
 const SETTINGS = path.join(HERE, "settings.json");
@@ -168,7 +170,9 @@ function serverDef(key) {
             "--with", "pillow",
             "mcp", "run", APPS[key].mcp,
         ],
-        env: {},
+        // Without this uv builds its virtualenv inside the .app, which an update
+        // wipes and a read-only install location would reject outright.
+        env: { UV_PROJECT_ENVIRONMENT: VENV },
     };
 }
 
@@ -229,9 +233,12 @@ function connectClient(clientId, keys) {
     const body = keys
         .map((k) => {
             const d = serverDef(k);
+            const env = Object.entries(d.env || {})
+                .map(([ek, ev]) => `${ek} = ${JSON.stringify(ev)}`)
+                .join(", ");
             return `[${c.key}.${k}]\ncommand = ${JSON.stringify(d.command)}\nargs = [${d.args
                 .map((a) => JSON.stringify(a))
-                .join(", ")}]`;
+                .join(", ")}]` + (env ? `\nenv = { ${env} }` : "");
         })
         .join("\n\n");
     const block = `${START}\n# Managed by Adobe MCP Hub. Edits inside this block are overwritten.\n${body}\n${END}`;
@@ -317,7 +324,8 @@ function warmUp() {
     execFile(uv, ["run", "--directory", path.join(engine, "mcp"),
         "--with", "fonttools", "--with", "python-socketio", "--with", "mcp",
         "--with", "requests", "--with", "websocket-client", "--with", "pillow",
-        "python", "-c", "print('warm')"], { timeout: 300000 },
+        "python", "-c", "print('warm')"],
+        { timeout: 300000, env: { ...process.env, UV_PROJECT_ENVIRONMENT: VENV } },
         (err) => console.log(err ? "\u26a0 warm-up failed: " + err.message : "\u2713 Python runtime ready"));
 }
 
@@ -349,9 +357,12 @@ function repairClientPaths() {
         let stale = false;
         if (CLIENTS[id].format === "json") {
             const servers = readJSON(CLIENTS[id].file, {})[CLIENTS[id].key] || {};
-            stale = connected.some((k) => servers[k] && servers[k].command !== want.command);
+            stale = connected.some((k) => servers[k] &&
+                (servers[k].command !== want.command ||
+                 (servers[k].env || {}).UV_PROJECT_ENVIRONMENT !== VENV));
         } else {
-            stale = !fs.readFileSync(CLIENTS[id].file, "utf8").includes(want.command);
+            const toml = fs.readFileSync(CLIENTS[id].file, "utf8");
+            stale = !toml.includes(want.command) || !toml.includes(VENV);
         }
         if (!stale) continue;
         try {
@@ -361,6 +372,62 @@ function repairClientPaths() {
             console.log(`\u26a0 could not repair ${CLIENTS[id].label}: ${e.message}`);
         }
     }
+}
+
+// Codex (and the ChatGPT desktop app's Codex host) runs MCP servers in a
+// workspace-write sandbox with networking off, so the Adobe servers cannot reach
+// the hub on localhost:3001. Every tool call fails as "cancelled" until this is
+// switched on. It widens their sandbox, so it is never done automatically.
+const CODEX_TOML = process.env.ADOBE_MCP_CODEX_TOML || CLIENTS.codex.file;
+
+// Line-based on purpose: splitting TOML with regexes lost the newline after the
+// section header and produced a file Codex could not parse.
+function codexTomlLines() {
+    return fs.existsSync(CODEX_TOML) ? fs.readFileSync(CODEX_TOML, "utf8").split("\n") : [];
+}
+
+function sectionRange(lines) {
+    const start = lines.findIndex((l) => l.trim() === "[sandbox_workspace_write]");
+    if (start === -1) return null;
+    let end = start + 1;
+    while (end < lines.length && !/^\s*\[/.test(lines[end])) end++;
+    return { start, end };
+}
+
+function codexNetworkAllowed() {
+    const lines = codexTomlLines();
+    const r = sectionRange(lines);
+    if (!r) return false;
+    return lines.slice(r.start + 1, r.end).some((l) => /^\s*network_access\s*=\s*true/.test(l));
+}
+
+function allowCodexNetwork() {
+    const lines = codexTomlLines();
+    if (fs.existsSync(CODEX_TOML)) fs.copyFileSync(CODEX_TOML, CODEX_TOML + ".adobe-mcp-backup");
+
+    const r = sectionRange(lines);
+    if (!r) {
+        lines.push(
+            "",
+            "# Added by Adobe MCP: lets local MCP servers reach the app on localhost.",
+            "[sandbox_workspace_write]",
+            "network_access = true",
+            ""
+        );
+    } else {
+        const i = lines.slice(r.start + 1, r.end)
+            .findIndex((l) => /^\s*network_access\s*=/.test(l));
+        if (i === -1) {
+            // Insert before the blank lines that separate this section from the
+            // next one, not after them.
+            let at = r.end;
+            while (at > r.start + 1 && lines[at - 1].trim() === "") at--;
+            lines.splice(at, 0, "network_access = true");
+        }
+        else lines[r.start + 1 + i] = "network_access = true";
+    }
+    fs.mkdirSync(path.dirname(CODEX_TOML), { recursive: true });
+    fs.writeFileSync(CODEX_TOML, lines.join("\n"));
 }
 
 /* ------------------------------------------------------------- updates -- */
@@ -489,6 +556,7 @@ app.get("/api/status", (_req, res) => {
         uv,
         debugMode: debugModeOn(),
         claudeRunning: claudeRunning(),
+        codexNetwork: codexNetworkAllowed(),
         version: VERSION,
         update,
         apps: Object.entries(APPS).map(([key, a]) => ({
@@ -674,6 +742,15 @@ app.post("/api/update", async (_req, res) => {
     }
 });
 
+app.post("/api/codex-network", (_req, res) => {
+    try {
+        allowCodexNetwork();
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post("/api/quit", (_req, res) => {
     res.json({ ok: true });
     setTimeout(() => process.exit(0), 200);
@@ -704,6 +781,7 @@ server.listen(PORT, () => {
     // The menu bar app decides when to show the panel — first run, its menu
     // item, or reopening the app. The hub never opens a tab on its own.
     console.log(`Adobe MCP ${VERSION}  \u2192  ${URL}`);
+    fs.mkdirSync(SUPPORT, { recursive: true });
     refreshPanels();
     repairClientPaths();
     checkForUpdate();

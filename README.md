@@ -71,9 +71,15 @@ Then just ask:
 
 The **ChatGPT desktop app**, **Codex CLI** and the **Codex IDE extension** all run
 local MCP servers and share one config file, so Adobe MCP connects all three at once.
-In the desktop app they appear under Settings → MCP servers; type `/mcp` in the
-composer to list what it can currently see. Restart the app if the list looks empty —
-it reads the config at launch.
+These tools live in the **Codex** surface, not a plain ChatGPT chat — asking a normal
+chat window about them will get you "no Adobe Illustrator MCP server appears".
+
+**One extra step for ChatGPT and Codex.** They run MCP servers in a sandbox with
+networking switched off, so the Adobe servers can't reach the app on `localhost` and
+every request fails as "cancelled". Press **Allow** on the ChatGPT row in Adobe MCP.
+That sets `network_access = true` under `[sandbox_workspace_write]` in
+`~/.codex/config.toml` — which also lets other Codex tools reach the network, so it's
+your call. Claude Desktop doesn't sandbox its MCP servers and needs nothing.
 
 **ChatGPT in a browser tab cannot** — its connectors only reach servers on the public
 internet, so they can't see an app on your Mac. Use the desktop app.
