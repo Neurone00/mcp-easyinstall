@@ -71,7 +71,9 @@ Then just ask:
 
 The **ChatGPT desktop app**, **Codex CLI** and the **Codex IDE extension** all run
 local MCP servers and share one config file, so Adobe MCP connects all three at once.
-In the desktop app they appear under Settings → MCP servers.
+In the desktop app they appear under Settings → MCP servers; type `/mcp` in the
+composer to list what it can currently see. Restart the app if the list looks empty —
+it reads the config at launch.
 
 **ChatGPT in a browser tab cannot** — its connectors only reach servers on the public
 internet, so they can't see an app on your Mac. Use the desktop app.

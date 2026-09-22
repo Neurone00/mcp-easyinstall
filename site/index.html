@@ -51,16 +51,22 @@ h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--soft
 section{padding:56px 0;border-top:1px solid var(--line)}
 
 ol.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:14px}
-ol.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);
+ol.steps > li{counter-increment:s;background:var(--card);border:1px solid var(--line);
   border-radius:12px;padding:18px 20px 18px 60px;position:relative;box-shadow:var(--shadow)}
-ol.steps li::before{content:counter(s);position:absolute;left:20px;top:18px;width:24px;height:24px;
+ol.steps > li::before{content:counter(s);position:absolute;left:20px;top:18px;width:24px;height:24px;
   border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;
   font-size:13px;font-weight:650}
-ol.steps b{display:block}
+ol.steps > li > b{display:block}
 ol.steps span{color:var(--soft);font-size:14.5px}
+ul.where{margin:9px 0 0;padding-left:18px;color:var(--soft);font-size:14px}
+ul.where li{margin:3px 0}
+ul.where b{color:var(--ink);font-weight:560}
 
 .ask{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
   border-radius:10px;padding:14px 18px;margin:10px 0;color:var(--soft);font-style:italic}
+.warn{background:var(--card);border:1px solid var(--line);border-left:3px solid #c77700;
+  border-radius:10px;padding:14px 18px;margin:26px 0 0;font-size:14.5px;color:var(--soft)}
+.warn b{color:var(--ink)}
 
 table{width:100%;border-collapse:collapse;font-size:15px}
 td{padding:13px 0;border-top:1px solid var(--line);vertical-align:top}
@@ -115,10 +121,33 @@ footer a{color:var(--soft)}
   </section>
 
   <section>
-    <h2>Then just ask</h2>
+    <h2>How to use it</h2>
+    <ol class="steps">
+      <li><b>Open the MCP panel in your Adobe app and leave it open.</b>
+          <span>That panel is the connection &mdash; close it and nothing works.</span>
+          <ul class="where">
+            <li>Illustrator, After Effects &mdash; <b>Window &rarr; Extensions &rarr; MCP Agent</b></li>
+            <li>Photoshop, InDesign &mdash; <b>Plugins &rarr; MCP Agent</b></li>
+            <li>Premiere Pro &mdash; <b>Window &rarr; MCP Agent</b></li>
+          </ul></li>
+      <li><b>Open Claude or ChatGPT.</b>
+          <span>The desktop apps, not a browser tab. There are buttons for both right
+          inside the panel.</span></li>
+      <li><b>Say what you want, in plain words.</b>
+          <span>It works on the document you already have open. Watch the panel's message
+          log to see each step arrive.</span></li>
+    </ol>
+
+    <p style="margin:26px 0 10px;color:var(--soft);font-size:14.5px">Things people ask for:</p>
     <p class="ask">Make me a 1080&times;1920 story with a bold headline in our brand colours.</p>
     <p class="ask">Rename every layer in this file to a consistent format.</p>
     <p class="ask">Build a rough cut from these clips with cross dissolves between them.</p>
+    <p class="ask">Create a 5 second comp and fade the title in.</p>
+
+    <div class="warn">
+      <b>Save before you start.</b> It edits the document you have open, and not every
+      step can be undone. Try it on a copy first.
+    </div>
   </section>
 
   <section>
@@ -137,7 +166,8 @@ footer a{color:var(--soft)}
       <tr><td>ChatGPT desktop, Codex CLI</td>
           <td><span class="ok">Connected automatically.</span> They share one config file.
               ChatGPT in a <i>browser tab</i> can't reach an app on your Mac &mdash; its
-              connectors only see the public internet.</td></tr>
+              connectors only see the public internet. To check the desktop app sees them,
+              type <b>/mcp</b> in its composer.</td></tr>
     </table>
   </section>
 

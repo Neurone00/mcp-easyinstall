@@ -271,13 +271,13 @@ function appRow(a) {
 
   if (!ready && a.installed && a.kind === "cep" && !needsPanel) {
     row.querySelector(".meta").appendChild(el(
-      `<details><summary>Where is the panel?</summary>
+      `<details data-k="where-${a.key}"><summary>Where is the panel?</summary>
         <ul class="steps"><li>In ${a.label}: <b>${a.panelMenu}</b></li>
         <li>Leave that panel open while you work.</li></ul></details>`));
   }
   if (a.installed && a.kind === "uxp" && !ready) {
     row.querySelector(".meta").appendChild(el(
-      `<details><summary>Why does this one need an extra step?</summary>
+      `<details data-k="uxp-${a.key}"><summary>Why does this one need an extra step?</summary>
         <ul class="steps">
           <li>Adobe only auto-installs plugins it has signed. ${a.label}'s plugin isn't, so it loads through Adobe's free <b>UXP Developer Tool</b>.</li>
           <li><b>Set up</b> adds the plugin to that tool for you &mdash; then press <b>Load</b> next to it.</li>
@@ -317,7 +317,7 @@ function clientRow(c) {
         el(`<button class="primary" data-restart="1">Quit &amp; reconnect</button>`));
     }
     row.querySelector(".meta").appendChild(el(
-      `<details><summary>Why does Claude have to be closed?</summary>
+      `<details data-k="claude-why"><summary>Why does Claude have to be closed?</summary>
         <ul class="steps">
           <li>Claude Desktop holds its settings in memory and writes the whole file back when it
           quits &mdash; erasing anything added while it was open.</li>
@@ -326,10 +326,12 @@ function clientRow(c) {
   }
   if (c.id === "codex") {
     row.querySelector(".meta").appendChild(el(
-      `<details><summary>Which ChatGPT does this cover?</summary>
+      `<details data-k="gpt-which"><summary>Which ChatGPT does this cover?</summary>
         <ul class="steps">
           <li><b>ChatGPT desktop app</b> &mdash; yes. Settings &rarr; MCP servers will already list your Adobe apps.</li>
           <li><b>Codex CLI</b> and the <b>IDE extension</b> &mdash; yes, same config file.</li>
+          <li>To check: type <code>/mcp</code> in ChatGPT's composer. Restart it if the list
+          looks empty &mdash; it reads the config at launch.</li>
           <li><b>ChatGPT in the browser</b> &mdash; no. Its connectors only reach servers on the public
           internet, so they can't see an app on your Mac.</li>
         </ul></details>`));
@@ -338,6 +340,12 @@ function clientRow(c) {
 }
 
 function render() {
+  // The 2s poll rebuilds these rows, which would slam every open <details>
+  // shut while you are reading it. Remember what was open and restore it.
+  const open = new Set(
+    [...document.querySelectorAll("details[open][data-k]")].map((d) => d.dataset.k)
+  );
+
   renderBanner();
   const apps = document.getElementById("apps");
   const clients = document.getElementById("clients");
@@ -345,6 +353,10 @@ function render() {
   clients.replaceChildren(...state.clients.map(clientRow));
 
   document.getElementById("ver").textContent = state.version ? "v" + state.version : "";
+
+  for (const d of document.querySelectorAll("details[data-k]")) {
+    if (open.has(d.dataset.k)) d.open = true;
+  }
 
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
@@ -411,9 +423,14 @@ document.addEventListener("click", async (e) => {
 
 /* ---------------------------------------------------------------- polling -- */
 
+let lastJSON = "";
 async function refresh() {
   try {
-    state = await api("GET", "/api/status");
+    const next = await api("GET", "/api/status");
+    const json = JSON.stringify(next);
+    if (json === lastJSON) return;
+    lastJSON = json;
+    state = next;
     render();
   } catch {
     document.getElementById("setup-said").textContent = "Lost contact with the Adobe MCP app.";
