@@ -110,8 +110,17 @@ button {
   cursor: pointer; white-space: nowrap; flex: none; transition: .12s;
 }
 button:hover:not(:disabled) { border-color: var(--ink-soft); }
+/* Weight carries meaning. Every button looked identical before, whether it
+   unblocked the app or was entirely optional.
+     primary — do this and the thing starts working
+     suggest — helpful next step, nothing is broken without it
+     quiet   — optional, available, not being recommended */
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.suggest { border-color: var(--accent); color: var(--accent); background: transparent; }
+button.suggest:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+button.quiet { border-color: transparent; color: var(--ink-soft); background: transparent; }
+button.quiet:hover:not(:disabled) { background: var(--bg); color: var(--ink); }
 button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" the least legible text on the page */
 .acts { display: flex; gap: 6px; flex: none; }
 .consent { margin-top: 8px; font-size: 12.5px; color: var(--ink-soft);
@@ -131,6 +140,7 @@ summary::marker { color: var(--idle); }
 code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
        background: var(--bg); padding: 1.5px 5px; border-radius: 4px; }
 
+.legend { color: var(--ink-soft); font-size: 12.5px; margin: 10px 2px 0; }
 footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: center; }
 #toast {
   position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 90px);
@@ -186,6 +196,9 @@ button:focus-visible, summary:focus-visible {
 
   <h2><span class="num" aria-hidden="true">1</span> Your Adobe apps</h2>
   <div class="list" id="apps"></div>
+
+  <p class="legend">Blue buttons are what's needed to get working. Outlined ones are
+     suggestions. Grey ones are optional.</p>
 
   <h2><span class="num" aria-hidden="true">2</span> Your AI assistants</h2>
   <div class="list" id="clients"></div>
@@ -303,7 +316,7 @@ function appRow(a) {
       ? `${a.clients.length} assistant${a.clients.length > 1 ? "s" : ""} can drive it`
       : "Connect an assistant below to use it";
     status = "Ready"; tone = "live";
-    action = `<button data-open="${a.key}">Open app</button>`;
+    action = `<button class="quiet" data-open="${a.key}">Open app</button>`;
   } else if (needsPanel) {
     note = "The panel hasn't been installed yet";
     status = "Not set up"; tone = "";
@@ -315,11 +328,11 @@ function appRow(a) {
   } else if (a.kind === "cep") {
     note = `Open the panel: ${a.panelMenu}`;
     status = "Panel closed"; tone = "";
-    action = `<button data-open="${a.key}">Open ${a.label}</button>`;
+    action = `<button class="suggest" data-open="${a.key}">Open ${a.label}</button>`;
   } else {
     note = "Needs one Load click in Adobe's UXP Developer Tool";
     status = "Not set up"; tone = "";
-    action = `<button data-uxp="${a.key}">Set up</button>`;
+    action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
   }
 
   const row = el(`
@@ -374,7 +387,7 @@ function clientRow(c) {
       </div>
       <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       <span class="acts">
-        ${n ? `<button data-disconnect="${c.id}">Disconnect</button>`
+        ${n ? `<button class="quiet" data-disconnect="${c.id}">Disconnect</button>`
             : `<button class="primary" data-connect="${c.id}">Connect</button>`}
       </span>
     </div>`);
