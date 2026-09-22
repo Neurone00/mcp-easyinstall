@@ -6,6 +6,7 @@
 
 import Cocoa
 import WebKit
+import ApplicationServices
 
 let dashboardURL = URL(string: "http://localhost:3001")!
 
@@ -89,6 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         launched = true
         watchForShowRequests()
+        watchForArrangeRequests()
 
         // First run: show the panel so setup isn't hidden behind the menu bar.
         if !UserDefaults.standard.bool(forKey: "hasLaunched") {
@@ -207,6 +209,108 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lastSeen = stamp
             DispatchQueue.main.async { self.openPanel() }
         }
+    }
+
+    /* ------------------------------------------------------ arranging -- */
+
+    /// Put the Adobe app on the left 80% of the screen and the AI assistants on
+    /// the right 20%.
+    ///
+    /// This has to happen HERE, in the app itself, and not in the hub or a
+    /// script it spawns. Moving another application's windows needs
+    /// Accessibility permission, and macOS grants that to the process that
+    /// asks — so the earlier osascript version made `osascript` the subject of
+    /// the permission, not Moskito Easy MCP. The grant either never appeared or
+    /// attached to the wrong app, and the call did nothing, silently. This
+    /// binary carries the app's own signed identity, so the grant lands on
+    /// Moskito Easy MCP and sticks across updates.
+    func watchForArrangeRequests() {
+        let req = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/AdobeMCP/arrange-request")
+        var lastSeen = (try? String(contentsOf: req, encoding: .utf8)) ?? ""
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            guard let body = try? String(contentsOf: req, encoding: .utf8) else { return }
+            guard body != lastSeen else { return }
+            lastSeen = body
+            // stamp, split, adobe .app, then any assistant .apps installed.
+            let parts = body.split(separator: "\n").map(String.init)
+            guard parts.count >= 3, let split = Double(parts[1]) else { return }
+            DispatchQueue.main.async {
+                self.arrange(adobe: parts[2], assistants: Array(parts.dropFirst(3)), split: split)
+            }
+        }
+    }
+
+    private func arrangeResult(_ text: String) {
+        let out = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/AdobeMCP/arrange-result")
+        try? text.write(to: out, atomically: true, encoding: .utf8)
+    }
+
+    func arrange(adobe: String, assistants: [String], split: Double) {
+        // Prompts the first time, then never again — the answer is remembered
+        // against this app's signature.
+        let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+        guard AXIsProcessTrustedWithOptions(opts as CFDictionary) else {
+            arrangeResult("needs-permission")
+            return
+        }
+
+        guard let screen = NSScreen.main else { return arrangeResult("no screen") }
+        // visibleFrame, not frame: it already excludes the menu bar and the
+        // Dock, so nothing ends up underneath them.
+        let area = screen.visibleFrame
+        let wide = (area.width * CGFloat(split)).rounded()
+
+        guard place(bundlePath: adobe,
+                    to: NSRect(x: area.minX, y: area.minY, width: wide, height: area.height))
+        else { return arrangeResult("no window to move \u{2014} is it open?") }
+
+        // Every running assistant goes to the same right-hand column. Splitting
+        // the remainder again between two of them leaves neither usable;
+        // whichever you bring forward fills it.
+        let right = NSRect(x: area.minX + wide, y: area.minY,
+                           width: area.width - wide, height: area.height)
+        for a in assistants { _ = place(bundlePath: a, to: right) }
+
+        arrangeResult("ok")
+    }
+
+    /// Move and resize an application's main window.
+    private func place(bundlePath: String, to frame: NSRect) -> Bool {
+        guard let id = Bundle(path: bundlePath)?.bundleIdentifier,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first
+        else { return false }
+
+        let ax = AXUIElementCreateApplication(app.processIdentifier)
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(ax, kAXWindowsAttribute as CFString, &value) == .success,
+              let windows = value as? [AXUIElement], !windows.isEmpty
+        else { return false }
+
+        // The main window, else the first one: an Adobe app has palettes and
+        // panels in this list too, and resizing a palette to 80% of the screen
+        // would be a memorable bug.
+        let target = windows.first { w in
+            var main: CFTypeRef?
+            AXUIElementCopyAttributeValue(w, kAXMainAttribute as CFString, &main)
+            return (main as? Bool) == true
+        } ?? windows[0]
+
+        // AX measures from the top-left of the PRIMARY screen downwards;
+        // NSScreen measures from the bottom-left upwards.
+        let top = NSScreen.screens.first?.frame.maxY ?? frame.maxY
+        var origin = CGPoint(x: frame.minX, y: top - frame.maxY)
+        var size = CGSize(width: frame.width, height: frame.height)
+
+        let posOK = AXUIElementSetAttributeValue(
+            target, kAXPositionAttribute as CFString,
+            AXValueCreate(.cgPoint, &origin)!) == .success
+        let sizeOK = AXUIElementSetAttributeValue(
+            target, kAXSizeAttribute as CFString,
+            AXValueCreate(.cgSize, &size)!) == .success
+        return posOK && sizeOK
     }
 
     /// The menu bar item's icon.

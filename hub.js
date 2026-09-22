@@ -141,92 +141,49 @@ function panelInstalled(key) {
 // Put the Adobe app on most of the screen and the assistant beside it, so you
 // can type a request and watch it happen without hunting for windows.
 //
-// This needs macOS Accessibility permission, because moving another app's
-// windows is exactly what that permission governs. Without it the script fails
-// with -1719 and we say so plainly rather than silently doing nothing.
-// Async on purpose. The first version used execFileSync, which blocked the
-// whole event loop — including the Adobe command proxy — for as long as
-// osascript took. And osascript does not fail fast here: while macOS is holding
-// the Accessibility request pending, it simply hangs, so a synchronous call
-// froze the hub for the full timeout.
-function osa(script, ms) {
-    return new Promise((resolve, reject) => {
-        execFile("/usr/bin/osascript", ["-e", script], { timeout: ms, encoding: "utf8" },
-            (err, stdout, stderr) => {
-                if (!err) return resolve(String(stdout).trim());
-                const text = String(stderr || err.message);
-                if (err.killed || /ETIMEDOUT/.test(text)) {
-                    const e = new Error(
-                        "macOS is waiting on permission to let this app move other apps' windows. " +
-                        "Look for its prompt, or switch it on under System Settings \u2192 " +
-                        "Privacy & Security \u2192 Accessibility. If it is already on, switch it " +
-                        "off and on again \u2014 see below."
-                    );
-                    e.needsAccessibility = true;
-                    return reject(e);
-                }
-                if (/-1719|assistive access/.test(text)) {
-                    // The permission is often already granted and still refused:
-                    // the app is ad-hoc signed, so every update changes its code
-                    // identity and macOS stops matching it to the grant. Saying
-                    // "go and allow it" to someone who already has is useless.
-                    const e = new Error(
-                        "macOS is still refusing to let this app move other windows. If you have already " +
-                        "switched it on under System Settings \u2192 Privacy & Security \u2192 Accessibility, " +
-                        "switch it OFF and ON again \u2014 the app is not signed by Apple, so its identity " +
-                        "changes with every update and macOS stops matching it to the permission you gave."
-                    );
-                    e.needsAccessibility = true;
-                    return reject(e);
-                }
-                reject(new Error(text.split("\n")[0]));
-            });
-    });
-}
+// Moving another app's windows needs macOS Accessibility permission, and macOS
+// grants that to whichever process asks. The osascript version this replaces
+// therefore asked on behalf of `osascript`, not Moskito Easy MCP: the grant
+// attached to the wrong thing, or never appeared, and the call did nothing,
+// silently. The menu bar binary carries the app's own signed identity, so it
+// does the work. We leave it a note and read the answer back.
+const ARRANGE_REQ = path.join(SUPPORT, "arrange-request");
+const ARRANGE_RES = path.join(SUPPORT, "arrange-result");
 
-async function screenSize() {
-    try {
-        const b = (await osa('tell application "Finder" to get bounds of window of desktop', 8000))
-            .split(",").map((n) => parseInt(n, 10));
-        if (b.length === 4 && b[2] > 0) return { w: b[2], h: b[3] };
-    } catch { /* fall through */ }
-    return { w: 1440, h: 900 };
-}
-
-// Put the Adobe app on most of the screen and the assistant beside it, so you
-// can type a request and watch it happen without hunting for windows.
-async function arrangeWindows(appKey, assistant, split) {
+async function arrangeWindows(appKey, split) {
     const bundle = appBundle(APPS[appKey].appGlob);
     if (!bundle) throw new Error(`${APPS[appKey].label} isn't installed.`);
-    const adobeProc = path.basename(bundle, ".app");
 
-    const { w, h } = await screenSize();
-    const left = Math.round(w * split);
-    const right = w - left;
+    fs.mkdirSync(SUPPORT, { recursive: true });
+    try { fs.unlinkSync(ARRANGE_RES); } catch { /* no previous answer to clear */ }
+    // Both assistants go in the same column, so there is nothing to choose
+    // between: whichever you bring forward fills it.
+    const assistants = ["Claude", "ChatGPT"]
+        .map((n) => path.join("/Applications", n + ".app"))
+        .filter((f) => fs.existsSync(f));
+    // The timestamp is what makes a repeat request differ from the last one.
+    fs.writeFileSync(ARRANGE_REQ, [Date.now(), split, bundle, ...assistants].join("\n"));
 
-    const script = `
-        on place(procName, x, y, ww, hh)
-            tell application "System Events"
-                if not (exists process procName) then return "missing"
-                tell process procName
-                    if (count of windows) is 0 then return "nowindow"
-                    set position of window 1 to {x, y}
-                    set size of window 1 to {ww, hh}
-                end tell
-            end tell
-            return "ok"
-        end place
-        set a to place("${adobeProc}", 0, 0, ${left}, ${h})
-        set b to place("${assistant}", ${left}, 0, ${right}, ${h})
-        return a & "|" & b
-    `;
-
-    const out = await osa(script, 25000);
-    const [adobe, asst] = out.split("|");
-    return {
-        ok: true, adobe, assistant: asst,
-        layout: `${Math.round(split * 100)}/${100 - Math.round(split * 100)}`,
-    };
+    // The watcher ticks twice a second; give it a few ticks before giving up.
+    for (let i = 0; i < 24; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        let answer;
+        try { answer = fs.readFileSync(ARRANGE_RES, "utf8").trim(); } catch { continue; }
+        if (answer === "needs-permission") {
+            const e = new Error(
+                "macOS needs your permission before Moskito Easy MCP can move other apps' " +
+                "windows. Allow it under Privacy & Security → Accessibility, then press " +
+                "Arrange again."
+            );
+            e.needsAccessibility = true;
+            throw e;
+        }
+        if (answer.startsWith("ok")) {
+            return { ok: true, layout: `${Math.round(split * 100)}/${100 - Math.round(split * 100)}` };
+        }
+        throw new Error(`Couldn't arrange the windows — ${answer}.`);
+    }
+    throw new Error("Moskito Easy MCP didn't answer. Try Restart Background Service from its menu.");
 }
 
 /* ------------------------------------------------------------- caching -- */
@@ -1110,8 +1067,7 @@ io.on("connection", (socket) => {
         try {
             if (req.type === "arrange") {
                 const split = Math.min(0.9, Math.max(0.5, Number(req.split) || 0.8));
-                const assistant = req.assistant === "ChatGPT" ? "ChatGPT" : "Claude";
-                return arrangeWindows(key, assistant, split)
+                return arrangeWindows(key, split)
                     .then((r) => socket.emit("app_response", { id: req.id, ...r }))
                     .catch((e) => socket.emit("app_response", {
                         id: req.id, ok: false, error: e.message,

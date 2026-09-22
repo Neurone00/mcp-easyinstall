@@ -304,6 +304,20 @@
     hubRequest({ type: "open_panel" }, function (r) { if (!r || !r.ok) openUrl(HUB); });
   }));
   moreSheet.appendChild(menuItem("Open the control panel in a browser", function () { openUrl(HUB); }));
+  // Back, and this time it works. The osascript version could not get the
+  // Accessibility permission to attach to us; the app's own binary does it now.
+  moreSheet.appendChild(menuItem("Arrange windows: " + APP + " + assistant", function () {
+    toggle(moreSheet);
+    flash("Arranging\u2026");
+    bindSocketOnce();
+    hubRequest({ type: "arrange", split: 0.8 }, function (r) {
+      if (r && r.ok) return flash("Arranged " + (r.layout || "80/20"));
+      flash((r && r.error) || "Couldn't arrange the windows");
+      // One click to the exact pane, rather than a sentence describing where
+      // in System Settings to go looking.
+      if (r && r.needsAccessibility) hubRequest({ type: "open_accessibility" }, function () {});
+    });
+  }));
   moreSheet.appendChild(menuItem("Copy log to clipboard", function () {
     var t = $("messageLog");
     if (!t) return;
