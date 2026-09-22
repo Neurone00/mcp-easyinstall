@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adobe MCP</title>
+<style>
+:root {
+  --bg: #f6f6f7;
+  --card: #ffffff;
+  --ink: #16161a;
+  --ink-soft: #6b6b76;
+  --line: #e4e4e9;
+  --accent: #3b5bdb;
+  --ok: #1f9d55;
+  --warn: #c77700;
+  --idle: #b9b9c2;
+  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px rgba(20,20,30,.05);
+}
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131317;
+    --card: #1c1c22;
+    --ink: #f2f2f5;
+    --ink-soft: #9a9aa6;
+    --line: #2b2b34;
+    --accent: #7b93ff;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --idle: #4a4a56;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131317; --card: #1c1c22; --ink: #f2f2f5; --ink-soft: #9a9aa6;
+  --line: #2b2b34; --accent: #7b93ff; --ok: #4ade80; --warn: #fbbf24;
+  --idle: #4a4a56; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 680px; margin: 0 auto; padding: 48px 16px 80px; }
+
+header { margin-bottom: 36px; }
+h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 640; }
+.sub { color: var(--ink-soft); margin: 0; }
+
+.banner {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--warn);
+  border-radius: 10px; padding: 14px 16px; margin: 20px 0 0; box-shadow: var(--shadow);
+}
+.banner.hidden { display: none; }
+.banner b { display: block; margin-bottom: 2px; }
+.banner p { margin: 0; color: var(--ink-soft); font-size: 13.5px; }
+
+h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-soft); font-weight: 620; margin: 40px 0 12px;
+}
+h2 .num {
+  display: inline-grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--accent); color: #fff;
+  font-size: 11px; margin-right: 7px; vertical-align: -3px; letter-spacing: 0;
+}
+
+.list { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+        box-shadow: var(--shadow); overflow: hidden; }
+.row { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row.off { opacity: .45; }
+
+.glyph {
+  width: 34px; height: 34px; flex: none; border-radius: 8px; display: grid; place-items: center;
+  font-weight: 700; font-size: 12px; letter-spacing: .02em; color: #fff;
+}
+.meta { flex: 1 1 auto; min-width: 0; }
+.meta .name { font-weight: 560; }
+.meta .note { font-size: 13px; color: var(--ink-soft); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); flex: none; }
+.dot.live { background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+.dot.part { background: var(--warn); }
+
+button {
+  font: inherit; font-size: 13.5px; font-weight: 550; padding: 7px 14px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  cursor: pointer; white-space: nowrap; flex: none; transition: .12s;
+}
+button:hover:not(:disabled) { border-color: var(--ink-soft); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button:disabled { opacity: .45; cursor: default; }
+button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8px; }
+
+.hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
+.hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
+.hero .said { color: var(--ink-soft); font-size: 13.5px; }
+
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--ink-soft); font-size: 13px; padding: 6px 2px; }
+summary::marker { color: var(--idle); }
+.steps { margin: 6px 0 4px; padding-left: 20px; color: var(--ink-soft); font-size: 13.5px; }
+.steps li { margin: 5px 0; }
+code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+       background: var(--bg); padding: 1.5px 5px; border-radius: 4px; }
+
+footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: center; }
+#toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 90px);
+  background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px;
+  font-size: 13.5px; font-weight: 500; transition: transform .22s cubic-bezier(.2,.8,.3,1);
+  box-shadow: var(--shadow); max-width: 90vw;
+}
+#toast.show { transform: translate(-50%, 0); }
+@media (max-width: 520px) {
+  .wrap { padding-top: 28px; }
+  .row { flex-wrap: wrap; }
+  .meta { flex-basis: calc(100% - 100px); }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Adobe MCP</h1>
+    <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
+    <div class="banner hidden" id="banner">
+      <div>
+        <b id="banner-title"></b>
+        <p id="banner-body"></p>
+      </div>
+    </div>
+  </header>
+
+  <div class="hero">
+    <button class="primary" id="setup-all">Set everything up</button>
+    <span class="said" id="setup-said">One click. Takes a few seconds.</span>
+  </div>
+
+  <h2><span class="num">1</span> Your Adobe apps</h2>
+  <div class="list" id="apps"></div>
+
+  <h2><span class="num">2</span> Your AI assistants</h2>
+  <div class="list" id="clients"></div>
+
+  <footer>
+    Adobe MCP runs quietly in the background. Keep it running while you work.
+    <button class="ghost" id="quit" style="margin-left:6px">Quit</button>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const TINT = {
+  photoshop:   "#001e36,#31a8ff",
+  illustrator: "#330000,#ff9a00",
+  aftereffects:"#00005b,#9999ff",
+  premiere:    "#2a0634,#ea77ff",
+  indesign:    "#49021f,#ff3366",
+};
+const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr", indesign:"Id" };
+
+let state = null;
+
+const toastEl = document.getElementById("toast");
+let toastTimer;
+function toast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+}
+
+async function api(method, path, body) {
+  const r = await fetch(path, {
+    method,
+    headers: body ? { "Content-Type": "application/json" } : {},
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+}
+
+function el(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild;
+}
+
+/* ---------------------------------------------------------------- render -- */
+
+function renderBanner() {
+  const b = document.getElementById("banner");
+  let title, body;
+  if (!state.engine) {
+    title = "Can't find the Adobe MCP engine";
+    body = "The app can't locate its own files. Re-download Adobe MCP and try again.";
+  } else if (!state.uv) {
+    title = "Missing the Python runner";
+    body = "The bundled <code>uv</code> runtime wasn't found. Re-download Adobe MCP.";
+  }
+  b.classList.toggle("hidden", !title);
+  if (title) {
+    document.getElementById("banner-title").textContent = title;
+    document.getElementById("banner-body").innerHTML = body;
+  }
+}
+
+function appRow(a) {
+  const [bg, fg] = TINT[a.key].split(",");
+  const ready = a.live;
+  const needsPanel = a.kind === "cep" && a.panelInstalled === false;
+
+  let note, dot, action;
+  if (!a.installed) {
+    note = "Not installed on this Mac";
+    dot = "";
+    action = "";
+  } else if (ready) {
+    note = "Connected &middot; " + (a.clients.length ? a.clients.length + " assistant" + (a.clients.length > 1 ? "s" : "") : "no assistant yet");
+    dot = "live";
+    action = `<button class="ghost" data-open="${a.key}">Open app</button>`;
+  } else if (needsPanel) {
+    note = "Panel not installed yet";
+    dot = "";
+    action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
+  } else if (a.kind === "cep") {
+    note = "Panel installed &middot; open it in " + a.label;
+    dot = "part";
+    action = `<button data-open="${a.key}">Open app</button>`;
+  } else {
+    note = "Needs Adobe's UXP Developer Tool";
+    dot = "part";
+    action = `<button data-uxp="${a.key}">Set up</button>`;
+  }
+
+  const row = el(`
+    <div class="row ${a.installed ? "" : "off"}">
+      <div class="glyph" style="background:${bg};color:${fg}">${SHORT[a.key]}</div>
+      <div class="meta">
+        <div class="name">${a.label}</div>
+        <div class="note">${note}</div>
+      </div>
+      ${dot ? `<span class="dot ${dot}"></span>` : ""}
+      ${action}
+    </div>`);
+
+  if (!ready && a.installed && a.kind === "cep" && !needsPanel) {
+    row.querySelector(".meta").appendChild(el(
+      `<details><summary>Where is the panel?</summary>
+        <ul class="steps"><li>In ${a.label}: <b>${a.panelMenu}</b></li>
+        <li>Leave that panel open while you work.</li></ul></details>`));
+  }
+  if (a.installed && a.kind === "uxp" && !ready) {
+    row.querySelector(".meta").appendChild(el(
+      `<details><summary>Why does this one need an extra step?</summary>
+        <ul class="steps">
+          <li>Adobe only auto-installs plugins it has signed. ${a.label}'s plugin isn't, so it loads through Adobe's free <b>UXP Developer Tool</b>.</li>
+          <li><b>Set up</b> adds the plugin to that tool for you &mdash; then press <b>Load</b> next to it.</li>
+          <li>In ${a.label}: <b>${a.panelMenu}</b></li>
+        </ul></details>`));
+  }
+  return row;
+}
+
+function clientRow(c) {
+  const n = c.connected.length;
+  const row = el(`
+    <div class="row">
+      <div class="glyph" style="background:${c.id === "codex" ? "#10a37f" : "#d97757"};color:#fff">
+        ${c.id === "codex" ? "GPT" : "C"}
+      </div>
+      <div class="meta">
+        <div class="name">${c.label}</div>
+        <div class="note">${n ? n + " app" + (n > 1 ? "s" : "") + " connected" : c.blurb}</div>
+      </div>
+      <span class="dot ${n ? "live" : ""}"></span>
+      ${n
+        ? `<button data-disconnect="${c.id}">Disconnect</button>`
+        : `<button class="primary" data-connect="${c.id}">Connect</button>`}
+    </div>`);
+
+  if (c.id === "claude-desktop" && n) {
+    row.querySelector(".meta").appendChild(el(
+      `<details><summary>Not seeing the tools in Claude?</summary>
+        <ul class="steps"><li>Claude Desktop only reads this on launch.
+        <button data-restart="1" style="margin-left:6px">Restart Claude</button></li></ul></details>`));
+  }
+  if (c.id === "codex") {
+    row.querySelector(".meta").appendChild(el(
+      `<details><summary>What about ChatGPT itself?</summary>
+        <ul class="steps">
+          <li>ChatGPT's own connectors only reach servers on the public internet, so it can't see an app on your Mac.</li>
+          <li><b>Codex CLI</b> is OpenAI's local agent &mdash; it talks to your Adobe apps directly. Install once with
+          <code>npm i -g @openai/codex</code>, then press Connect.</li>
+        </ul></details>`));
+  }
+  return row;
+}
+
+function render() {
+  renderBanner();
+  const apps = document.getElementById("apps");
+  const clients = document.getElementById("clients");
+  apps.replaceChildren(...state.apps.map(appRow));
+  clients.replaceChildren(...state.clients.map(clientRow));
+
+  const live = state.apps.filter((a) => a.live).length;
+  const wired = state.clients.filter((c) => c.connected.length).length;
+  document.getElementById("setup-said").textContent =
+    live && wired ? `${live} app${live > 1 ? "s" : ""} live, ${wired} assistant${wired > 1 ? "s" : ""} connected.`
+                  : "One click. Takes a few seconds.";
+}
+
+/* --------------------------------------------------------------- actions -- */
+
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const was = b.textContent;
+  b.disabled = true;
+  try {
+    if (b.dataset.panel) {
+      b.textContent = "Installing…";
+      await api("POST", "/api/panel/" + b.dataset.panel);
+      toast("Panel installed. Now open the app and show the MCP panel.");
+    } else if (b.dataset.uxp) {
+      await api("POST", "/api/uxp/" + b.dataset.uxp);
+      toast("Added to the UXP Developer Tool — press Load next to it there.");
+    } else if (b.dataset.open) {
+      await api("POST", "/api/open/" + b.dataset.open);
+      toast("Opening…");
+    } else if (b.dataset.connect) {
+      b.textContent = "Connecting…";
+      const r = await api("POST", "/api/client/" + b.dataset.connect);
+      toast(`Connected ${r.connected.length} apps.` +
+            (b.dataset.connect === "claude-desktop" ? " Restart Claude Desktop to finish." : ""));
+    } else if (b.dataset.disconnect) {
+      await api("DELETE", "/api/client/" + b.dataset.disconnect);
+      toast("Disconnected.");
+    } else if (b.dataset.restart) {
+      await api("POST", "/api/restart-claude");
+      toast("Restarting Claude…");
+    } else if (b.id === "quit") {
+      await api("POST", "/api/quit");
+      document.body.innerHTML =
+        '<div class="wrap"><h1>Adobe MCP stopped</h1>' +
+        '<p class="sub">Your apps are disconnected until you open it again.</p></div>';
+      return;
+    } else if (b.id === "setup-all") {
+      b.textContent = "Setting up…";
+      const r = await api("POST", "/api/setup");
+      toast(r.message);
+    } else return;
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    b.disabled = false;
+    b.textContent = was;
+    refresh();
+  }
+});
+
+/* ---------------------------------------------------------------- polling -- */
+
+async function refresh() {
+  try {
+    state = await api("GET", "/api/status");
+    render();
+  } catch {
+    document.getElementById("setup-said").textContent = "Lost contact with the Adobe MCP app.";
+  }
+}
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
