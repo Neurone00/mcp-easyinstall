@@ -127,9 +127,22 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
   background: var(--bg); border-radius: 8px; padding: 9px 11px; }
 button.ghost { border-color: transparent; color: var(--ink-soft); padding: 7px 8px; }
 
-#what-changes { margin-top: 6px; }
-/* Tucked away: the button inside the disclosure sits above the explanation. */
-#what-changes.tucked > button { margin: 4px 0 10px; }
+.titlerow { display: flex; align-items: flex-start; gap: 12px; }
+.titlerow h1 { flex: 1 1 auto; }
+.gearbtn { border-color: transparent; background: transparent; color: var(--ink-soft);
+  font-size: 18px; line-height: 1; padding: 6px 9px; margin-top: 2px; }
+.gearbtn:hover:not(:disabled) { background: var(--card); color: var(--ink); }
+.gearbtn[aria-expanded="true"] { background: var(--card); color: var(--ink);
+  border-color: var(--line); }
+
+/* Settings live behind the gear rather than beside the status line: a button
+   offering to re-run setup reads as a warning when nothing is wrong. */
+.settings { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 16px 18px; margin-top: 16px; }
+.settings[hidden] { display: none; }
+.settings h3 { margin: 0 0 4px; font-size: 14px; font-weight: 620; }
+.settings-what { margin: 10px 0 2px; font-size: 13px; color: var(--ink-soft); }
+.settings > button { margin-bottom: 4px; }
 .hero:empty { display: none; }
 .hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
@@ -172,8 +185,12 @@ button:focus-visible, summary:focus-visible {
 <main class="wrap">
 
   <header>
-    <h1><img src="brand/mark-animated.svg" alt="" width="30" height="30"
-         style="vertical-align:-6px;margin-right:9px;border-radius:7px">Moskito&nbsp;Easy&nbsp;MCP</h1>
+    <div class="titlerow">
+      <h1><img src="brand/mark-animated.svg" alt="" width="30" height="30"
+           style="vertical-align:-6px;margin-right:9px;border-radius:7px">Moskito&nbsp;Easy&nbsp;MCP</h1>
+      <button id="gear" class="gearbtn" aria-expanded="false"
+              aria-controls="settings" title="Settings">&#9881;</button>
+    </div>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
     <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
       <div style="flex:1">
@@ -188,17 +205,19 @@ button:focus-visible, summary:focus-visible {
     <button class="primary" id="setup-all">Set everything up</button>
     <span class="said" id="setup-said">Installs the panels and connects your assistants.</span>
   </div>
-  <details id="what-changes"><summary>What does this change on my Mac?</summary>
+  <section id="settings" class="settings" hidden aria-label="Settings">
+    <h3>Settings</h3>
+    <p class="settings-what">What setting everything up changes on your Mac:</p>
     <ul class="steps">
       <li>Copies the MCP panels into <code>~/Library/Application Support/Adobe/CEP/extensions</code></li>
       <li>Turns on Adobe's <b>PlayerDebugMode</b>, a global Adobe preference, so unsigned
           panels are allowed to load</li>
-      <li>Adds Adobe MCP's servers to Claude Desktop, Claude Code and Codex config files
+      <li>Adds this app's servers to Claude Desktop, Claude Code and Codex config files
           &mdash; a timestamped backup of each is kept beside it</li>
       <li>Downloads a small Python runtime on first run</li>
       <li>It never touches your documents</li>
     </ul>
-  </details>
+  </section>
 
   <h2><span class="num" aria-hidden="true">1</span> Your Adobe apps</h2>
   <div class="list" id="apps"></div>
@@ -482,16 +501,13 @@ function render() {
   // Once everything is working, the setup controls stop being the point and
   // start reading as a warning that something needs doing. Tuck them into the
   // disclosure; the state line alone is enough.
-  const tuck = document.getElementById("what-changes");
+  const panel = document.getElementById("settings");
   const heroRow = document.querySelector(".hero");
   if (ready && setupBtn.parentElement === heroRow) {
-    tuck.appendChild(setupBtn);
-    tuck.querySelector("summary").textContent = "Setup options";
-  } else if (!ready && setupBtn.parentElement === tuck) {
+    panel.insertBefore(setupBtn, panel.querySelector(".settings-what"));
+  } else if (!ready && setupBtn.parentElement === panel) {
     heroRow.insertBefore(setupBtn, heroRow.firstChild);
-    tuck.querySelector("summary").textContent = "What does this change on my Mac?";
   }
-  tuck.classList.toggle("tucked", !!ready);
 
   if (!anyApp) {
     said.textContent = "No Adobe apps found in /Applications — there's nothing to set up yet.";
@@ -552,6 +568,12 @@ document.addEventListener("click", async (e) => {
       document.body.innerHTML =
         '<div class="wrap"><h1>Updating\u2026</h1>' +
         '<p class="sub">Adobe MCP will reopen in a moment. You can close this tab.</p></div>';
+      return;
+    } else if (b.id === "gear") {
+      const panel = document.getElementById("settings");
+      const open = panel.hidden;
+      panel.hidden = !open;
+      b.setAttribute("aria-expanded", String(open));
       return;
     } else if (b.id === "quit") {
       await api("POST", "/api/quit");
