@@ -258,7 +258,7 @@
 
   var helpBtn = footBtn("?", "How to use this");
   var logBtn = footBtn("Log", "Connection messages");
-  var gear = footBtn("⚙", "Open the Adobe MCP control panel");
+  var gear = footBtn("⚙", "Open the Moskito Easy MCP control panel");
   var more = footBtn("⋯", "More");
   var spacer = document.createElement("span");
   spacer.className = "sp";

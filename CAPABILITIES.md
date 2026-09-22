@@ -1,4 +1,4 @@
-# What Adobe MCP can do
+# What Moskito Easy MCP can do
 
 Every tool below is live and tested against a real document. Ask in plain words —
 you never name a tool yourself.

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Adobe MCP</title>
+<title>Moskito Easy MCP</title>
 <link rel="icon" href="brand/mark.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -157,7 +157,7 @@ button:focus-visible, summary:focus-visible {
 
   <header>
     <h1><img src="brand/mark.svg" alt="" width="30" height="30"
-         style="vertical-align:-6px;margin-right:9px;border-radius:7px">Adobe MCP</h1>
+         style="vertical-align:-6px;margin-right:9px;border-radius:7px">Moskito&nbsp;Easy&nbsp;MCP</h1>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
     <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
       <div style="flex:1">
@@ -191,7 +191,7 @@ button:focus-visible, summary:focus-visible {
   <div class="list" id="clients"></div>
 
   <footer>
-    <span style="opacity:.75">Moskito</span> &middot; Adobe MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
+    Moskito Easy MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
     <button class="ghost" id="quit" style="margin-left:6px">Quit</button>
   </footer>
 </main>
@@ -246,10 +246,10 @@ function renderBanner() {
 
   if (!state.engine) {
     title = "Can't find the Adobe MCP engine";
-    body = "The app can't locate its own files. Re-download Adobe MCP and try again.";
+    body = "The app can't locate its own files. Re-download Moskito Easy MCP and try again.";
   } else if (!state.uv) {
     title = "Missing the Python runner";
-    body = "The bundled <code>uv</code> runtime wasn't found. Re-download Adobe MCP.";
+    body = "The bundled <code>uv</code> runtime wasn't found. Re-download Moskito Easy MCP.";
   } else if (state.python && state.python.building) {
     news = true;
     title = "Setting up Python…";
@@ -401,7 +401,7 @@ function clientRow(c) {
       `<details data-k="claude-why"><summary>If Claude stops seeing your apps</summary>
         <ul class="steps">
           <li>Claude Desktop rewrites its own settings when it quits, which can drop these.</li>
-          <li>Adobe MCP puts them back within 30 seconds of Claude closing, so usually you
+          <li>Moskito Easy MCP puts them back within 30 seconds of Claude closing, so usually you
           need do nothing.</li>
         </ul></details>`));
   }
@@ -527,7 +527,7 @@ document.addEventListener("click", async (e) => {
     } else if (b.id === "quit") {
       await api("POST", "/api/quit");
       document.body.innerHTML =
-        '<div class="wrap"><h1>Adobe MCP stopped</h1>' +
+        '<div class="wrap"><h1>Moskito Easy MCP stopped</h1>' +
         '<p class="sub">Your apps are disconnected until you open it again.</p></div>';
       return;
     } else if (b.id === "setup-all") {
@@ -561,7 +561,7 @@ async function refresh() {
   } catch {
     lastJSON = "";
     document.getElementById("setup-said").textContent =
-      "Lost contact with the Adobe MCP app — retrying…";
+      "Lost contact with Moskito Easy MCP — retrying…";
   }
 }
 refresh();

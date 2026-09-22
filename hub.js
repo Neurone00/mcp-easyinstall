@@ -157,8 +157,8 @@ function osa(script, ms) {
                 const text = String(stderr || err.message);
                 if (err.killed || /ETIMEDOUT/.test(text)) {
                     const e = new Error(
-                        "macOS is waiting on permission to let Adobe MCP move other apps' windows. " +
-                        "Look for its prompt, or switch on Adobe MCP under System Settings \u2192 " +
+                        "macOS is waiting on permission to let Moskito Easy MCP move other apps' windows. " +
+                        "Look for its prompt, or switch on Moskito Easy MCP under System Settings \u2192 " +
                         "Privacy & Security \u2192 Accessibility, then try again."
                     );
                     e.needsAccessibility = true;
@@ -166,8 +166,8 @@ function osa(script, ms) {
                 }
                 if (/-1719|assistive access/.test(text)) {
                     const e = new Error(
-                        "macOS won't let Adobe MCP move other apps' windows until you allow it: " +
-                        "System Settings \u2192 Privacy & Security \u2192 Accessibility \u2192 switch on Adobe MCP."
+                        "macOS won't let Moskito Easy MCP move other apps' windows until you allow it: " +
+                        "System Settings \u2192 Privacy & Security \u2192 Accessibility \u2192 switch on Moskito Easy MCP."
                     );
                     e.needsAccessibility = true;
                     return reject(e);
@@ -468,27 +468,76 @@ function connectClient(clientId, keys) {
         writeJSON(c.file, cfg);
         return;
     }
-    // TOML: manage one delimited block so hand-written config is never clobbered.
-    const START = "# >>> adobe-mcp >>>";
-    const END = "# <<< adobe-mcp <<<";
-    const body = keys
-        .map((k) => {
-            const d = serverDef(k);
-            const env = Object.entries(d.env || {})
-                .map(([ek, ev]) => `${ek} = ${JSON.stringify(ev)}`)
-                .join(", ");
-            return `[${c.key}.${k}]\ncommand = ${JSON.stringify(d.command)}\nargs = [${d.args
-                .map((a) => JSON.stringify(a))
-                .join(", ")}]` + (env ? `\nenv = { ${env} }` : "");
-        })
-        .join("\n\n");
-    const block = `${START}\n# Managed by Adobe MCP Hub. Edits inside this block are overwritten.\n${body}\n${END}`;
-    let toml = fs.existsSync(c.file) ? fs.readFileSync(c.file, "utf8") : "";
-    if (fs.existsSync(c.file)) fs.copyFileSync(c.file, c.file + ".adobe-mcp-backup");
-    const re = new RegExp(`${START}[\\s\\S]*?${END}`);
-    toml = re.test(toml) ? toml.replace(re, block) : (toml.trimEnd() + "\n\n" + block + "\n");
-    fs.mkdirSync(path.dirname(c.file), { recursive: true });
-    fs.writeFileSync(c.file, toml.trimStart());
+
+    // TOML is edited one table at a time, not as a marker-delimited block.
+    // The block approach broke twice: retiring the last table inside it
+    // swallowed the closing marker, and — worse — Codex writes its own tables
+    // such as [mcp_servers.aftereffects.tools.execute_extend_script] in among
+    // ours, which a block rewrite would have deleted along with the user's
+    // settings. Removing exactly our own table headers leaves everything else,
+    // including child tables, untouched.
+    const lines = fs.existsSync(c.file) ? fs.readFileSync(c.file, "utf8").split("\n") : [];
+    const ours = new Set(Object.keys(APPS).map((k) => `[${c.key}.${k}]`));
+
+    const keep = [];
+    let dropping = false;
+    for (const line of lines) {
+        const t = line.trim();
+        if (/^\[/.test(t)) dropping = ours.has(t);
+        // Retire the old markers wherever they still are.
+        if (t === "# >>> adobe-mcp >>>" || t === "# <<< adobe-mcp <<<") continue;
+        // Must match the comment this function WRITES, or it accumulates one
+        // copy per repair pass — and repair runs every 30 seconds.
+        if (t.startsWith("# Managed by Adobe MCP") || t.startsWith("# Managed by Moskito") ||
+            t.startsWith("# Written by Moskito")) continue;
+        if (!dropping) keep.push(line);
+    }
+
+    const body = keys.map((k) => {
+        const d = serverDef(k);
+        const env = Object.entries(d.env || {})
+            .map(([ek, ev]) => `${ek} = ${JSON.stringify(ev)}`).join(", ");
+        return `[${c.key}.${k}]\n` +
+               `command = ${JSON.stringify(d.command)}\n` +
+               `args = [${d.args.map((a) => JSON.stringify(a)).join(", ")}]` +
+               (env ? `\nenv = { ${env} }` : "");
+    }).join("\n\n");
+
+    // Collapse the gaps left where our old tables were, or the file grows by a
+    // blank line on every repair pass — which runs every 30 seconds.
+    const text = keep.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() +
+        "\n\n# Written by Moskito Easy MCP. These tables are rewritten when the app moves.\n" +
+        body + "\n";
+    writeTomlChecked(c.file, text.trimStart(), c.key);
+}
+
+function tomlLooksSane(text, sectionKey) {
+    const headers = (text.match(/^\s*\[[^\]]+\]/gm) || []).map((h) => h.trim());
+    if (new Set(headers).size !== headers.length) return "a table is declared twice";
+    return null;
+}
+
+// Write TOML, then read it back and undo the write if it looks broken. Both
+// times this file was corrupted in testing, a check this simple would have
+// caught it before the user's Codex ever saw it.
+function writeTomlChecked(file, text, sectionKey) {
+    const problem = tomlLooksSane(text, sectionKey);
+    if (problem) throw new Error(`Refusing to write ${path.basename(file)}: ${problem}.`);
+    let backup = null;
+    if (fs.existsSync(file)) {
+        backup = `${file}.adobe-mcp-backup-${Date.now()}`;
+        fs.copyFileSync(file, backup);
+        pruneBackups(file);
+    }
+    const tmp = `${file}.adobe-mcp-tmp`;
+    fs.writeFileSync(tmp, text);
+    fs.renameSync(tmp, file);
+
+    const after = tomlLooksSane(fs.readFileSync(file, "utf8"), sectionKey);
+    if (after && backup) {
+        fs.copyFileSync(backup, file);
+        throw new Error(`${path.basename(file)} came out malformed (${after}) — put the previous version back.`);
+    }
 }
 
 function disconnectClient(clientId) {
@@ -500,17 +549,23 @@ function disconnectClient(clientId) {
         writeJSON(c.file, cfg);
         return;
     }
-    fs.copyFileSync(c.file, c.file + ".adobe-mcp-backup");
-    const toml = fs
-        .readFileSync(c.file, "utf8")
-        .replace(/# >>> adobe-mcp >>>[\s\S]*?# <<< adobe-mcp <<</, "")
-        .trimStart();
-    fs.writeFileSync(c.file, toml);
+    const lines = fs.readFileSync(c.file, "utf8").split("\n");
+    const ours = new Set(Object.keys(APPS).map((k) => `[${c.key}.${k}]`));
+    const keep = [];
+    let dropping = false;
+    for (const line of lines) {
+        const t = line.trim();
+        if (/^\[/.test(t)) dropping = ours.has(t);
+        if (t === "# >>> adobe-mcp >>>" || t === "# <<< adobe-mcp <<<") continue;
+        if (t.startsWith("# Written by Moskito") || t.startsWith("# Managed by Adobe MCP")) continue;
+        if (!dropping) keep.push(line);
+    }
+    writeTomlChecked(c.file, keep.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n", c.key);
 }
 
 // Claude Desktop keeps its config in memory and writes the whole file back when
 // it quits, silently undoing anything we wrote while it was open. So the write
-// has to happen while it is closed.
+// has to happen while it is closed. Cached: /api/status asks every two seconds.
 const claudeRunning = memo(() => {
     try {
         execFileSync("/usr/bin/pgrep", ["-x", "Claude"], { stdio: ["ignore", "pipe", "ignore"] });
@@ -684,13 +739,18 @@ function removeRetired(id) {
         const keep = [];
         let dropping = false;
         for (const line of lines) {
-            const isHeader = /^\s*\[/.test(line);
-            if (isHeader) dropping = headers.includes(line.trim());
+            const t = line.trim();
+            // A dropped table ends at the next table header — OR at our own
+            // closing marker. Without that second condition, retiring the LAST
+            // table in the managed block swallowed the marker with it, so the
+            // next write could not find the block, appended a second one, and
+            // left duplicate tables that Codex refused to parse.
+            if (/^\[/.test(t)) dropping = headers.includes(t);
+            else if (t.startsWith("# <<<") || t.startsWith("# >>>")) dropping = false;
             if (!dropping) keep.push(line);
         }
         if (keep.length === lines.length) return false;
-        fs.copyFileSync(c.file, `${c.file}.adobe-mcp-backup-${Date.now()}`);
-        fs.writeFileSync(c.file, keep.join("\n"));
+        writeTomlChecked(c.file, keep.join("\n"), c.key);
         return true;
     } catch (e) {
         console.log(`⚠ could not tidy ${c.label}: ${e.message}`);
@@ -711,14 +771,26 @@ function repairClientPaths() {
         // exception that kills the hub, so the read is inside the try too.
         let stale = false;
         try {
+            // The engine path lives in ARGS, not command — the venv binary sits
+            // outside the bundle and never moves. Comparing only the command
+            // meant renaming or moving the app left every server pointing at a
+            // folder that no longer existed, silently.
+            const engineArg = want.args[want.args.length - 1];
             if (CLIENTS[id].format === "json") {
                 const servers = readJSON(CLIENTS[id].file, {})[CLIENTS[id].key] || {};
-                stale = connected.some((k) => servers[k] &&
-                    (servers[k].command !== want.command ||
-                     !(servers[k].env || {}).PYTHONDONTWRITEBYTECODE));
+                stale = connected.some((k) => {
+                    const def = servers[k];
+                    if (!def) return false;
+                    if (def.command !== want.command) return true;
+                    if (!(def.env || {}).PYTHONDONTWRITEBYTECODE) return true;
+                    const last = (def.args || [])[(def.args || []).length - 1] || "";
+                    return path.dirname(last) !== path.dirname(engineArg);
+                });
             } else {
                 const toml = fs.readFileSync(CLIENTS[id].file, "utf8");
-                stale = !toml.includes(want.command) || !toml.includes("PYTHONDONTWRITEBYTECODE");
+                stale = !toml.includes(want.command)
+                    || !toml.includes("PYTHONDONTWRITEBYTECODE")
+                    || !toml.includes(path.dirname(engineArg));
             }
         } catch (e) {
             console.log(`⚠ could not check ${CLIENTS[id].label}: ${e.message}`);
@@ -918,7 +990,7 @@ app.use((req, res, next) => {
     // No Origin at all is a same-origin navigation or curl, which is fine.
     if (!origin || ALLOWED_ORIGINS.has(origin)) return next();
     console.log(`⚠ refused a request from ${origin}`);
-    res.status(403).json({ error: "Adobe MCP only accepts requests from its own window." });
+    res.status(403).json({ error: "Moskito Easy MCP only accepts requests from its own window." });
 });
 
 const server = http.createServer(app);
@@ -1021,7 +1093,7 @@ io.on("connection", (socket) => {
                 status: "FAILURE",
                 message: APPS[application]
                     ? `The ${label} panel isn't connected. In ${label}: ${APPS[application].panelMenu}. ` +
-                      `Adobe MCP's window has a Connect button when the panel is open but idle.`
+                      `The Moskito Easy MCP window has a Connect button when the panel is open but idle.`
                     : `Nothing is connected for "${application}".`,
             });
         }
@@ -1346,7 +1418,7 @@ setInterval(() => {
 server.listen(PORT, "127.0.0.1", () => {
     // The menu bar app decides when to show the panel — first run, its menu
     // item, or reopening the app. The hub never opens a tab on its own.
-    console.log(`Adobe MCP ${VERSION}  \u2192  ${URL}`);
+    console.log(`Moskito Easy MCP ${VERSION}  \u2192  ${URL}`);
     fs.mkdirSync(SUPPORT, { recursive: true });
     refreshPanels();
     ensureVenv(() => repairClientPaths());

@@ -1,4 +1,4 @@
-# Adobe MCP — easy install
+# Moskito Easy MCP — easy install
 
 Let **Claude** and **ChatGPT** drive Adobe Illustrator, After Effects, Premiere Pro,
 and Photoshop.
@@ -9,10 +9,10 @@ One app. Nothing else to install — no Node, no Python, no Homebrew, no termina
 
 ## Install
 
-1. **[Download Adobe MCP](../../releases/latest)** and drag it to your Applications folder.
+1. **[Download Moskito Easy MCP](../../releases/latest)** and drag it to your Applications folder.
 2. Double-click it. **macOS will refuse the first time — that's expected.** Then open
    **System Settings → Privacy & Security**, scroll down, and click **Open Anyway**
-   next to Adobe MCP. Only needed once.
+   next to Moskito Easy MCP. Only needed once.
 
    *(Right-click → Open no longer works — Apple removed that shortcut in macOS 15.
    The app isn't signed by Apple, which costs €99/year.)*
@@ -31,8 +31,8 @@ That's it. The window tells you what's connected and what isn't.
 | **Claude Desktop, Claude Code** | Connected for you. |
 | **ChatGPT desktop, Codex CLI, IDE extension** | Connected for you. |
 
-Adobe MCP lives in your **menu bar** (the ✨ icon). Click it → **Open Control Panel**
-to get back to the settings window any time, or **Quit Adobe MCP** to stop it. There's
+Moskito Easy MCP lives in your **menu bar** (the ✨ icon). Click it → **Open Control Panel**
+to get back to the settings window any time, or **Quit Moskito Easy MCP** to stop it. There's
 also a **⚙** button in the Illustrator and After Effects panels.
 
 Keep it running while you work.
@@ -53,7 +53,7 @@ Adobe only auto-installs plugins that Adobe itself has signed. Photoshop and Pre
 use that newer plugin system, so their panel loads through Adobe's free
 **UXP Developer Tool** (available in Creative Cloud).
 
-Adobe MCP adds the plugin to that tool for you — you press **Load** next to it once.
+Moskito Easy MCP adds the plugin to that tool for you — you press **Load** next to it once.
 Illustrator and After Effects use the older system, which has no such restriction,
 so those are fully automatic.
 
@@ -78,13 +78,13 @@ Then just ask:
 ## About ChatGPT
 
 The **ChatGPT desktop app**, **Codex CLI** and the **Codex IDE extension** all run
-local MCP servers and share one config file, so Adobe MCP connects all three at once.
+local MCP servers and share one config file, so Moskito Easy MCP connects all three at once.
 These tools live in the **Codex** surface, not a plain ChatGPT chat — asking a normal
 chat window about them will get you "no Adobe Illustrator MCP server appears".
 
 **One extra step for ChatGPT and Codex.** They run MCP servers in a sandbox with
 networking switched off, so the Adobe servers can't reach the app on `localhost` and
-every request fails as "cancelled". Press **Allow** on the ChatGPT row in Adobe MCP.
+every request fails as "cancelled". Press **Allow** on the ChatGPT row in Moskito Easy MCP.
 That sets `network_access = true` under `[sandbox_workspace_write]` in
 `~/.codex/config.toml` — which also lets other Codex tools reach the network, so it's
 your call. Claude Desktop doesn't sandbox its MCP servers and needs nothing.
@@ -103,14 +103,14 @@ cd mcp-easyinstall
 ```
 
 `build.sh` downloads Node, uv and the adb-mcp engine, lipos both architectures
-together and packs them into `dist/Adobe MCP.app`. The result is universal: the
+together and packs them into `dist/Moskito Easy MCP.app`. The result is universal: the
 same build runs on Apple Silicon and Intel, whichever Mac you build it on. The
 build refuses to continue if any bundled binary is not universal.
 
 ### How it fits together
 
 ```
-Claude / Codex  ──MCP──▶  Adobe MCP  ──socket.io──▶  panel inside the Adobe app
+Claude / Codex  ──MCP──▶  Moskito Easy MCP  ──socket.io──▶  panel inside the Adobe app
                           (hub.js, port 3001)
 ```
 
@@ -132,7 +132,7 @@ action made the model write an ExtendScript program — expensive, error-prone,
 and the reason simple requests showed up as hundreds of "lines of code" in
 usage dashboards.
 
-Adobe MCP adds thirteen more, built at build time and dispatched through the
+Moskito Easy MCP adds thirteen more, built at build time and dispatched through the
 existing script bridge (the panel needs no changes):
 
 `get_instructions`, `list_artboards`, `list_items`, `create_rectangle`,

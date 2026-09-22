@@ -16,13 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startHub()
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "wand.and.rays",
-                                     accessibilityDescription: "Adobe MCP")
-        item.button?.image?.isTemplate = true
+        setIcon()
 
         let menu = NSMenu()
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
-        let header = NSMenuItem(title: "Adobe MCP \(version)", action: nil, keyEquivalent: "")
+        let header = NSMenuItem(title: "Moskito Easy MCP \(version)", action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
@@ -34,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Restart Background Service",
                                 action: #selector(restartHub), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit Adobe MCP",
+        menu.addItem(NSMenuItem(title: "Quit Moskito Easy MCP",
                                 action: #selector(quit), keyEquivalent: "q"))
         item.menu = menu
 
@@ -83,15 +81,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if Date().timeIntervalSince(self.lastStart) > 60 { self.restarts = 0 }
                 self.restarts += 1
                 guard self.restarts <= 5 else {
-                    NSLog("Adobe MCP: hub keeps crashing, giving up. See ~/Library/Logs/AdobeMCP.log")
+                    NSLog("Moskito Easy MCP: hub keeps crashing, giving up. See ~/Library/Logs/AdobeMCP.log")
                     self.gaveUp = true
                     // Make it visible: an icon that silently does nothing is worse
                     // than an icon that says something is wrong.
-                    self.item.button?.image = NSImage(systemSymbolName: "exclamationmark.triangle",
-                                                      accessibilityDescription: "Adobe MCP stopped")
-                    self.item.button?.image?.isTemplate = true
+                    self.setIcon(alert: true)
                     let alert = NSAlert()
-                    alert.messageText = "Adobe MCP stopped working"
+                    alert.messageText = "Moskito Easy MCP stopped working"
                     alert.informativeText = "Its background service failed to start five times. "
                         + "Open the log to see why, or use Restart Background Service to try again."
                     alert.addButton(withTitle: "Open Log")
@@ -118,6 +114,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// The menu bar item's icon.
+    ///
+    /// Drawn in code rather than loaded from the bundle so it can never end up
+    /// with no image AND no title — which is what the previous version risked:
+    /// it relied on an SF Symbol, and if that name were unavailable the button
+    /// would have been an invisible, unclickable gap in the menu bar. The
+    /// fallback below guarantees something is always there.
+    func setIcon(alert: Bool = false) {
+        let size = NSSize(width: 18, height: 18)
+        let image = NSImage(size: size, flipped: false) { rect in
+            // The EYE mark: ground, white compound eye, punched-out pupil.
+            // Template mode recolours it to suit light or dark menu bars.
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
+
+            let eye = NSBezierPath(ovalIn: NSRect(x: rect.width * 0.17, y: rect.height * 0.17,
+                                                  width: rect.width * 0.66, height: rect.height * 0.66))
+            NSColor.white.setFill()
+            eye.fill()
+
+            let pupil = NSBezierPath(ovalIn: NSRect(x: rect.width * 0.34, y: rect.height * 0.22,
+                                                    width: rect.width * 0.30, height: rect.height * 0.30))
+            NSColor.black.setFill()
+            NSGraphicsContext.current?.compositingOperation = .destinationOut
+            pupil.fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            return true
+        }
+        image.isTemplate = true
+        item.button?.image = image
+        item.button?.toolTip = alert ? "Moskito Easy MCP — stopped" : "Moskito Easy MCP"
+        // Belt and braces: if the image ever fails to draw, a short title keeps
+        // the item visible and clickable instead of vanishing.
+        if item.button?.image == nil { item.button?.title = "MCP" }
+        item.button?.appearsDisabled = alert
+    }
+
     @objc func openLog() {
         let log = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Logs/AdobeMCP.log")
@@ -127,8 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func restartHub() {
         restarts = 0
         gaveUp = false
-        item.button?.image = NSImage(systemSymbolName: "wand.and.rays", accessibilityDescription: "Adobe MCP")
-        item.button?.image?.isTemplate = true
+        setIcon()
         hub?.terminate()          // terminationHandler brings it back
         if hub == nil { startHub() }
     }

@@ -15,7 +15,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # meant an Intel colleague downloaded an app that could not launch at all.
 ARCH="universal"
 VER="$(/usr/bin/sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$HERE/package.json" | head -1)"
-APP="$HERE/dist/Adobe MCP.app"
+APP="$HERE/dist/Moskito Easy MCP.app"
 RES="$APP/Contents/Resources"
 
 say() { printf '\033[1m→\033[0m %s\n' "$1"; }
@@ -197,8 +197,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleName</key><string>Adobe MCP</string>
-  <key>CFBundleDisplayName</key><string>Adobe MCP</string>
+  <key>CFBundleName</key><string>Moskito Easy MCP</string>
+  <key>CFBundleDisplayName</key><string>Moskito Easy MCP</string>
   <key>CFBundleIdentifier</key><string>com.moskitodesign.adobemcp</string>
   <key>CFBundleVersion</key><string>$VER</string>
   <key>CFBundleShortVersionString</key><string>$VER</string>
@@ -219,22 +219,22 @@ xattr -cr "$APP" 2>/dev/null || true
 say "Built: $APP  v$VER  ($(du -sh "$APP" | cut -f1))"
 
 if [ "${1:-}" = "--zip" ] || [ "${1:-}" = "--release" ]; then
-  rm -f "$HERE/dist/Adobe-MCP-macOS-$ARCH.zip"
-  ( cd "$HERE/dist" && ditto -c -k --sequesterRsrc --keepParent "Adobe MCP.app" "Adobe-MCP-macOS-$ARCH.zip" )
-  say "Zipped: $HERE/dist/Adobe-MCP-macOS-$ARCH.zip ($(du -sh "$HERE/dist/Adobe-MCP-macOS-$ARCH.zip" | cut -f1))"
+  rm -f "$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip"
+  ( cd "$HERE/dist" && ditto -c -k --sequesterRsrc --keepParent "Moskito Easy MCP.app" "Moskito-Easy-MCP-macOS-$ARCH.zip" )
+  say "Zipped: $HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip ($(du -sh "$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip" | cut -f1))"
 fi
 
 # --------------------------------------------------------------- release ----
 # Tag and publish, so the update check in hub.js has something to find.
 if [ "${1:-}" = "--release" ]; then
-  ZIP="$HERE/dist/Adobe-MCP-macOS-$ARCH.zip"
+  ZIP="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip"
   if gh release view "v$VER" >/dev/null 2>&1; then
     say "Updating release v$VER"
     gh release upload "v$VER" "$ZIP" --clobber
   else
     say "Publishing release v$VER"
     git tag -f "v$VER" && git push -q --force origin "v$VER"
-    gh release create "v$VER" "$ZIP" --title "Adobe MCP $VER" --generate-notes
+    gh release create "v$VER" "$ZIP" --title "Moskito Easy MCP $VER" --generate-notes
   fi
   say "Released v$VER"
 fi
