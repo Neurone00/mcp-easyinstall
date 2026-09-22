@@ -63,9 +63,9 @@ so those are fully automatic.
 
 Open the MCP panel inside the Adobe app and leave it open:
 
-- Illustrator / After Effects → **Window → Extensions → MCP Agent**
-- Photoshop → **Plugins → MCP Agent**
-- Premiere Pro → **Window → MCP Agent**
+- Illustrator / After Effects → **Window → Extensions → Moskito Easy MCP**
+- Photoshop → **Plugins → Moskito Easy MCP**
+- Premiere Pro → **Window → Moskito Easy MCP**
 
 Then just ask:
 

@@ -15,7 +15,14 @@
 (function () {
   "use strict";
 
-  var APP = (document.title || "this app").replace(/ MCP Agent$/, "");
+  // The page title used to carry the host app's name; it now says "Moskito
+  // Easy MCP" like everything else, so the app is read from main.js's own
+  // APPLICATION constant instead.
+  var LABELS = {
+    illustrator: "Illustrator", aftereffects: "After Effects",
+    premiere: "Premiere Pro", photoshop: "Photoshop",
+  };
+  var APP = (typeof APPLICATION !== "undefined" && LABELS[APPLICATION]) || "this app";
   var HUB = "http://localhost:3001/";
 
   function $(id) { return document.getElementById(id); }

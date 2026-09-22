@@ -73,25 +73,25 @@ const APPS = {
         label: "Photoshop",
         kind: "uxp", uxp: "ps", mcp: "ps-mcp.py",
         appGlob: "Adobe Photoshop",
-        panelMenu: "Plugins → MCP Agent",
+        panelMenu: "Plugins → Moskito Easy MCP",
     },
     illustrator: {
         label: "Illustrator",
         kind: "cep", cep: "com.mikechambers.ai", mcp: "ai-mcp.py",
         appGlob: "Adobe Illustrator",
-        panelMenu: "Window → Extensions → MCP Agent",
+        panelMenu: "Window → Extensions → Moskito Easy MCP",
     },
     aftereffects: {
         label: "After Effects",
         kind: "cep", cep: "com.mikechambers.ae", mcp: "ae-mcp.py",
         appGlob: "Adobe After Effects",
-        panelMenu: "Window → Extensions → MCP Agent",
+        panelMenu: "Window → Extensions → Moskito Easy MCP",
     },
     premiere: {
         label: "Premiere Pro",
         kind: "uxp", uxp: "pr", mcp: "pr-mcp.py",
         appGlob: "Adobe Premiere Pro",
-        panelMenu: "Window → MCP Agent",
+        panelMenu: "Window → Moskito Easy MCP",
     },
     // InDesign is deliberately absent. Its server exposes exactly one tool,
     // create_document, and no scripting escape hatch — it can make an empty
@@ -157,17 +157,24 @@ function osa(script, ms) {
                 const text = String(stderr || err.message);
                 if (err.killed || /ETIMEDOUT/.test(text)) {
                     const e = new Error(
-                        "macOS is waiting on permission to let Moskito Easy MCP move other apps' windows. " +
-                        "Look for its prompt, or switch on Moskito Easy MCP under System Settings \u2192 " +
-                        "Privacy & Security \u2192 Accessibility, then try again."
+                        "macOS is waiting on permission to let this app move other apps' windows. " +
+                        "Look for its prompt, or switch it on under System Settings \u2192 " +
+                        "Privacy & Security \u2192 Accessibility. If it is already on, switch it " +
+                        "off and on again \u2014 see below."
                     );
                     e.needsAccessibility = true;
                     return reject(e);
                 }
                 if (/-1719|assistive access/.test(text)) {
+                    // The permission is often already granted and still refused:
+                    // the app is ad-hoc signed, so every update changes its code
+                    // identity and macOS stops matching it to the grant. Saying
+                    // "go and allow it" to someone who already has is useless.
                     const e = new Error(
-                        "macOS won't let Moskito Easy MCP move other apps' windows until you allow it: " +
-                        "System Settings \u2192 Privacy & Security \u2192 Accessibility \u2192 switch on Moskito Easy MCP."
+                        "macOS is still refusing to let this app move other windows. If you have already " +
+                        "switched it on under System Settings \u2192 Privacy & Security \u2192 Accessibility, " +
+                        "switch it OFF and ON again \u2014 the app is not signed by Apple, so its identity " +
+                        "changes with every update and macOS stops matching it to the permission you gave."
                     );
                     e.needsAccessibility = true;
                     return reject(e);

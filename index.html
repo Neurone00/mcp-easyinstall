@@ -318,7 +318,7 @@ function appRow(a) {
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
   } else if (a.kind === "cep" && a.panelOpen) {
-    note = "The panel is open but hasn't connected";
+    note = `The panel is open but hasn't connected — ${a.panelMenu}`;
     status = "Idle"; tone = "part";
     action = `<button class="primary" data-connectpanel="${a.key}">Connect</button>`;
   } else if (a.kind === "cep") {
@@ -326,7 +326,9 @@ function appRow(a) {
     status = "Panel closed"; tone = "";
     action = `<button class="suggest" data-open="${a.key}">Open ${a.label}</button>`;
   } else {
-    note = "Needs one Load click in Adobe's UXP Developer Tool";
+    // Was an accordion explaining Adobe's signing rules. Nobody needs the
+    // reason; they need the next action and where the panel lives.
+    note = `Load it once in Adobe's UXP Developer Tool, then ${a.panelMenu}`;
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
   }
@@ -342,22 +344,6 @@ function appRow(a) {
       ${action}
     </div>`);
 
-  if (a.installed && a.kind === "cep" && !a.live) {
-    row.querySelector(".meta").appendChild(el(
-      `<details data-k="where-${a.key}"><summary>Where is the panel?</summary>
-        <ul class="steps"><li>In ${a.label}: <b>${a.panelMenu}</b></li>
-        <li>Leave it open &mdash; that panel is the connection.</li></ul></details>`));
-  }
-  if (a.installed && a.kind === "uxp" && !a.live) {
-    row.querySelector(".meta").appendChild(el(
-      `<details data-k="uxp-${a.key}"><summary>Why does this one need an extra step?</summary>
-        <ul class="steps">
-          <li>Adobe only auto-installs plugins it has signed. ${a.label}'s isn't, so it loads
-          through Adobe's free <b>UXP Developer Tool</b>.</li>
-          <li><b>Set up</b> adds it to that tool for you &mdash; then press <b>Load</b> there.</li>
-          <li>In ${a.label}: <b>${a.panelMenu}</b></li>
-        </ul></details>`));
-  }
   return row;
 }
 

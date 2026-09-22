@@ -114,6 +114,25 @@ for panel in "$HERE"/engine/cep/*/; do
   /usr/bin/sed -i '' "s|<Extension Id=\"[^\"]*\">|<Extension Id=\"$id\">|" "$panel/.debug"
 done
 
+# One name everywhere. Adobe's own menus said "Illustrator MCP Agent",
+# "AfterEffects MCP Agent", "Photoshop MCP Agent" — three names for one product,
+# none of them the product's name.
+say "Naming the panels consistently"
+for panel in "$HERE"/engine/cep/*/; do
+  /usr/bin/sed -i '' 's|<Menu>[^<]*</Menu>|<Menu>Moskito Easy MCP</Menu>|' "$panel/CSXS/manifest.xml"
+  /usr/bin/sed -i '' 's|<title>[^<]*</title>|<title>Moskito Easy MCP</title>|' "$panel/index.html"
+done
+for m in "$HERE"/engine/uxp/*/manifest.json; do
+  [ -f "$m" ] || continue
+  "$HERE/runtime/node" -e '
+    const fs=require("fs"), f=process.argv[1];
+    const j=JSON.parse(fs.readFileSync(f,"utf8"));
+    j.name = "Moskito Easy MCP";
+    if (Array.isArray(j.entrypoints)) j.entrypoints.forEach(e => { if (e.label) e.label = { default: "Moskito Easy MCP" }; });
+    fs.writeFileSync(f, JSON.stringify(j, null, 2));
+  ' "$m"
+done
+
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
 
