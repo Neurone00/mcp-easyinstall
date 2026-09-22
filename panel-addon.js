@@ -263,7 +263,14 @@
   var spacer = document.createElement("span");
   spacer.className = "sp";
 
-  gear.onclick = function () { openUrl(HUB); };
+  // Ask the app to raise its own window; fall back to a browser tab only if
+  // the hub can't be reached.
+  gear.onclick = function () {
+    bindSocketOnce();
+    hubRequest({ type: "open_panel" }, function (r) {
+      if (!r || !r.ok) openUrl(HUB);
+    });
+  };
 
   foot.appendChild(helpBtn);
   foot.appendChild(logBtn);
@@ -308,7 +315,11 @@
 
   moreSheet.innerHTML = "<h4>More</h4>";
   moreSheet.appendChild(connLabel);
-  moreSheet.appendChild(menuItem("Open the control panel", function () { openUrl(HUB); }));
+  moreSheet.appendChild(menuItem("Open the control panel", function () {
+    bindSocketOnce();
+    hubRequest({ type: "open_panel" }, function (r) { if (!r || !r.ok) openUrl(HUB); });
+  }));
+  moreSheet.appendChild(menuItem("Open the control panel in a browser", function () { openUrl(HUB); }));
   moreSheet.appendChild(menuItem("Copy log to clipboard", function () {
     var t = $("messageLog");
     if (!t) return;

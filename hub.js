@@ -1060,6 +1060,21 @@ io.on("connection", (socket) => {
                         needsAccessibility: !!e.needsAccessibility,
                     }));
             }
+            if (req.type === "open_panel") {
+                // Reopening the app makes the menu bar wrapper show its control
+                // window (applicationShouldHandleReopen), so the panel's gear
+                // raises the real window rather than a stray browser tab.
+                // A flag file the menu bar app watches. Tried `open -b` and an
+                // AppleScript activate first: neither reliably reaches an
+                // accessory app's reopen handler, and both fail silently.
+                try {
+                    fs.mkdirSync(SUPPORT, { recursive: true });
+                    fs.writeFileSync(path.join(SUPPORT, "show-window"), String(Date.now()));
+                } catch (e) {
+                    return socket.emit("app_response", { id: req.id, ok: false, error: e.message });
+                }
+                return socket.emit("app_response", { id: req.id, ok: true });
+            }
             if (req.type === "open_accessibility") {
                 execFile("/usr/bin/open",
                     ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]);
