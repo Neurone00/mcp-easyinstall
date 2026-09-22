@@ -19,6 +19,8 @@ const { execFile, execFileSync } = require("child_process");
 
 const PORT = 3001;
 const HOME = os.homedir();
+const REPO = "Neurone00/mcp-easyinstall";
+const VERSION = require("./package.json").version;
 const HERE = __dirname;
 const SETTINGS = path.join(HERE, "settings.json");
 
@@ -319,6 +321,88 @@ function warmUp() {
         (err) => console.log(err ? "\u26a0 warm-up failed: " + err.message : "\u2713 Python runtime ready"));
 }
 
+// An installed CEP panel is a copy, so an app update would leave a stale one
+// behind. Re-copying at launch is cheap (a few hundred KB) and idempotent, so a
+// panel can never drift from the app that drives it.
+function refreshPanels() {
+    for (const [key, a] of Object.entries(APPS)) {
+        if (a.kind !== "cep" || !panelInstalled(key)) continue;
+        try {
+            installPanel(key);
+        } catch (e) {
+            console.log(`\u26a0 could not refresh the ${a.label} panel: ${e.message}`);
+        }
+    }
+}
+
+/* ------------------------------------------------------------- updates -- */
+
+// "1.2.0" > "1.10.0" is false — compare numerically, segment by segment.
+function isNewer(a, b) {
+    const pa = String(a).split("."), pb = String(b).split(".");
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const x = parseInt(pa[i] || "0", 10), y = parseInt(pb[i] || "0", 10);
+        if (x !== y) return x > y;
+    }
+    return false;
+}
+
+let update = null;        // {version, url, notes} once a newer release is seen
+let updateChecked = 0;
+
+async function checkForUpdate() {
+    if (Date.now() - updateChecked < 6 * 3600 * 1000) return update;
+    updateChecked = Date.now();
+    try {
+        const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+            headers: { Accept: "application/vnd.github+json" },
+            signal: AbortSignal.timeout(10000),
+        });
+        if (!r.ok) return update;
+        const d = await r.json();
+        const latest = String(d.tag_name || "").replace(/^v/, "");
+        const asset = (d.assets || []).find((a) => a.name.endsWith(".zip"));
+        update = (latest && asset && isNewer(latest, VERSION))
+            ? { version: latest, url: asset.browser_download_url, notes: d.body || "" }
+            : null;
+    } catch {
+        /* offline, rate-limited — just skip this round */
+    }
+    return update;
+}
+
+// The app can't overwrite itself while it is running, so hand the swap to a
+// detached script that waits for this process to exit first.
+async function applyUpdate() {
+    if (!update) throw new Error("No update available.");
+    const bundle = path.resolve(HERE, "..", "..");
+    if (!bundle.endsWith(".app")) throw new Error("Updates only work on the installed app.");
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "adobe-mcp-"));
+    const zip = path.join(tmp, "update.zip");
+    const r = await fetch(update.url, { redirect: "follow" });
+    if (!r.ok) throw new Error(`Download failed (${r.status}).`);
+    fs.writeFileSync(zip, Buffer.from(await r.arrayBuffer()));
+
+    execFileSync("/usr/bin/ditto", ["-x", "-k", zip, tmp]);
+    const fresh = fs.readdirSync(tmp).find((n) => n.endsWith(".app"));
+    if (!fresh) throw new Error("That download didn't contain an app.");
+
+    const script = path.join(tmp, "swap.sh");
+    fs.writeFileSync(script, [
+        "#!/bin/bash",
+        `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.3; done`,
+        `rm -rf ${JSON.stringify(bundle)}`,
+        `/usr/bin/ditto ${JSON.stringify(path.join(tmp, fresh))} ${JSON.stringify(bundle)}`,
+        `/usr/bin/xattr -cr ${JSON.stringify(bundle)}`,
+        `/usr/bin/open ${JSON.stringify(bundle)}`,
+        `rm -rf ${JSON.stringify(tmp)}`,
+    ].join("\n"));
+    fs.chmodSync(script, 0o755);
+    execFile("/bin/bash", [script], { detached: true, stdio: "ignore" }).unref();
+    setTimeout(() => process.exit(0), 300);
+}
+
 /* ------------------------------------------------------------- the proxy -- */
 
 const app = express();
@@ -377,6 +461,8 @@ app.get("/api/status", (_req, res) => {
         uv,
         debugMode: debugModeOn(),
         claudeRunning: claudeRunning(),
+        version: VERSION,
+        update,
         apps: Object.entries(APPS).map(([key, a]) => ({
             key,
             label: a.label,
@@ -551,6 +637,15 @@ app.post("/api/setup", (_req, res) => {
     }
 });
 
+app.post("/api/update", async (_req, res) => {
+    try {
+        await applyUpdate();
+        res.json({ ok: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post("/api/quit", (_req, res) => {
     res.json({ ok: true });
     setTimeout(() => process.exit(0), 200);
@@ -568,7 +663,19 @@ server.on("error", (e) => {
     process.exit(0);
 });
 
+// If the menu bar app is force-quit or crashes, this process is reparented to
+// launchd and would sit on port 3001 forever, blocking the next launch.
+setInterval(() => {
+    if (process.ppid === 1) {
+        console.log("Parent app is gone \u2014 shutting down.");
+        process.exit(0);
+    }
+}, 5000).unref();
+
 server.listen(PORT, () => {
-    console.log(`Adobe MCP  \u2192  ${URL}`);
+    console.log(`Adobe MCP ${VERSION}  \u2192  ${URL}`);
+    refreshPanels();
+    checkForUpdate();
+    setInterval(checkForUpdate, 6 * 3600 * 1000);
     execFile("/usr/bin/open", [URL]);
 });

@@ -27,8 +27,17 @@ That's it. The window tells you what's connected and what isn't.
 | **Claude Desktop, Claude Code** | Connected for you. |
 | **ChatGPT desktop, Codex CLI, IDE extension** | Connected for you. |
 
-Keep Adobe MCP running while you work. It sits in the background with no dock icon;
-use **Quit** in its window to stop it.
+Adobe MCP lives in your **menu bar** (the ✨ icon). Click it → **Open Control Panel**
+to get back to the settings window any time, or **Quit Adobe MCP** to stop it. There's
+also a **⚙** button in the MCP panel inside each Adobe app.
+
+Keep it running while you work.
+
+### Updates
+
+The app checks for a new version on launch and offers a one-click update. The Adobe
+panels refresh themselves from the app every time it starts, so they can never drift
+out of step with it.
 
 ### The extra click
 

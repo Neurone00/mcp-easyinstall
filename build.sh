@@ -14,6 +14,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 ARCH="$(uname -m)"   # arm64 | x86_64
 NODE_ARCH=$([ "$ARCH" = "arm64" ] && echo arm64 || echo x64)
 UV_ARCH=$([ "$ARCH" = "arm64" ] && echo aarch64 || echo x86_64)
+VER="$(/usr/bin/sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' "$HERE/package.json" | head -1)"
 APP="$HERE/dist/Adobe MCP.app"
 RES="$APP/Contents/Resources"
 
@@ -66,16 +67,25 @@ say "Assembling the app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$RES"
-cp "$HERE/hub.js" "$HERE/index.html" "$RES/"
+cp "$HERE/hub.js" "$HERE/index.html" "$HERE/package.json" "$RES/"
 # A stray .venv from running the engine locally would double the app's size.
 rm -rf "$HERE/engine/mcp/.venv" "$HERE/engine/mcp/__pycache__"
 cp -R "$HERE/node_modules" "$HERE/runtime" "$HERE/engine" "$RES/"
 
-cat > "$APP/Contents/MacOS/AdobeMCP" <<'LAUNCH'
+# A menu bar icon is the only way to reach a background app once its browser tab
+# is closed. Needs Xcode Command Line Tools; without them fall back to a plain
+# launcher (works, but invisible once the tab is shut).
+if command -v swiftc >/dev/null 2>&1; then
+  say "Compiling the menu bar app"
+  swiftc -O -target "$ARCH-apple-macos12" -o "$APP/Contents/MacOS/AdobeMCP" "$HERE/menubar.swift"
+else
+  say "No swiftc — building without the menu bar icon"
+  cat > "$APP/Contents/MacOS/AdobeMCP" <<'LAUNCH'
 #!/bin/bash
 RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
 exec "$RES/runtime/node" "$RES/hub.js" >> "$HOME/Library/Logs/AdobeMCP.log" 2>&1
 LAUNCH
+fi
 chmod +x "$APP/Contents/MacOS/AdobeMCP"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -85,8 +95,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>Adobe MCP</string>
   <key>CFBundleDisplayName</key><string>Adobe MCP</string>
   <key>CFBundleIdentifier</key><string>com.moskitodesign.adobemcp</string>
-  <key>CFBundleVersion</key><string>1.0.0</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleVersion</key><string>$VER</string>
+  <key>CFBundleShortVersionString</key><string>$VER</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleExecutable</key><string>AdobeMCP</string>
   <key>CFBundleIconFile</key><string>app</string>
@@ -101,10 +111,25 @@ PLIST
 codesign --force --deep --sign - "$APP" 2>/dev/null || true
 xattr -cr "$APP" 2>/dev/null || true
 
-say "Built: $APP ($(du -sh "$APP" | cut -f1))"
+say "Built: $APP  v$VER  ($(du -sh "$APP" | cut -f1))"
 
-if [ "${1:-}" = "--zip" ]; then
+if [ "${1:-}" = "--zip" ] || [ "${1:-}" = "--release" ]; then
   rm -f "$HERE/dist/Adobe-MCP-macOS-$ARCH.zip"
   ( cd "$HERE/dist" && ditto -c -k --sequesterRsrc --keepParent "Adobe MCP.app" "Adobe-MCP-macOS-$ARCH.zip" )
   say "Zipped: $HERE/dist/Adobe-MCP-macOS-$ARCH.zip ($(du -sh "$HERE/dist/Adobe-MCP-macOS-$ARCH.zip" | cut -f1))"
+fi
+
+# --------------------------------------------------------------- release ----
+# Tag and publish, so the update check in hub.js has something to find.
+if [ "${1:-}" = "--release" ]; then
+  ZIP="$HERE/dist/Adobe-MCP-macOS-$ARCH.zip"
+  if gh release view "v$VER" >/dev/null 2>&1; then
+    say "Updating release v$VER"
+    gh release upload "v$VER" "$ZIP" --clobber
+  else
+    say "Publishing release v$VER"
+    git tag -f "v$VER" && git push -q --force origin "v$VER"
+    gh release create "v$VER" "$ZIP" --title "Adobe MCP $VER" --generate-notes
+  fi
+  say "Released v$VER"
 fi

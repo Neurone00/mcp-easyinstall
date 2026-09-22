@@ -56,6 +56,9 @@ h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 640;
   border-radius: 10px; padding: 14px 16px; margin: 20px 0 0; box-shadow: var(--shadow);
 }
 .banner.hidden { display: none; }
+.banner.news { border-left-color: var(--accent); }
+.banner button { align-self: center; }
+button.hidden { display: none; }
 .banner b { display: block; margin-bottom: 2px; }
 .banner p { margin: 0; color: var(--ink-soft); font-size: 13.5px; }
 
@@ -132,10 +135,11 @@ footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: 
     <h1>Adobe MCP</h1>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
     <div class="banner hidden" id="banner">
-      <div>
+      <div style="flex:1">
         <b id="banner-title"></b>
         <p id="banner-body"></p>
       </div>
+      <button class="primary hidden" id="banner-action"></button>
     </div>
   </header>
 
@@ -151,7 +155,7 @@ footer { margin-top: 44px; color: var(--ink-soft); font-size: 13px; text-align: 
   <div class="list" id="clients"></div>
 
   <footer>
-    Adobe MCP runs quietly in the background. Keep it running while you work.
+    Adobe MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
     <button class="ghost" id="quit" style="margin-left:6px">Quit</button>
   </footer>
 </div>
@@ -200,15 +204,26 @@ function el(html) {
 
 function renderBanner() {
   const b = document.getElementById("banner");
-  let title, body;
+  const act = document.getElementById("banner-action");
+  let title, body, action = null, news = false;
+
   if (!state.engine) {
     title = "Can't find the Adobe MCP engine";
     body = "The app can't locate its own files. Re-download Adobe MCP and try again.";
   } else if (!state.uv) {
     title = "Missing the Python runner";
     body = "The bundled <code>uv</code> runtime wasn't found. Re-download Adobe MCP.";
+  } else if (state.update) {
+    news = true;
+    title = `Version ${state.update.version} is available`;
+    body = `You're on ${state.version}. Updating takes a few seconds and reopens the app.`;
+    action = "Update now";
   }
+
   b.classList.toggle("hidden", !title);
+  b.classList.toggle("news", news);
+  act.classList.toggle("hidden", !action);
+  if (action) act.textContent = action;
   if (title) {
     document.getElementById("banner-title").textContent = title;
     document.getElementById("banner-body").innerHTML = body;
@@ -329,6 +344,8 @@ function render() {
   apps.replaceChildren(...state.apps.map(appRow));
   clients.replaceChildren(...state.clients.map(clientRow));
 
+  document.getElementById("ver").textContent = state.version ? "v" + state.version : "";
+
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
   document.getElementById("setup-said").textContent =
@@ -365,6 +382,13 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.restart) {
       await api("POST", "/api/restart-claude");
       toast("Restarting Claude…");
+    } else if (b.id === "banner-action") {
+      b.textContent = "Downloading\u2026";
+      await api("POST", "/api/update");
+      document.body.innerHTML =
+        '<div class="wrap"><h1>Updating\u2026</h1>' +
+        '<p class="sub">Adobe MCP will reopen in a moment. You can close this tab.</p></div>';
+      return;
     } else if (b.id === "quit") {
       await api("POST", "/api/quit");
       document.body.innerHTML =

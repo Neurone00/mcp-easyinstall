@@ -36,6 +36,7 @@
     ".mcp-ask button:hover{background:#35353c;border-color:#666}",
     ".mcp-ask button.go{background:#d97757;border-color:#d97757;color:#fff}",
     ".mcp-ask button.go:hover{filter:brightness(1.1)}",
+    ".mcp-ask button.cog{flex:0 0 34px;font-size:14px}",
     ".mcp-hint{font-size:10.5px;line-height:1.45;color:#8a8a94;margin:0 0 6px}",
   ].join("");
   document.head.appendChild(css);
@@ -58,8 +59,15 @@
     if (!openApp("ChatGPT")) openUrl("https://chatgpt.com/");
   };
 
+  var settings = document.createElement("button");
+  settings.className = "cog";
+  settings.textContent = "\u2699";
+  settings.title = "Open the Adobe MCP control panel";
+  settings.onclick = function () { openUrl("http://localhost:3001/"); };
+
   bar.appendChild(claude);
   bar.appendChild(gpt);
+  bar.appendChild(settings);
 
   var hint = document.createElement("p");
   hint.className = "mcp-hint";
