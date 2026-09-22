@@ -76,9 +76,6 @@
     ".amcp button:hover:not(:disabled){border-color:var(--a-soft)}",
     ".amcp button:focus-visible{outline:2px solid var(--a-accent);outline-offset:2px}",
     ".amcp button:disabled{opacity:.55;cursor:default}",
-    ".amcp button.go{background:var(--a-accent);border-color:var(--a-accent);color:#fff}",
-    ".amcp button.go:hover:not(:disabled){filter:brightness(1.08)}",
-
     ".amcp-row{display:flex;gap:6px;margin:0 0 8px}",
     ".amcp-row button{flex:1}",
     ".amcp-row button.icon{flex:0 0 36px;padding:9px 0;font-size:13px}",
@@ -159,15 +156,16 @@
   var bar = document.createElement("div");
   bar.className = "amcp-row";
 
+  // Two ways to do the same thing, so they look and read the same. Styling one
+  // as the primary action said "use Claude", which is not ours to say.
   var claude = document.createElement("button");
-  claude.className = "go";
   claude.textContent = "Ask Claude";
-  claude.title = "Open Claude, which can drive " + APP;
+  claude.title = "Open the Claude desktop app, which can drive " + APP;
   claude.onclick = function () { if (!openApp("Claude")) openUrl("https://claude.ai/new"); };
 
   var gpt = document.createElement("button");
-  gpt.textContent = "ChatGPT";        // the ↗ implied a web link; it opens an app
-  gpt.title = "Open the ChatGPT desktop app";
+  gpt.textContent = "Ask ChatGPT";
+  gpt.title = "Open the ChatGPT desktop app, which can drive " + APP;
   gpt.onclick = function () { if (!openApp("ChatGPT")) openUrl("https://chatgpt.com/"); };
 
   bar.appendChild(claude);
