@@ -156,23 +156,18 @@ function writeJSON(file, data) {
 // The command an AI client runs to start one app's MCP server.
 function serverDef(key) {
     const engine = findEngine();
-    const uv = findUv();
-    if (!engine || !uv) return null;
+    if (!engine) return null;
+    // Deliberately NOT `uv run`. Codex and the ChatGPT desktop app sandbox MCP
+    // servers with writes confined to the workspace, so uv could not build its
+    // virtualenv and every call died as "user cancelled MCP tool call". The venv
+    // is built once by the hub, which is not sandboxed; clients only read it.
     return {
-        command: uv,
-        args: [
-            "run", "--directory", path.join(engine, "mcp"),
-            "--with", "fonttools",
-            "--with", "python-socketio",
-            "--with", "mcp",
-            "--with", "requests",
-            "--with", "websocket-client",
-            "--with", "pillow",
-            "mcp", "run", APPS[key].mcp,
-        ],
-        // Without this uv builds its virtualenv inside the .app, which an update
-        // wipes and a read-only install location would reject outright.
-        env: { UV_PROJECT_ENVIRONMENT: VENV },
+        command: path.join(VENV, "bin", "mcp"),
+        args: ["run", path.join(engine, "mcp", APPS[key].mcp)],
+        // Python writes __pycache__ next to the script, i.e. inside the .app.
+        // A sandboxed client can't do that, and the server dies before it can
+        // answer. Nothing here needs the bytecode cache.
+        env: { PYTHONDONTWRITEBYTECODE: "1" },
     };
 }
 
@@ -315,18 +310,30 @@ function debugModeOn() {
 
 // First `uv run` downloads Python and the PyPI deps. Do it now, in the
 // background, so the first thing the user asks Claude doesn't time out.
-let warmed = false;
-function warmUp() {
-    if (warmed) return;
-    const engine = findEngine(), uv = findUv();
-    if (!engine || !uv) return;
-    warmed = true;
-    execFile(uv, ["run", "--directory", path.join(engine, "mcp"),
-        "--with", "fonttools", "--with", "python-socketio", "--with", "mcp",
-        "--with", "requests", "--with", "websocket-client", "--with", "pillow",
-        "python", "-c", "print('warm')"],
-        { timeout: 300000, env: { ...process.env, UV_PROJECT_ENVIRONMENT: VENV } },
-        (err) => console.log(err ? "\u26a0 warm-up failed: " + err.message : "\u2713 Python runtime ready"));
+const PY_DEPS = ["fonttools", "python-socketio", "mcp", "requests", "websocket-client", "pillow"];
+let venvReady = fs.existsSync(path.join(VENV, "bin", "mcp"));
+let venvBuilding = false;
+function ensureVenv(done) {
+    if (venvReady || venvBuilding) return done && done();
+    const uv = findUv();
+    if (!uv) return done && done();
+    venvBuilding = true;
+    console.log("Building the Python environment (first run only)\u2026");
+    execFile(uv, ["venv", VENV], { timeout: 300000 }, (e1) => {
+        if (e1) {
+            venvBuilding = false;
+            console.log("\u26a0 venv failed: " + e1.message);
+            return done && done();
+        }
+        execFile(uv, ["pip", "install", "--python", path.join(VENV, "bin", "python"), ...PY_DEPS],
+            { timeout: 600000 }, (e2) => {
+                venvBuilding = false;
+                venvReady = !e2 && fs.existsSync(path.join(VENV, "bin", "mcp"));
+                console.log(venvReady ? "\u2713 Python environment ready"
+                                      : "\u26a0 venv deps failed: " + (e2 && e2.message));
+                done && done();
+            });
+    });
 }
 
 // An installed CEP panel is a copy, so an app update would leave a stale one
@@ -359,10 +366,10 @@ function repairClientPaths() {
             const servers = readJSON(CLIENTS[id].file, {})[CLIENTS[id].key] || {};
             stale = connected.some((k) => servers[k] &&
                 (servers[k].command !== want.command ||
-                 (servers[k].env || {}).UV_PROJECT_ENVIRONMENT !== VENV));
+                 !(servers[k].env || {}).PYTHONDONTWRITEBYTECODE));
         } else {
             const toml = fs.readFileSync(CLIENTS[id].file, "utf8");
-            stale = !toml.includes(want.command) || !toml.includes(VENV);
+            stale = !toml.includes(want.command) || !toml.includes("PYTHONDONTWRITEBYTECODE");
         }
         if (!stale) continue;
         try {
@@ -707,7 +714,7 @@ app.post("/api/setup", (_req, res) => {
                 failed.push(`${a.label} (${e.message})`);
             }
         }
-        warmUp();
+        ensureVenv();
 
         const keys = registerableApps();
         const wired = [];
@@ -783,7 +790,10 @@ server.listen(PORT, () => {
     console.log(`Adobe MCP ${VERSION}  \u2192  ${URL}`);
     fs.mkdirSync(SUPPORT, { recursive: true });
     refreshPanels();
-    repairClientPaths();
+    ensureVenv(() => repairClientPaths());
+    // Claude Desktop is skipped while it is open, so keep checking: the moment
+    // it closes, its config gets fixed without the user doing anything.
+    setInterval(repairClientPaths, 30000).unref();
     checkForUpdate();
     setInterval(checkForUpdate, 6 * 3600 * 1000);
 });

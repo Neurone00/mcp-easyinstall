@@ -120,3 +120,12 @@ installer, the control panel, and the connection to Claude and ChatGPT.
 Neither project is endorsed by or supported by Adobe.
 
 MIT licensed.
+
+
+## Known limitation
+
+`codex exec` — the **non-interactive** Codex CLI — cannot run these tools. It reports
+`user cancelled MCP tool call` because it runs with approvals disabled and has no way
+to grant one. The same request works from any interactive client: the ChatGPT desktop
+app, the Codex TUI, Claude Desktop, or Claude Code. Only scripted `codex exec` runs
+are affected.

@@ -41,6 +41,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     var quitting = false
+    var restarts = 0
+    var lastStart = Date.distantPast
 
     func startHub() {
         guard let res = Bundle.main.resourcePath else { return }
@@ -58,10 +60,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // If the hub dies the menu bar icon would still be there doing nothing,
         // so bring it back — with a pause, so a crash loop doesn't spin.
+        // Restart a hub that dies — but a hub that dies instantly is broken, and
+        // relaunching it forever just fills the log. Give up after a few tries.
         p.terminationHandler = { [weak self] _ in
             guard let self, !self.quitting else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.startHub() }
+            DispatchQueue.main.async {
+                if Date().timeIntervalSince(self.lastStart) > 60 { self.restarts = 0 }
+                self.restarts += 1
+                guard self.restarts <= 5 else {
+                    NSLog("Adobe MCP: hub keeps crashing, giving up. See ~/Library/Logs/AdobeMCP.log")
+                    return
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { self.startHub() }
+            }
         }
+        lastStart = Date()
         try? p.run()
         hub = p
     }
