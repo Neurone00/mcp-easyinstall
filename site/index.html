@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Adobe MCP</title>
+<meta name="description" content="Let Claude and ChatGPT drive Illustrator, After Effects, Premiere Pro, Photoshop and InDesign. One app, nothing else to install.">
+<meta property="og:title" content="Adobe MCP">
+<meta property="og:description" content="Let Claude and ChatGPT drive your Adobe apps. One app, nothing else to install.">
+<style>
+:root {
+  --bg:#f6f6f7; --card:#fff; --ink:#16161a; --soft:#6b6b76; --line:#e4e4e9;
+  --accent:#3b5bdb; --ok:#1f9d55;
+  --shadow:0 1px 2px rgba(20,20,30,.06), 0 10px 30px rgba(20,20,30,.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#131317; --card:#1c1c22; --ink:#f2f2f5; --soft:#9a9aa6; --line:#2b2b34;
+    --accent:#7b93ff; --ok:#4ade80;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.28);
+  }
+}
+:root[data-theme="dark"]{--bg:#131317;--card:#1c1c22;--ink:#f2f2f5;--soft:#9a9aa6;
+  --line:#2b2b34;--accent:#7b93ff;--ok:#4ade80;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.28);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+
+.hero{padding:96px 0 56px;text-align:center}
+h1{font-size:clamp(38px,7vw,60px);letter-spacing:-.03em;margin:0 0 14px;font-weight:660;line-height:1.05}
+.tag{font-size:clamp(17px,2.6vw,21px);color:var(--soft);margin:0 auto 34px;max-width:32ch}
+.dl{display:inline-flex;align-items:center;gap:10px;background:var(--accent);color:#fff;
+  text-decoration:none;font-weight:600;font-size:17px;padding:15px 30px;border-radius:12px;
+  box-shadow:var(--shadow);transition:.15s}
+.dl:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.fine{color:var(--soft);font-size:13.5px;margin-top:14px}
+.fine a{color:inherit}
+
+.apps{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:50px 0 0}
+.chip{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);
+  border-radius:999px;padding:7px 15px 7px 8px;font-size:14px;font-weight:500;box-shadow:var(--shadow)}
+.sq{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;
+  font-size:10px;font-weight:700;color:#fff}
+
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--soft);
+  font-weight:620;margin:0 0 16px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+
+ol.steps{counter-reset:s;list-style:none;padding:0;margin:0;display:grid;gap:14px}
+ol.steps li{counter-increment:s;background:var(--card);border:1px solid var(--line);
+  border-radius:12px;padding:18px 20px 18px 60px;position:relative;box-shadow:var(--shadow)}
+ol.steps li::before{content:counter(s);position:absolute;left:20px;top:18px;width:24px;height:24px;
+  border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;
+  font-size:13px;font-weight:650}
+ol.steps b{display:block}
+ol.steps span{color:var(--soft);font-size:14.5px}
+
+.ask{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:10px;padding:14px 18px;margin:10px 0;color:var(--soft);font-style:italic}
+
+table{width:100%;border-collapse:collapse;font-size:15px}
+td{padding:13px 0;border-top:1px solid var(--line);vertical-align:top}
+td:first-child{font-weight:560;width:42%;padding-right:20px}
+td:last-child{color:var(--soft)}
+tr:first-child td{border-top:0}
+.ok{color:var(--ok);font-weight:600}
+
+footer{padding:44px 0 64px;color:var(--soft);font-size:13.5px;text-align:center;
+  border-top:1px solid var(--line)}
+footer a{color:var(--soft)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="hero">
+    <h1>Adobe MCP</h1>
+    <p class="tag">Let Claude and ChatGPT drive your Adobe apps.</p>
+    <a class="dl" id="dl" href="https://github.com/Neurone00/mcp-easyinstall/releases/latest">
+      Download for Mac
+    </a>
+    <p class="fine">
+      Apple Silicon &middot; macOS 12+ &middot; free &middot;
+      <a href="https://github.com/Neurone00/mcp-easyinstall">source on GitHub</a>
+    </p>
+
+    <div class="apps">
+      <div class="chip"><span class="sq" style="background:#330000;color:#ff9a00">Ai</span>Illustrator</div>
+      <div class="chip"><span class="sq" style="background:#00005b;color:#99f">Ae</span>After Effects</div>
+      <div class="chip"><span class="sq" style="background:#2a0634;color:#ea77ff">Pr</span>Premiere Pro</div>
+      <div class="chip"><span class="sq" style="background:#001e36;color:#31a8ff">Ps</span>Photoshop</div>
+      <div class="chip"><span class="sq" style="background:#49021f;color:#f36">Id</span>InDesign</div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Install</h2>
+    <ol class="steps">
+      <li><b>Download and drag to Applications.</b>
+          <span>No Node, no Python, no terminal. It's all inside the app.</span></li>
+      <li><b>Right-click &rarr; Open.</b>
+          <span>Only the first time &mdash; macOS asks this of any app not from the App Store.</span></li>
+      <li><b>Press &ldquo;Set everything up&rdquo;.</b>
+          <span>It installs the panels and connects Claude and ChatGPT for you.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Then just ask</h2>
+    <p class="ask">Make me a 1080&times;1920 story with a bold headline in our brand colours.</p>
+    <p class="ask">Rename every layer in this file to a consistent format.</p>
+    <p class="ask">Build a rough cut from these clips with cross dissolves between them.</p>
+  </section>
+
+  <section>
+    <h2>What's automatic</h2>
+    <table>
+      <tr><td>Illustrator, After Effects</td>
+          <td><span class="ok">Fully automatic.</span> Panel installed and connected for you.</td></tr>
+      <tr><td>Photoshop, Premiere, InDesign</td>
+          <td>One extra click. Adobe only auto-installs plugins it has signed, so these load
+              through Adobe's free UXP Developer Tool &mdash; you press <b>Load</b> once.</td></tr>
+      <tr><td>Claude Desktop, Claude Code</td>
+          <td><span class="ok">Connected automatically.</span></td></tr>
+      <tr><td>ChatGPT</td>
+          <td>Through OpenAI's Codex CLI. ChatGPT in the browser can't reach an app on your
+              Mac &mdash; its connectors only see the public internet.</td></tr>
+    </table>
+  </section>
+
+  <footer>
+    Built on <a href="https://github.com/mikechambers/adb-mcp">adb-mcp</a> by Mike Chambers.<br>
+    Not endorsed by or supported by Adobe.
+  </footer>
+</div>
+
+<script>
+// Point the button straight at the latest .zip when the API is reachable.
+fetch("https://api.github.com/repos/Neurone00/mcp-easyinstall/releases/latest")
+  .then((r) => r.ok ? r.json() : Promise.reject())
+  .then((d) => {
+    const zip = (d.assets || []).find((a) => a.name.endsWith(".zip"));
+    if (zip) document.getElementById("dl").href = zip.browser_download_url;
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>
