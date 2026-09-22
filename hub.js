@@ -136,6 +136,92 @@ function panelInstalled(key) {
     return null;
 }
 
+/* ----------------------------------------------------- window arranging -- */
+
+// Put the Adobe app on most of the screen and the assistant beside it, so you
+// can type a request and watch it happen without hunting for windows.
+//
+// This needs macOS Accessibility permission, because moving another app's
+// windows is exactly what that permission governs. Without it the script fails
+// with -1719 and we say so plainly rather than silently doing nothing.
+// Async on purpose. The first version used execFileSync, which blocked the
+// whole event loop — including the Adobe command proxy — for as long as
+// osascript took. And osascript does not fail fast here: while macOS is holding
+// the Accessibility request pending, it simply hangs, so a synchronous call
+// froze the hub for the full timeout.
+function osa(script, ms) {
+    return new Promise((resolve, reject) => {
+        execFile("/usr/bin/osascript", ["-e", script], { timeout: ms, encoding: "utf8" },
+            (err, stdout, stderr) => {
+                if (!err) return resolve(String(stdout).trim());
+                const text = String(stderr || err.message);
+                if (err.killed || /ETIMEDOUT/.test(text)) {
+                    const e = new Error(
+                        "macOS is waiting on permission to let Adobe MCP move other apps' windows. " +
+                        "Look for its prompt, or switch on Adobe MCP under System Settings \u2192 " +
+                        "Privacy & Security \u2192 Accessibility, then try again."
+                    );
+                    e.needsAccessibility = true;
+                    return reject(e);
+                }
+                if (/-1719|assistive access/.test(text)) {
+                    const e = new Error(
+                        "macOS won't let Adobe MCP move other apps' windows until you allow it: " +
+                        "System Settings \u2192 Privacy & Security \u2192 Accessibility \u2192 switch on Adobe MCP."
+                    );
+                    e.needsAccessibility = true;
+                    return reject(e);
+                }
+                reject(new Error(text.split("\n")[0]));
+            });
+    });
+}
+
+async function screenSize() {
+    try {
+        const b = (await osa('tell application "Finder" to get bounds of window of desktop', 8000))
+            .split(",").map((n) => parseInt(n, 10));
+        if (b.length === 4 && b[2] > 0) return { w: b[2], h: b[3] };
+    } catch { /* fall through */ }
+    return { w: 1440, h: 900 };
+}
+
+// Put the Adobe app on most of the screen and the assistant beside it, so you
+// can type a request and watch it happen without hunting for windows.
+async function arrangeWindows(appKey, assistant, split) {
+    const bundle = appBundle(APPS[appKey].appGlob);
+    if (!bundle) throw new Error(`${APPS[appKey].label} isn't installed.`);
+    const adobeProc = path.basename(bundle, ".app");
+
+    const { w, h } = await screenSize();
+    const left = Math.round(w * split);
+    const right = w - left;
+
+    const script = `
+        on place(procName, x, y, ww, hh)
+            tell application "System Events"
+                if not (exists process procName) then return "missing"
+                tell process procName
+                    if (count of windows) is 0 then return "nowindow"
+                    set position of window 1 to {x, y}
+                    set size of window 1 to {ww, hh}
+                end tell
+            end tell
+            return "ok"
+        end place
+        set a to place("${adobeProc}", 0, 0, ${left}, ${h})
+        set b to place("${assistant}", ${left}, 0, ${right}, ${h})
+        return a & "|" & b
+    `;
+
+    const out = await osa(script, 25000);
+    const [adobe, asst] = out.split("|");
+    return {
+        ok: true, adobe, assistant: asst,
+        layout: `${Math.round(split * 100)}/${100 - Math.round(split * 100)}`,
+    };
+}
+
 /* ------------------------------------------------------------- caching -- */
 
 // /api/status is polled every two seconds by every open tab, and it was doing
@@ -883,6 +969,36 @@ io.on("connection", (socket) => {
             message: `Registered for ${application}`,
         });
         console.log(`✓ ${application} panel connected`);
+    });
+
+    // Requests from a panel, over the channel we already trust.
+    socket.on("app_request", (req) => {
+        const key = req && req.application;
+        if (!Object.prototype.hasOwnProperty.call(APPS, key)) {
+            return socket.emit("app_response", { id: req && req.id, ok: false, error: "Unknown app." });
+        }
+        try {
+            if (req.type === "arrange") {
+                const split = Math.min(0.9, Math.max(0.5, Number(req.split) || 0.8));
+                const assistant = req.assistant === "ChatGPT" ? "ChatGPT" : "Claude";
+                return arrangeWindows(key, assistant, split)
+                    .then((r) => socket.emit("app_response", { id: req.id, ...r }))
+                    .catch((e) => socket.emit("app_response", {
+                        id: req.id, ok: false, error: e.message,
+                        needsAccessibility: !!e.needsAccessibility,
+                    }));
+            }
+            if (req.type === "open_accessibility") {
+                execFile("/usr/bin/open",
+                    ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]);
+                return socket.emit("app_response", { id: req.id, ok: true });
+            }
+            socket.emit("app_response", { id: req.id, ok: false, error: "Unknown request." });
+        } catch (e) {
+            socket.emit("app_response", {
+                id: req.id, ok: false, error: e.message, needsAccessibility: !!e.needsAccessibility,
+            });
+        }
     });
 
     socket.on("command_packet_response", ({ packet }) => {

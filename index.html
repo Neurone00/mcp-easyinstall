@@ -4,14 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Adobe MCP</title>
+<link rel="icon" href="brand/mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #f6f6f7;
+  --bg: #f4f7fb;            /* EYE surface */
   --card: #ffffff;
-  --ink: #16161a;
-  --ink-soft: #6b6b76;
-  --line: #e4e4e9;
-  --accent: #3b5bdb;
+  --ink: #111827;
+  --ink-soft: #64748b;
+  --line: #e2e8f0;
+  --accent: #2855ff;        /* EYE primary */
+  --accent-dark: #183bbf;
   --ok: #1f9d55;
   --warn: #c77700;
   --idle: #b9b9c2;
@@ -25,6 +29,7 @@
     --ink-soft: #9a9aa6;
     --line: #2b2b34;
     --accent: #7b93ff;
+    --accent-dark: #5f7bff;
     --ok: #4ade80;
     --warn: #fbbf24;
     --idle: #4a4a56;
@@ -40,7 +45,7 @@
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--ink);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font: 15px/1.5 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 .wrap { max-width: 680px; margin: 0 auto; padding: 48px 16px 80px; }
@@ -151,7 +156,8 @@ button:focus-visible, summary:focus-visible {
 <main class="wrap">
 
   <header>
-    <h1>Adobe MCP</h1>
+    <h1><img src="brand/mark.svg" alt="" width="30" height="30"
+         style="vertical-align:-6px;margin-right:9px;border-radius:7px">Adobe MCP</h1>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
     <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
       <div style="flex:1">
@@ -185,7 +191,7 @@ button:focus-visible, summary:focus-visible {
   <div class="list" id="clients"></div>
 
   <footer>
-    Adobe MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
+    <span style="opacity:.75">Moskito</span> &middot; Adobe MCP <span id="ver"></span> runs quietly in the background. Keep it running while you work.
     <button class="ghost" id="quit" style="margin-left:6px">Quit</button>
   </footer>
 </main>
