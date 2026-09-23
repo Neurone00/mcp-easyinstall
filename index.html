@@ -233,17 +233,13 @@ button:focus-visible {
       every message, whether you use it or not. Turning off the ones you don't drive
       makes each request smaller and leaves more room for your actual work.</p>
 
-    <p class="settings-what">Anonymous usage</p>
-    <div class="applist">
-      <label id="analytics-row">
-        <input type="checkbox" data-analytics="1">
-        <span>Send anonymous usage counts</span>
-      </label>
-    </div>
-    <p class="settings-note">Which apps and commands get used, how often they fail, and how
-      much data the tools send back &mdash; so the app can be improved. A random id, not
-      linked to you, so &ldquo;how many people&rdquo; can be counted at all.
-      <b>Never sent:</b> document names, your prompts, scripts, file paths, or artwork.</p>
+    <p class="settings-what">Anonymous usage is recorded</p>
+    <p class="settings-note">This is a company tool and its use is measured, the same way
+      Teams is. What is recorded: which Adobe apps and which commands are used, how often
+      they fail, and how much data the tools send back. It is tied to a random id, not to
+      you or your account.<br>
+      <b>Never recorded:</b> document names, your prompts, the scripts that run, file paths,
+      or any of your artwork.</p>
 
     <p class="settings-what">What setting everything up changes on your Mac:</p>
     <ul class="steps">
@@ -254,6 +250,7 @@ button:focus-visible {
           &mdash; a timestamped backup of each is kept beside it</li>
       <li>Downloads a small Python runtime on first run</li>
       <li>It never touches your documents</li>
+      <li>Records anonymous usage counts &mdash; apps and commands used, not your work</li>
     </ul>
   </section>
 
@@ -544,8 +541,6 @@ function render() {
   const clients = document.getElementById("clients");
   apps.replaceChildren(...state.apps.map(appRow));
   renderAppList();
-  const ana = document.querySelector("[data-analytics]");
-  if (ana && document.activeElement !== ana) ana.checked = state.analytics !== false;
   clients.replaceChildren(...state.clients.map(clientRow));
 
 
@@ -595,20 +590,6 @@ function render() {
 /* --------------------------------------------------------------- actions -- */
 
 document.addEventListener("change", async (e) => {
-  const ana = e.target.closest("[data-analytics]");
-  if (ana) {
-    ana.disabled = true;
-    try {
-      await api("POST", "/api/analytics", { on: ana.checked });
-      toast(ana.checked ? "Anonymous usage counts on." : "Anonymous usage counts off.");
-    } catch (err) {
-      toast(err.message);
-      ana.checked = !ana.checked;
-    } finally {
-      ana.disabled = false;
-    }
-    return;
-  }
   const box = e.target.closest("[data-appon]");
   if (!box) return;
   const key = box.dataset.appon;

@@ -1134,16 +1134,28 @@ async function applyUpdate() {
 const ANALYTICS = path.join(SUPPORT, "analytics.json");
 const COLLECT_URL = "https://adobe-mcp.l-salvioni.workers.dev/collect";
 
+// Not optional. This is a monitored tool the company hands out, the same way
+// Teams is, and the app says so plainly rather than offering a switch that is
+// not really a switch. What keeps that defensible is the payload, not a
+// checkbox: it is anonymous by construction and carries nothing about anyone's
+// work. Someone who wants to know what is sent should be able to read this
+// function and the one below and be satisfied.
 function analyticsState() {
     let st;
     try { st = readJSON(ANALYTICS, null); } catch { st = null; }
     if (!st || typeof st !== "object" || !st.id) {
-        st = { id: crypto.randomUUID(), enabled: true };
-        try {
-            fs.mkdirSync(SUPPORT, { recursive: true });
-            writeJSON(ANALYTICS, st);
-        } catch { /* read-only home: just do not record anything */ }
+        st = { id: crypto.randomUUID() };
+    } else if ("enabled" in st) {
+        // Left by the version that briefly had a switch. Nothing reads it now,
+        // and leaving it there implies a control that does not exist.
+        delete st.enabled;
+    } else {
+        return st;
     }
+    try {
+        fs.mkdirSync(SUPPORT, { recursive: true });
+        writeJSON(ANALYTICS, st);
+    } catch { /* read-only home: carry on with an id for this run only */ }
     return st;
 }
 
@@ -1155,7 +1167,6 @@ const inFlight = new Map();   // senderId -> { app, tool } so the reply can be a
 function bump(obj, key, by = 1) { obj[key] = (obj[key] || 0) + by; }
 
 function noteCall(app, tool, senderId) {
-    if (!analyticsState().enabled) return;
     bump(tally.calls, app);
     if (tool) bump(tally.tools, `${app}.${tool}`);
     if (senderId) {
@@ -1166,7 +1177,6 @@ function noteCall(app, tool, senderId) {
 }
 
 function noteReply(senderId, packet) {
-    if (!analyticsState().enabled) return;
     const seen = inFlight.get(senderId);
     if (!seen) return;
     inFlight.delete(senderId);
@@ -1178,7 +1188,6 @@ function noteReply(senderId, packet) {
 
 async function sendAnalytics() {
     const st = analyticsState();
-    if (!st.enabled) return;
     const payload = tally;
     const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length;
     if (!anything) return;
@@ -1421,7 +1430,6 @@ app.get("/api/status", (_req, res) => {
         python: { ready: venvReady, building: venvBuilding, error: venvError },
         version: VERSION,
         update,
-        analytics: analyticsState().enabled,
         apps: Object.entries(APPS).map(([key, a]) => ({
             key,
             label: a.label,
@@ -1458,20 +1466,6 @@ app.post("/api/panel/:key", (req, res) => {
 
 // Turning an app off has to rewrite the configs, or it saves nothing until
 // something else happens to trigger a write.
-// The switch behind the disclosure. Off means nothing is gathered at all, not
-// gathered-and-withheld.
-app.post("/api/analytics", (req, res) => {
-    try {
-        const st = analyticsState();
-        st.enabled = !(req.body && req.body.on === false);
-        writeJSON(ANALYTICS, st);
-        if (!st.enabled) tally = { calls: {}, errors: {}, bytes: {}, tools: {} };
-        res.json({ ok: true, enabled: st.enabled });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    }
-});
-
 app.post("/api/app-enabled/:key", (req, res) => {
     const key = req.params.key;
     if (!APPS[key]) return res.status(404).json({ error: "Unknown app." });
@@ -2049,6 +2043,9 @@ server.listen(PORT, "127.0.0.1", () => {
     refreshPanelOpen();
     setInterval(refreshPanelOpen, 5000).unref();
     setInterval(autoLoadUxp, 5000).unref();
+    // Also settles the id on first run, and clears the stale "enabled" key,
+    // rather than waiting for the first flush fifteen minutes later.
+    analyticsState();
     setInterval(sendAnalytics, 15 * 60 * 1000).unref();
     // Give the app a moment to finish starting — panels, venv, config repair —
     // before it considers restarting itself.
