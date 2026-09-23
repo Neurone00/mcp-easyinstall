@@ -1524,13 +1524,23 @@ app.post("/api/load-uxp/:key", async (req, res) => {
 function appRunning(key) {
     const bundle = appBundle(APPS[key].appGlob);
     if (!bundle) return false;
-    try {
-        execFileSync("/usr/bin/pgrep", ["-f", path.join(bundle, "Contents", "MacOS")],
-            { stdio: "ignore", timeout: 5000 });
-        return true;
-    } catch {
-        return false;   // pgrep exits non-zero when nothing matches
+    const probe = path.join(bundle, "Contents", "MacOS");
+
+    // "pgrep found nothing" and "pgrep could not be asked" are different
+    // answers, and treating both as not-running made the first Set up report
+    // a running Photoshop as closed: setupUxp had just killed the Developer
+    // Tool, the machine was busy, and the probe timed out. Exit status 1 is
+    // the real no; anything else is worth asking again.
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            execFileSync("/usr/bin/pgrep", ["-f", probe], { stdio: "ignore", timeout: 10000 });
+            return true;
+        } catch (e) {
+            if (e.status === 1) return false;
+        }
     }
+    console.log(`\u26a0 couldn't tell whether ${APPS[key].label} is running`);
+    return false;
 }
 
 async function setupUxp(key) {
