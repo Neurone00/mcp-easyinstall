@@ -1333,7 +1333,6 @@ const UDT_GLOB = "Adobe UXP Developer Tool";
 // Read out of the tool's own bundle, so: undocumented, and Adobe could change
 // it. Every failure here falls back to asking the user to click Load.
 const UXP_SERVICE = "ws://127.0.0.1:14001/socket/cli";
-const UXP_APP_ID = { photoshop: "PS", premiere: "PPRO" };
 
 // A connected panel is the only trustworthy signal that a plugin is loaded:
 // the service reports "already loaded" as the same flat failure string as a
@@ -1373,7 +1372,10 @@ function loadUxpPluginOnce(key) {
         let WebSocket;
         try { WebSocket = require("ws"); } catch { return reject(new Error("ws unavailable.")); }
 
-        const want = UXP_APP_ID[key];
+        // The service's appId is the same string the workspace uses as hostParam
+        // — "PS", "premierepro". A separate map of guesses had "PPRO" for
+        // Premiere, which matched nothing.
+        const want = String(UDT_HOST[key] || "").toUpperCase();
         const ws = new WebSocket(UXP_SERVICE);
         const reqId = Date.now() % 100000;
         let hostId = null, settled = false;
@@ -1390,8 +1392,8 @@ function loadUxpPluginOnce(key) {
         ws.on("message", (raw) => {
             let m;
             try { m = JSON.parse(String(raw)); } catch { return; }
-            if (m.command === "didAddRuntimeClient" && m.app &&
-                String(m.app.appId || "").toUpperCase().startsWith(want)) {
+            if (m.command === "didAddRuntimeClient" && m.app && want &&
+                String(m.app.appId || "").toUpperCase() === want) {
                 hostId = m.id;
             }
             if (m.command === "didCompleteConnection") {
