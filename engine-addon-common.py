@@ -114,3 +114,45 @@ try:
 except Exception:
     # Never let a saving stop the server from starting.
     pass
+
+
+# ===========================================================================
+# Adobe MCP shared additions — the facts that cause wrong calls
+# ===========================================================================
+#
+# Found by auditing each server's readers against its writers. These are the
+# places where a reasonable reading of the tool list produces a wrong call, and
+# nothing errors — the work just lands somewhere unintended. Short on purpose:
+# instructions are paid for on every request.
+
+_APP_NOTES = {
+    "premiere": """
+TIME COMES IN TWO UNITS
+  add_marker_to_sequence, add_media_to_sequence and set_clip_start_end_times
+  take TICKS. export_frame and get_sequence_frame_image take SECONDS.
+  1 second = 2,940,000 ticks. So 5 seconds is 14,700,000 ticks.
+  Check which one the tool you are about to call asks for.
+""",
+    "photoshop": """
+READING A POSITION AND SETTING ONE ARE NOT THE SAME
+  get_layer_bounds returns ABSOLUTE pixels from the document's top-left.
+  translate_layer takes a RELATIVE offset in pixels. To move a layer so its
+  left edge sits at x, pass x - bounds.left, not x.
+  scale_layer takes PERCENTAGES, not pixels.
+""",
+    "illustrator": """
+POSITIONS ROUND-TRIP
+  Everything that reports a position — list_items, find_items, get_selection,
+  and the value returned by create_* and move_item — uses the same space the
+  setters take: pixels from the artboard's top-left, y downward. A position you
+  read can be passed straight back without conversion.
+""",
+}
+
+try:
+    _note = _APP_NOTES.get(APPLICATION)
+    if _note:
+        mcp._mcp_server.instructions = (
+            (mcp._mcp_server.instructions or "") + "\n" + _note.strip()).strip()
+except Exception:
+    pass

@@ -90,6 +90,34 @@ for panel in "$HERE"/engine/cep/*/; do
   /usr/bin/sed -i '' \
     's|out\.projectInfo = await getProjectInfo();|out.projectInfo = await mcpCompactDocument(getProjectInfo);|' \
     "$panel/main.js"
+  # CEP's evalScript returns a STRING, so ExtendScript coerces whatever the
+  # script returned with toString(): a script returning an object arrives as
+  # the literal "[object Object]", destroyed before the panel sees it. The
+  # After Effects panel already captures and serialises the result; the
+  # Illustrator one does not, which is where that came from. Give it the same.
+  AMCP_JS="$panel/commands.js" "$HERE/runtime/node" -e '
+    const fs = require("fs");
+    const f = process.env.AMCP_JS;
+    let s = fs.readFileSync(f, "utf8");
+    // The needle alone decides. An earlier guard also skipped any file
+    // containing "var result = (function()", which the Illustrator panel has
+    // elsewhere, so the patch silently never applied to the one panel needing it.
+    if (s.includes("__amcpOut")) process.exit(0);
+    const needle = ["            try {",
+                    "                ${scriptString}",
+                    "            } catch(e) {"].join("\n");
+    if (!s.includes(needle)) process.exit(0);
+    const patched = ["            try {",
+      "                var __amcpOut = (function(){ ${scriptString} })();",
+      "                if (typeof __amcpOut === \"string\") return __amcpOut;",
+      "                if (__amcpOut === undefined || __amcpOut === null) return \"\";",
+      "                try { return JSON.stringify(__amcpOut); }",
+      "                catch(__e) { return String(__amcpOut); }",
+      "            } catch(e) {"].join("\n");
+    fs.writeFileSync(f, s.replace(needle, patched));
+    console.log("  \u2192 serialising script results in " + f.split("/").slice(-2)[0]);
+  '
+
   if ! grep -q "panel-addon.js" "$panel/index.html"; then
     /usr/bin/sed -i '' 's|</body>|    <script src="panel-addon.js"></script>\
 </body>|' "$panel/index.html"
