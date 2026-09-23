@@ -1398,8 +1398,12 @@ function loadUxpPluginOnce(key) {
             }
             if (m.command === "didCompleteConnection") {
                 if (!hostId) {
-                    return done(new Error(`${APPS[key].label} isn't connected to the Developer Tool. `
-                        + "Turn on Developer Mode in its settings and restart it."));
+                    // An Adobe app joins this service when IT starts, so one
+                    // that was already open before the Developer Tool existed
+                    // never connects, and the tool shows no row for it at all.
+                    return done(new Error(`${APPS[key].label} isn't connected to Adobe's `
+                        + `Developer Tool. Quit and reopen ${APPS[key].label} \u2014 it only `
+                        + "connects if the Developer Tool was already running when it started."));
                 }
                 ws.send(JSON.stringify({
                     command: "proxy", clientId: hostId, requestId: reqId,
