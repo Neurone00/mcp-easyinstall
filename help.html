@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What can I do with this? — Moskito Easy MCP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f7fb;
+  --card: #ffffff;
+  --ink: #111827;
+  --ink-soft: #64748b;
+  --line: #e2e8f0;
+  --accent: #2855ff;
+  --shadow: 0 1px 2px rgba(20,20,30,.06), 0 8px 24px rgba(20,20,30,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131317; --card: #1c1c22; --ink: #f2f2f5; --ink-soft: #9a9aa6;
+    --line: #2b2b34; --accent: #7b93ff;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131317; --card: #1c1c22; --ink: #f2f2f5; --ink-soft: #9a9aa6;
+  --line: #2b2b34; --accent: #7b93ff;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.6 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+
+a { color: var(--accent); }
+.back {
+  display: inline-block; margin-bottom: 26px; font-size: 13.5px;
+  color: var(--ink-soft); text-decoration: none;
+}
+.back:hover { color: var(--ink); }
+
+h1 { font-size: 28px; line-height: 1.25; margin: 0 0 10px; letter-spacing: -.02em; }
+.lede { font-size: 16px; color: var(--ink-soft); margin: 0 0 30px; }
+
+h2 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--ink-soft); font-weight: 620; margin: 40px 0 12px;
+}
+
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 14px;
+}
+.card h3 {
+  margin: 0 0 4px; font-size: 17px; font-weight: 600;
+  display: flex; align-items: center; gap: 10px;
+}
+.card h3 img { width: 26px; height: 26px; border-radius: 6px; }
+.card > p { margin: 0 0 14px; color: var(--ink-soft); font-size: 14px; }
+
+.can { margin: 0 0 4px; padding: 0; list-style: none; }
+.can li { margin: 7px 0; padding-left: 16px; position: relative; font-size: 14.5px; }
+.can li::before {
+  content: ""; position: absolute; left: 0; top: .62em;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+}
+
+/* Example prompts are the point of the page: they show the register to write
+   in, which is the thing people get wrong. */
+.say { margin: 14px 0 0; border-top: 1px solid var(--line); padding-top: 14px; }
+.say .label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-soft); font-weight: 620; margin-bottom: 8px;
+}
+.say q {
+  display: block; margin: 6px 0; font-size: 14.5px; quotes: "\201c" "\201d";
+  color: var(--ink);
+}
+.say q::before, .say q::after { color: var(--ink-soft); }
+
+.nope { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+.nope .label {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--ink-soft); font-weight: 620; margin-bottom: 6px;
+}
+.nope p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.nope b { color: var(--ink); font-weight: 560; }
+
+.note {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px; font-size: 14px; color: var(--ink-soft); margin-bottom: 14px;
+}
+.note b { color: var(--ink); font-weight: 560; }
+footer { margin-top: 40px; font-size: 13px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+  <a class="back" href="/">&larr; Back</a>
+
+  <h1>What can I do with this?</h1>
+  <p class="lede">
+    Ask Claude or ChatGPT in your own words. You never name a command — describe
+    what you want in the document you have open, the way you would to a colleague
+    looking over your shoulder.
+  </p>
+
+  <div class="note">
+    <b>Say which app you mean if it could be either.</b> &ldquo;Export a PNG&rdquo;
+    could be Illustrator or After Effects, and the assistant will ask. Naming it
+    saves a round trip.
+  </div>
+
+  <h2>Illustrator</h2>
+  <div class="card">
+    <h3><img src="/api/icon/illustrator" alt="">Illustrator</h3>
+    <p>The most complete of the four. It can read your document and change it.</p>
+    <ul class="can">
+      <li><b>Read</b> — what is on each artboard, what you have selected, layers, swatches, fonts</li>
+      <li><b>Draw</b> — rectangles, ellipses, lines, text, placed images, artboards, layers</li>
+      <li><b>Change</b> — colour, position, size, rotation, opacity, alignment, spacing, grouping, type and font</li>
+      <li><b>Export</b> — PNG at any scale, SVG, or save a copy</li>
+      <li><b>Fetch</b> — download an image from a link, save it next to your file, and place it</li>
+    </ul>
+    <div class="say">
+      <div class="label">Try saying</div>
+      <q>Make a 1200&times;630 artboard and centre the logo on it</q>
+      <q>Everything on this artboard that is orange, change it to #2855ff</q>
+      <q>Space these six icons evenly across the artboard</q>
+      <q>Set the headline in Inter Semibold at 48pt and tighten the tracking</q>
+      <q>Export this artboard as a PNG at 2&times; onto my desktop</q>
+    </div>
+    <div class="nope">
+      <div class="label">It cannot</div>
+      <p>
+        <b>Pathfinder</b>, <b>Offset Path</b>, <b>Outline Stroke</b>, the whole
+        <b>Effect menu</b> (drop shadows, warps, blurs) and the
+        <b>Appearance panel</b>. Adobe gives these no scripting access at all, so
+        nothing built on scripting can reach them &mdash; ours included. The
+        assistant will say so rather than produce something that only looks right.
+        Image Trace does work.
+      </p>
+    </div>
+  </div>
+
+  <h2>After Effects</h2>
+  <div class="card">
+    <h3><img src="/api/icon/aftereffects" alt="">After Effects</h3>
+    <p>
+      Built around effects, because that is what After Effects gives scripts
+      access to. It reads the effects installed on <em>your</em> machine, so
+      Video Copilot, Red Giant and Boris FX work the same as Adobe&rsquo;s own.
+    </p>
+    <ul class="can">
+      <li><b>Read</b> — compositions, layers, and what is already applied to a layer</li>
+      <li><b>Apply</b> — any installed effect, including third-party plugins</li>
+      <li><b>Adjust</b> — set any parameter on an applied effect</li>
+      <li><b>Animate</b> — keyframe an effect parameter or a transform, with easing</li>
+      <li><b>Presets</b> — apply an .ffx animation preset</li>
+    </ul>
+    <div class="say">
+      <div class="label">Try saying</div>
+      <q>What effects do I have installed with &ldquo;glow&rdquo; in the name?</q>
+      <q>Put a Gaussian Blur on the logo layer and take it from 40 to 0 over the first second</q>
+      <q>Fade this layer up over 12 frames with an ease out</q>
+      <q>What is already applied to the background layer?</q>
+    </div>
+    <div class="nope">
+      <div class="label">It cannot</div>
+      <p>
+        <b>Roto Brush</b>, <b>Content-Aware Fill</b> and <b>mask tracking</b>.
+        It also cannot read rendered pixels, so it cannot tell you how something
+        looks &mdash; only what is set.
+      </p>
+    </div>
+  </div>
+
+  <h2>Photoshop and Premiere Pro</h2>
+  <div class="card">
+    <h3><img src="/api/icon/photoshop" alt="">Photoshop</h3>
+    <p>Layers, selections, masks, adjustments and export.</p>
+    <ul class="can">
+      <li><b>Layers</b> — create, duplicate, group, rename, move, scale, rotate, flip</li>
+      <li><b>Selections</b> — rectangle, ellipse, polygon, subject, sky; turn one into a mask</li>
+      <li><b>Adjustments</b> — brightness and contrast, colour balance, vibrance, black and white</li>
+      <li><b>Styles</b> — drop shadow, stroke, gradient</li>
+      <li><b>Generate</b> — make an image from a description with Adobe Firefly, on its own layer</li>
+      <li><b>Generative fill</b> — describe what should go inside a selection and let it blend in</li>
+      <li><b>Clean up</b> — remove a background, harmonise a pasted layer with the scene</li>
+      <li><b>Export</b> — PNG of the document or of single layers</li>
+    </ul>
+    <div class="say">
+      <div class="label">Try saying</div>
+      <q>Select the subject, mask it, and drop the background out</q>
+      <q>Generate a soft grey studio backdrop on a new layer behind the product</q>
+      <q>Select the sky, then fill it with an overcast sky at dusk</q>
+      <q>Export each layer as its own PNG</q>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3><img src="/api/icon/premiere" alt="">Premiere Pro</h3>
+    <p>Projects, bins, sequences and the basics of cutting.</p>
+    <ul class="can">
+      <li><b>Project</b> — create, open, save, import media, organise into bins</li>
+      <li><b>Sequences</b> — build one from clips, add markers, close gaps</li>
+      <li><b>Clips</b> — set in and out points, disable, change position and scale</li>
+      <li><b>Effects</b> — Gaussian blur, motion blur, tint, black and white, transitions</li>
+      <li><b>Export</b> — a frame, or the whole sequence</li>
+    </ul>
+    <div class="say">
+      <div class="label">Try saying</div>
+      <q>Import everything in this folder and put it in a bin called Rushes</q>
+      <q>Build a sequence from these clips in order and close the gaps</q>
+      <q>Add a cross dissolve between every clip</q>
+    </div>
+  </div>
+
+  <h2>Using two apps together</h2>
+  <div class="card">
+    <h3>Make an image in Photoshop, use it in Illustrator</h3>
+    <p>
+      Photoshop can generate images with Firefly. Illustrator cannot, but it can
+      place a file. So the route between them is a saved PNG.
+    </p>
+    <div class="say">
+      <div class="label">Ask Photoshop</div>
+      <q>Generate a hand-drawn palm leaf on a white background and save it as a PNG on my desktop</q>
+      <div class="label" style="margin-top:12px">Then ask Illustrator</div>
+      <q>Place that PNG on the artboard and scale it to 400px wide</q>
+    </div>
+    <div class="nope">
+      <div class="label">If the image is a link</div>
+      <p>
+        Ask Illustrator to fetch it. It saves the file next to your document
+        &mdash; or in a subfolder you name &mdash; and can place it in the same
+        step. It only accepts web links, and never overwrites a file you already
+        have.
+      </p>
+    </div>
+  </div>
+
+  <h2>Worth knowing</h2>
+  <div class="note">
+    <b>It works on the document you have open.</b> There is no separate copy and
+    nothing is uploaded. Changes land in the file in front of you.
+  </div>
+  <div class="note">
+    <b>You can undo it.</b> Everything the assistant changes in After Effects is
+    grouped into a single undo. In the others, undo works as it normally does.
+  </div>
+  <div class="note">
+    <b>Not while something is rendering.</b> Adobe blocks scripting during a
+    render, so wait for it to finish.
+  </div>
+  <div class="note">
+    <b>When there is no tool for something</b>, the assistant can still write
+    Illustrator or After Effects scripting directly. That covers gradients,
+    blends and unusual path work. It is slower and likelier to need a second
+    attempt, so it is a fallback, not the usual route.
+  </div>
+
+  <footer>
+    Moskito Easy MCP &middot; <a href="/">Back to setup</a>
+  </footer>
+
+</main>
+</body>
+</html>

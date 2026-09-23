@@ -101,14 +101,21 @@ done
 # Additive and marker-guarded, like the panel injection above, so re-running the
 # build or updating the engine cannot duplicate or clobber them.
 say "Adding Illustrator tools and instructions to the engine"
-add_engine() {   # $1 = server file, $2 = addon file, $3 = marker to test for
+# Keep the vendored server as it came, and rebuild from it every time. The
+# previous version skipped a server that already carried our marker, which
+# meant an EDIT to an addon never shipped: the first build wrote it, and every
+# build after that saw the marker and left the old copy in place. fetch_image
+# was written, built, and silently absent from the app.
+reset_engine() {   # $1 = server file
   local target="$HERE/engine/mcp/$1"
-  local marker="${3:-Adobe MCP additions}"
   [ -f "$target" ] || { echo "Missing engine server: $1"; exit 1; }
-  if ! grep -q "$marker" "$target"; then
-    printf '\n' >> "$target"
-    cat "$HERE/$2" >> "$target"
-  fi
+  [ -f "$target.orig" ] || cp "$target" "$target.orig"
+  cp "$target.orig" "$target"
+}
+add_engine() {   # $1 = server file, $2 = addon file
+  local target="$HERE/engine/mcp/$1"
+  printf '\n' >> "$target"
+  cat "$HERE/$2" >> "$target"
 }
 # Illustrator's .debug names the AFTER EFFECTS extension id — a copy-paste in
 # the upstream engine. CEP therefore never enables remote debugging for the
@@ -141,13 +148,13 @@ for m in "$HERE"/engine/uxp/*/manifest.json; do
   ' "$m"
 done
 
+for s in ai ae ps pr; do reset_engine "$s-mcp.py"; done
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
-# Every server, not just the two we extended: the app the model should be using
-# is a question for Photoshop and Premiere too. Its own marker, or the check
-# above would see the Illustrator addon's and skip it.
+# Every server, not just the two we extended: which app the model should be
+# driving is a question for Photoshop and Premiere too.
 for s in ai ae ps pr; do
-  add_engine "$s-mcp.py" engine-addon-common.py "Adobe MCP shared additions"
+  add_engine "$s-mcp.py" engine-addon-common.py
 done
 
 # Route the raw-script tool's result through our error check too, so a thrown
@@ -200,7 +207,7 @@ say "Assembling the app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$RES"
-cp "$HERE/hub.js" "$HERE/index.html" "$HERE/package.json" "$RES/"
+cp "$HERE/hub.js" "$HERE/index.html" "$HERE/help.html" "$HERE/package.json" "$RES/"
 mkdir -p "$RES/brand" && cp "$HERE/brand/mark.svg" "$HERE/brand/mark-animated.svg" "$RES/brand/"
 # A stray .venv from running the engine locally would double the app's size.
 rm -rf "$HERE/engine/mcp/.venv" "$HERE/engine/mcp/__pycache__"

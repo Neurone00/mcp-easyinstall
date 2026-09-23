@@ -911,3 +911,117 @@ def save_as(path: str):
         doc.saveAs(_file($PATH));
         return JSON.stringify({ path:$PATH, saved:true });
     """, PATH=path))
+
+
+# ---------------------------------------------------------------------------
+# Bringing an image in from outside
+# ---------------------------------------------------------------------------
+#
+# place_image takes a path on this Mac, and a model that has just produced or
+# found an image has a URL. Nothing bridged the two, so "generate an image and
+# put it in my document" stopped halfway and the user had to download the file
+# by hand.
+#
+# A tool that downloads a URL to a path is worth keeping on a short lead, so
+# this one does not take a destination path at all. It writes next to the open
+# document — which is also where people asked for it — or to ~/Downloads when
+# the document has never been saved. `folder` names one subfolder, not a path.
+
+import os as _os
+import re as _re
+import urllib.request as _urlreq
+import urllib.parse as _urlparse
+
+_MAX_IMAGE_BYTES = 50 * 1024 * 1024
+
+_IMAGE_TYPES = {
+    "image/png": ".png", "image/jpeg": ".jpg", "image/gif": ".gif",
+    "image/webp": ".webp", "image/tiff": ".tif", "image/svg+xml": ".svg",
+}
+
+
+def _document_folder() -> str:
+    """The open document's folder, or ~/Downloads if it was never saved."""
+    try:
+        raw = _run(_js("""
+            var doc=_doc();
+            var p="";
+            try { p = doc.path.fsName; } catch(e) { p = ""; }
+            return JSON.stringify({ folder:p });
+        """))
+        text = raw["response"]["content"][0]["text"]
+        folder = _json.loads(_json.loads(text) if isinstance(text, str) else text)["folder"]
+        if folder and _os.path.isdir(folder):
+            return folder
+    except Exception:
+        pass
+    return _os.path.join(_os.path.expanduser("~"), "Downloads")
+
+
+def _safe_name(name: str, fallback: str = "image") -> str:
+    """One path component, no separators, no leading dot, no surprises."""
+    name = _os.path.basename(name or "").strip()
+    name = _re.sub(r"[^A-Za-z0-9._ -]", "_", name).lstrip(".")
+    return name or fallback
+
+
+@mcp.tool()
+def fetch_image(url: str, filename: str = "", folder: str = "", place: bool = False,
+                x: float = 0, y: float = 0, width: float = None):
+    """
+    Downloads an image and saves it beside the open document.
+
+    Use this when you have an image as a URL — one you generated, or one from
+    the web — and need it as a file before place_image can use it.
+
+    Args:
+        url: an http(s) URL pointing at an image.
+        filename: what to call it. Defaults to the name in the URL.
+        folder: one subfolder next to the document, e.g. "assets". Created if
+            needed. Not a path — "../x" and absolute paths are refused.
+        place: also place it in the document, at x, y, scaled to width.
+
+    Returns the saved path. The file goes next to the open document, or into
+    ~/Downloads if the document has never been saved.
+    """
+    parsed = _urlparse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("fetch_image only downloads http:// or https:// URLs.")
+
+    base = _document_folder()
+    if folder:
+        safe = _safe_name(folder, "")
+        if not safe or safe in (".", ".."):
+            raise ValueError("`folder` is a single folder name, not a path.")
+        base = _os.path.join(base, safe)
+        _os.makedirs(base, exist_ok=True)
+
+    with _urlreq.urlopen(url, timeout=60) as response:
+        ctype = (response.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if ctype not in _IMAGE_TYPES:
+            raise ValueError(f"That URL returned {ctype or 'no content type'}, not an image.")
+        # read one byte past the cap, so a too-large file is detected rather
+        # than silently truncated.
+        data = response.read(_MAX_IMAGE_BYTES + 1)
+    if len(data) > _MAX_IMAGE_BYTES:
+        raise ValueError("That image is larger than 50 MB.")
+
+    name = _safe_name(filename or _os.path.basename(parsed.path), "image")
+    if not _os.path.splitext(name)[1]:
+        name += _IMAGE_TYPES[ctype]
+
+    # Never overwrite: the folder next to someone's document is full of their
+    # own files.
+    stem, ext = _os.path.splitext(name)
+    path = _os.path.join(base, name)
+    n = 2
+    while _os.path.exists(path):
+        path = _os.path.join(base, f"{stem}-{n}{ext}")
+        n += 1
+
+    with open(path, "wb") as f:
+        f.write(data)
+
+    if place:
+        place_image(path=path, x=x, y=y, width=width)
+    return {"path": path, "bytes": len(data), "placed": place}

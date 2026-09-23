@@ -125,6 +125,10 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
 
 .titlerow { display: flex; align-items: flex-start; gap: 12px; }
 .titlerow h1 { flex: 1 1 auto; }
+/* Deliberately quiet: it is worth finding once, not competing with setup. */
+.whatcan { color: var(--ink-soft); font-size: 13.5px; margin-left: 4px; }
+.whatcan:hover { color: var(--accent); }
+
 .gearbtn { border-color: transparent; background: transparent; color: var(--ink-soft);
   font-size: 32px; line-height: 1; padding: 6px 11px; margin-top: 2px; }
 .gearbtn:hover:not(:disabled) { background: var(--card); color: var(--ink); }
@@ -197,7 +201,8 @@ button:focus-visible {
       <button id="gear" class="gearbtn" aria-expanded="false"
               aria-controls="settings" title="Settings">&#9881;</button>
     </div>
-    <p class="sub">Let Claude and ChatGPT drive your Adobe apps.</p>
+    <p class="sub">Let Claude and ChatGPT drive your Adobe apps.
+      <a class="whatcan" href="/help.html">What can I do with this?</a></p>
     <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
       <div style="flex:1">
         <b id="banner-title"></b>
