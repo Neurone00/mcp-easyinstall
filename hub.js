@@ -1343,8 +1343,11 @@ function panelLive(key) {
     return !!set && set.size > 0;
 }
 
+// No "it is already loaded, skip" here: loading an already-loaded plugin simply
+// reloads it, which is exactly what someone pressing Load a second time wants —
+// and is how a new build reaches a panel without restarting the app. The
+// automatic loop does its own liveness check, so it never churns a working one.
 async function loadUxpPlugin(key) {
-    if (panelLive(key)) return { ok: true, already: true };
     try {
         return await loadUxpPluginOnce(key);
     } catch (e) {

@@ -113,24 +113,58 @@
     arrangeBtn.setAttribute("title", APP + " on the left, Claude and ChatGPT on the right");
     arrangeRow.appendChild(arrangeBtn);
 
-    var settings = el("div", ROW);
-    settings.appendChild(action("Settings", function () {
+    /* --------------------------------------------- the rarely-wanted things -- */
+
+    // Disconnect, the launch preference and the credits all move in here. The
+    // upstream nodes are MOVED, not recreated: their handlers are bound to
+    // those elements, and the Connect button's label is updated by name.
+    var more = el("div", "display:none;margin:2px 0 0");
+
+    var moreBtn = action("More", function () {
+        var open = more.style.display !== "none";
+        more.style.display = open ? "none" : "block";
+        moreBtn.textContent = open ? "More" : "Close";
+    });
+
+    var bottomRow = el("div", ROW);
+    bottomRow.appendChild(action("Settings", function () {
         bindSocketOnce();
         hubRequest({ type: "open_panel" }, function (r) {
             say(r && r.ok ? "" : "Open Moskito Easy MCP from the menu bar.");
         });
     }));
+    bottomRow.appendChild(moreBtn);
 
     ui.appendChild(askRow);
     ui.appendChild(arrangeRow);
-    ui.appendChild(settings);
+    ui.appendChild(bottomRow);
     ui.appendChild(status);
+    ui.appendChild(more);
 
-    // Above the upstream Connect button, which is the rarely-wanted control,
-    // for the same reason it sits behind a menu in the CEP panels.
     if (document.body.firstChild) {
         document.body.insertBefore(ui, document.body.firstChild);
     } else {
         document.body.appendChild(ui);
     }
+
+    function move(node, style) {
+        if (!node) return;
+        if (style) node.setAttribute("style", style);
+        more.appendChild(node);
+    }
+
+    var connectBtn = document.getElementById("btnStart");
+    var launchBox = document.getElementById("chkConnectOnLaunch");
+    move(connectBtn && connectBtn.parentElement, "margin:0 0 8px");
+    move(launchBox && launchBox.parentElement, "margin:0 0 10px");
+
+    // The stylesheet pins the credits with position:fixed, so they sat under
+    // the Connect button rather than below it. Put them back in the flow.
+    move(document.querySelector("footer"),
+         "position:static;bottom:auto;left:auto;font-size:10px;opacity:.6;line-height:1.4");
+
+    // The upstream spacer only existed to separate controls that have moved.
+    Array.prototype.forEach.call(document.body.querySelectorAll("p"), function (n) {
+        if (!n.textContent.trim()) n.setAttribute("style", "display:none");
+    });
 }());
