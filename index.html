@@ -557,27 +557,43 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.uxp) {
       const a = state.apps.find((x) => x.key === b.dataset.uxp);
       const r = await api("POST", "/api/uxp/" + b.dataset.uxp);
+      const steps = [];
+
       // Without the Developer Tool there is no window to look in, so saying
       // "find the row" first sent people hunting for something that could not
       // be there. Ask them to install it, and only then start the steps.
-      const steps = r.udtMissing
-        ? [{ text: "Adobe's free <b>UXP Developer Tool</b> isn't installed. "
-                 + `It is what loads the panel into ${a.label}.`,
-             sub: "It comes from Creative Cloud, under All apps. Opening both for you.",
-             action: { label: "Open Creative Cloud and Adobe's instructions", path: "/api/uxp-help" },
-             ok: "I've installed it" },
-           { text: "Open the <b>UXP Developer Tool</b> and find the row <b>Moskito Easy MCP</b>.",
-             action: { label: "Open it for me", path: "/api/uxp/" + a.key },
-             ok: "Found it" }]
-        : [{ text: "In the <b>UXP Developer Tool</b> window, find the row <b>Moskito Easy MCP</b>.",
-             sub: "Opening now. Check the Dock if it isn't in front.",
-             ok: "Found it" }];
+      if (r.udtMissing) {
+        steps.push({
+          text: "Adobe's free <b>UXP Developer Tool</b> isn't installed. "
+              + `It is what loads the panel into ${a.label}.`,
+          sub: "It comes from Creative Cloud, under All apps.",
+          action: { label: "Open Creative Cloud and Adobe's instructions", path: "/api/uxp-help" },
+          ok: "I've installed it",
+        });
+      }
+      // Load fails with a bare "Plugin Load Failed" when the app is closed, and
+      // Adobe's tool gives no reason. Wait for it before we get there.
+      if (r.wasClosed) {
+        steps.push({
+          text: `${a.label} is opening. Wait until it has finished.`,
+          sub: "The Developer Tool is open behind it. Loading the panel into an "
+             + "app that isn't running fails without saying why.",
+          focus: "/api/open/" + a.key,
+          ok: `${a.label} is ready`,
+        });
+      }
       wizard(a, steps.concat([
-        { text: "Click <b>Load</b> at the end of that row.",
-          sub: "Its status changes to Loaded.",
+        { text: "In the <b>UXP Developer Tool</b>, find the row <b>Moskito Easy MCP</b>.",
+          sub: "Brought to the front for you.",
+          focus: "/api/focus-uxp",
+          ok: "Found it" },
+        { text: "Click <b>Load</b>, at the right-hand end of that row.",
+          sub: "Its state changes from Not loaded to Loaded.",
+          focus: "/api/focus-uxp",
           ok: "Done" },
-        { text: `In ${a.label}, open <b>${a.panelMenu}</b>.`,
-          sub: "The panel connects by itself." },
+        { text: `Back in ${a.label}, open <b>${a.panelMenu}</b>.`,
+          sub: "The panel appears and connects by itself.",
+          focus: "/api/open/" + a.key },
       ]));
     } else if (b.dataset.open) {
       const a = state.apps.find((x) => x.key === b.dataset.open);

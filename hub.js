@@ -1289,6 +1289,22 @@ const UDT_HOST = { photoshop: "PS", premiere: "premierepro" };
 // Register a UXP plugin in Adobe's Developer Tool so the user only has to press
 // "Load". Adobe rejects unsigned .ccx packages outright (UPIA status -267), so
 // this is as far as automation can go without an Adobe-signed plugin.
+// The Developer Tool loads a plugin INTO a running application. With the app
+// closed, Load fails with a bare "Plugin Load Failed" and no reason — which is
+// the likeliest way to be stuck here, since nothing in the flow says the app
+// has to be open.
+function appRunning(key) {
+    const bundle = appBundle(APPS[key].appGlob);
+    if (!bundle) return false;
+    try {
+        execFileSync("/usr/bin/pgrep", ["-f", path.join(bundle, "Contents", "MacOS")],
+            { stdio: "ignore", timeout: 5000 });
+        return true;
+    } catch {
+        return false;   // pgrep exits non-zero when nothing matches
+    }
+}
+
 function setupUxp(key) {
     const engine = findEngine();
     if (!engine) throw new Error("Can't find the adb-mcp engine folder.");
@@ -1296,24 +1312,47 @@ function setupUxp(key) {
     if (!fs.existsSync(manifest)) throw new Error(`Plugin source missing: ${manifest}`);
 
     const ws = readJSON(UDT_WORKSPACE, { version: 1, plugins: [] });
+    // Also drop entries we retired, and any whose manifest is gone — a plugin
+    // pointing at a deleted app shows up as a broken row the user cannot
+    // explain. There were two, left by an earlier name for this app.
     ws.plugins = (ws.plugins || []).filter(
-        (p) => p.hostParam !== UDT_HOST[key] && p.manifestPath !== manifest
+        (p) => p.hostParam !== UDT_HOST[key]
+            && p.manifestPath !== manifest
+            && p.hostParam !== "ID"
+            && fs.existsSync(p.manifestPath || "")
     );
     ws.plugins.push({ manifestPath: manifest, pluginOptions: { breakOnStart: false }, hostParam: UDT_HOST[key] });
     writeJSON(UDT_WORKSPACE, ws);
 
+    // Open the host app now, so it is ready by the time they reach Load.
+    const wasClosed = !appRunning(key);
+    if (wasClosed) {
+        const bundle = appBundle(APPS[key].appGlob);
+        if (bundle) execFile("/usr/bin/open", ["-a", bundle]);
+    }
+
     const udt = fs.readdirSync("/Applications").find((n) => n.startsWith("Adobe UXP Developer Tool"));
     if (!udt) {
-        return { ok: true, udtMissing: true,
+        return { ok: true, udtMissing: true, wasClosed,
                  message: "Install Adobe's free UXP Developer Tool from Creative Cloud, then press Set up again." };
     }
     execFile("/usr/bin/open", ["-a", path.join("/Applications", udt)]);
-    return { ok: true };
+    return { ok: true, wasClosed };
 }
 
 // Adobe ships the UXP Developer Tool through Creative Cloud, not as a download,
 // so the useful thing is to open Creative Cloud if it is there and Adobe's
 // install page either way. No URL comes from the client: nothing to sanitise.
+// Bring Adobe's Developer Tool to the front. Launching Photoshop right after it
+// means Photoshop ends up on top, so by the time anyone reaches "press Load"
+// the window they need is behind the one they are told to ignore.
+app.post("/api/focus-uxp", (_req, res) => {
+    const udt = fs.readdirSync("/Applications").find((n) => n.startsWith("Adobe UXP Developer Tool"));
+    if (!udt) return res.status(404).json({ error: "The UXP Developer Tool isn't installed." });
+    execFile("/usr/bin/open", ["-a", path.join("/Applications", udt)]);
+    res.json({ ok: true });
+});
+
 app.post("/api/uxp-help", (_req, res) => {
     // By bundle id, not path: Creative Cloud.app lives in
     // /Applications/Utilities/Adobe Creative Cloud/ACC/, which is not where
