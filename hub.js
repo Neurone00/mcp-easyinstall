@@ -1458,9 +1458,17 @@ async function autoLoadUxp() {
             await loadUxpPlugin(key);
             console.log(`\u2713 loaded the ${a.label} panel`);
             state.wait = 15000;
+            state.said = null;
         } catch (e) {
-            state.wait = Math.min(state.wait * 2, 300000);
-            console.log(`\u26a0 couldn't load the ${a.label} panel: ${e.message}`);
+            // "not connected" needs the user to restart the app, so retrying
+            // every 15 seconds only fills the log. Go straight to the slowest
+            // rate and say it once.
+            const needsUser = /isn't connected/.test(e.message);
+            state.wait = needsUser ? 300000 : Math.min(state.wait * 2, 300000);
+            if (state.said !== e.message) {
+                state.said = e.message;
+                console.log(`\u26a0 couldn't load the ${a.label} panel: ${e.message}`);
+            }
         }
     }
 }
