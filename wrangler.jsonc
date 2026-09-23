@@ -1,6 +1,25 @@
 {
-  // Static landing page for Adobe MCP. Deploy with: npx wrangler deploy
+  // Landing page, anonymous usage collection, and the admin view.
+  // Deploy with: npx wrangler deploy
   "name": "adobe-mcp",
+  "main": "worker.js",
   "compatibility_date": "2026-09-22",
-  "assets": { "directory": "./site" }
+  "assets": { "directory": "./site", "binding": "ASSETS" },
+
+  // Write-heavy, read-rare, and free at this scale. It also cannot become a
+  // place a document name ends up by accident.
+  //
+  // Commented out until Analytics Engine is enabled on the account, at
+  // dash.cloudflare.com -> Workers -> Analytics Engine. Deploying with this
+  // binding before that fails the whole deploy and would take the site down
+  // with it; without it the worker still serves the page and /collect simply
+  // stores nothing.
+  // "analytics_engine_datasets": [
+  //   { "binding": "USAGE", "dataset": "moskito_easy_mcp_usage" }
+  // ]
+
+  // /admin needs Cloudflare Access in front of it, restricted to the
+  // moskitodesign.it domain, plus two secrets for the SQL API:
+  //   npx wrangler secret put CF_ACCOUNT_ID
+  //   npx wrangler secret put CF_API_TOKEN
 }

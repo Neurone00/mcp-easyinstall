@@ -156,3 +156,37 @@ try:
             (mcp._mcp_server.instructions or "") + "\n" + _note.strip()).strip()
 except Exception:
     pass
+
+
+# ===========================================================================
+# Adobe MCP shared additions — name the tool on the wire
+# ===========================================================================
+#
+# Every Illustrator tool reaches the panel as action "executeExtendScript", so
+# counting actions would say "executeExtendScript: 100%" and tell nobody
+# anything. The tool's own name is only known on this side, so put it in the
+# command. The hub reads it for anonymous usage counts; the panel ignores it.
+#
+# Rebinding the module-level name rather than patching core: the servers did
+# `from core import createCommand`, so the name they call is this module's, and
+# this file is appended to that same module.
+
+_amcp_create = createCommand
+_AMCP_SKIP = {"createCommand", "_amcp_tagged", "_run", "sendCommand", "wrapper"}
+
+
+def _amcp_tagged(action: str, options: dict):
+    command = _amcp_create(action, options)
+    try:
+        import inspect
+        for frame in inspect.stack()[1:8]:
+            name = frame.function
+            if name not in _AMCP_SKIP and not name.startswith("_"):
+                command["tool"] = name
+                break
+    except Exception:
+        pass          # a missing label is not worth failing a real command over
+    return command
+
+
+createCommand = _amcp_tagged

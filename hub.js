@@ -1119,6 +1119,88 @@ async function applyUpdate() {
     setTimeout(() => process.exit(0), 300);
 }
 
+/* ----------------------------------------------------------- analytics -- */
+
+// Anonymous, aggregate, and deliberately small.
+//
+// What leaves this Mac: a random id that is not tied to any person, the app
+// version, which Adobe apps were driven, which tools were called, how often
+// they failed, and how many bytes we sent back. Averaging across installs
+// happens at the other end, so nothing here is ever attributable.
+//
+// What never leaves: document names, prompt text, script contents, file paths,
+// artwork. The Settings panel promises we do not touch documents, and this
+// must not quietly make that untrue.
+const ANALYTICS = path.join(SUPPORT, "analytics.json");
+const COLLECT_URL = "https://adobe-mcp.l-salvioni.workers.dev/collect";
+
+function analyticsState() {
+    let st;
+    try { st = readJSON(ANALYTICS, null); } catch { st = null; }
+    if (!st || typeof st !== "object" || !st.id) {
+        st = { id: crypto.randomUUID(), enabled: true };
+        try {
+            fs.mkdirSync(SUPPORT, { recursive: true });
+            writeJSON(ANALYTICS, st);
+        } catch { /* read-only home: just do not record anything */ }
+    }
+    return st;
+}
+
+// Reset after each send. Held in memory so a busy session is not writing to
+// disk on every tool call.
+let tally = { calls: {}, errors: {}, bytes: {}, tools: {} };
+const inFlight = new Map();   // senderId -> { app, tool } so the reply can be attributed
+
+function bump(obj, key, by = 1) { obj[key] = (obj[key] || 0) + by; }
+
+function noteCall(app, tool, senderId) {
+    if (!analyticsState().enabled) return;
+    bump(tally.calls, app);
+    if (tool) bump(tally.tools, `${app}.${tool}`);
+    if (senderId) {
+        inFlight.set(senderId, { app, tool });
+        // A reply that never comes must not pin an entry forever.
+        setTimeout(() => inFlight.delete(senderId), 120000);
+    }
+}
+
+function noteReply(senderId, packet) {
+    if (!analyticsState().enabled) return;
+    const seen = inFlight.get(senderId);
+    if (!seen) return;
+    inFlight.delete(senderId);
+    try {
+        bump(tally.bytes, seen.app, JSON.stringify(packet || "").length);
+    } catch { /* unserialisable: skip the size, keep the count */ }
+    if (packet && packet.status && packet.status !== "SUCCESS") bump(tally.errors, seen.app);
+}
+
+async function sendAnalytics() {
+    const st = analyticsState();
+    if (!st.enabled) return;
+    const payload = tally;
+    const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length;
+    if (!anything) return;
+    tally = { calls: {}, errors: {}, bytes: {}, tools: {} };   // swap first: a failed
+                                                               // send drops a window
+                                                               // rather than doubling it
+    try {
+        await fetch(COLLECT_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                id: st.id,
+                version: VERSION,
+                os: os.release(),
+                day: new Date().toISOString().slice(0, 10),
+                ...payload,
+            }),
+            signal: AbortSignal.timeout(10000),
+        });
+    } catch { /* offline: this is telemetry, not the product */ }
+}
+
 /* ------------------------------------------------------------- the proxy -- */
 
 const app = express();
@@ -1270,12 +1352,18 @@ io.on("connection", (socket) => {
     });
 
     socket.on("command_packet_response", ({ packet }) => {
-        if (packet.senderId) io.to(packet.senderId).emit("packet_response", packet);
+        if (packet.senderId) {
+            noteReply(packet.senderId, packet);
+            io.to(packet.senderId).emit("packet_response", packet);
+        }
     });
 
     socket.on("command_packet", ({ application, command }) => {
         lastCommandAt = Date.now();   // the updater waits for a quiet moment
         const packet = { senderId: socket.id, application, command };
+        // command.tool is set by the Python side: every Illustrator tool arrives
+        // as action "executeExtendScript", so the action alone counts nothing.
+        noteCall(application, command && command.tool, socket.id);
         const clients = applicationClients[application];
         const label = APPS[application] ? APPS[application].label : application;
 
@@ -1333,6 +1421,7 @@ app.get("/api/status", (_req, res) => {
         python: { ready: venvReady, building: venvBuilding, error: venvError },
         version: VERSION,
         update,
+        analytics: analyticsState().enabled,
         apps: Object.entries(APPS).map(([key, a]) => ({
             key,
             label: a.label,
@@ -1369,6 +1458,20 @@ app.post("/api/panel/:key", (req, res) => {
 
 // Turning an app off has to rewrite the configs, or it saves nothing until
 // something else happens to trigger a write.
+// The switch behind the disclosure. Off means nothing is gathered at all, not
+// gathered-and-withheld.
+app.post("/api/analytics", (req, res) => {
+    try {
+        const st = analyticsState();
+        st.enabled = !(req.body && req.body.on === false);
+        writeJSON(ANALYTICS, st);
+        if (!st.enabled) tally = { calls: {}, errors: {}, bytes: {}, tools: {} };
+        res.json({ ok: true, enabled: st.enabled });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post("/api/app-enabled/:key", (req, res) => {
     const key = req.params.key;
     if (!APPS[key]) return res.status(404).json({ error: "Unknown app." });
@@ -1946,6 +2049,7 @@ server.listen(PORT, "127.0.0.1", () => {
     refreshPanelOpen();
     setInterval(refreshPanelOpen, 5000).unref();
     setInterval(autoLoadUxp, 5000).unref();
+    setInterval(sendAnalytics, 15 * 60 * 1000).unref();
     // Give the app a moment to finish starting — panels, venv, config repair —
     // before it considers restarting itself.
     setTimeout(autoUpdate, 45000);
