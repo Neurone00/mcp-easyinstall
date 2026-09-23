@@ -582,6 +582,19 @@ document.addEventListener("click", async (e) => {
           ok: `${a.label} is ready`,
         });
       }
+      // The real blocker, and the one Adobe's tool refuses to name: without
+      // Developer Mode, Photoshop never connects to the Developer Tool's
+      // service, and Load fails with "Plugin Load Failed" and nothing else.
+      // The setting is not readable from outside Photoshop, so this step is
+      // always shown and written to be skipped in two seconds if it is done.
+      steps.push({
+        text: `In ${a.label}: <b>${a.label} \u2192 Settings \u2192 Plugins</b>, and turn on `
+            + "<b>Enable Developer Mode</b>.",
+        sub: "Already on? Go straight to the next step. If you have just turned "
+           + `it on, quit ${a.label} and open it again \u2014 it only connects at startup.`,
+        focus: "/api/open/" + a.key,
+        ok: "Developer Mode is on",
+      });
       wizard(a, steps.concat([
         { text: "In the <b>UXP Developer Tool</b>, find the row <b>Moskito Easy MCP</b>.",
           sub: "Brought to the front for you.",

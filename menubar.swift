@@ -97,6 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launched = true
         watchForShowRequests()
         watchForArrangeRequests()
+        watchForFocusRequests()
 
         // First run: show the panel so setup isn't hidden behind the menu bar.
         if !UserDefaults.standard.bool(forKey: "hasLaunched") {
@@ -219,6 +220,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lastSeen = stamp
             DispatchQueue.main.async { self.openPanel() }
         }
+    }
+
+    /// Bring another application to the front.
+    ///
+    /// `open -a` does not do it: from a background process it reopens the app
+    /// without activating it, so asking for the Developer Tool left whatever
+    /// was in front exactly where it was — measured, the frontmost app did not
+    /// change at all. Activation has to come from a process macOS will listen
+    /// to, and setting AXFrontmost needs the Accessibility permission this app
+    /// already holds for arranging.
+    func watchForFocusRequests() {
+        let req = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/AdobeMCP/focus-request")
+        var lastSeen = (try? String(contentsOf: req, encoding: .utf8)) ?? ""
+        Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            guard let body = try? String(contentsOf: req, encoding: .utf8) else { return }
+            guard body != lastSeen else { return }
+            lastSeen = body
+            // First line is a timestamp, to make repeat requests differ.
+            let parts = body.split(separator: "\n").map(String.init)
+            guard parts.count >= 2 else { return }
+            DispatchQueue.main.async { self.focus(bundlePath: parts[1]) }
+        }
+    }
+
+    func focus(bundlePath: String) {
+        guard let id = Bundle(path: bundlePath)?.bundleIdentifier,
+              let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first
+        else { return }
+        app.activate(options: [.activateAllWindows])
+        // activate() alone is advisory and macOS may ignore it; AXFrontmost is
+        // the one that actually moves the app in front.
+        let ax = AXUIElementCreateApplication(app.processIdentifier)
+        AXUIElementSetAttributeValue(ax, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     }
 
     /* ------------------------------------------------------ arranging -- */

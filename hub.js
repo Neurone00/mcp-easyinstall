@@ -149,6 +149,20 @@ function panelInstalled(key) {
 // does the work. We leave it a note and read the answer back.
 const ARRANGE_REQ = path.join(SUPPORT, "arrange-request");
 const ARRANGE_RES = path.join(SUPPORT, "arrange-result");
+const FOCUS_REQ = path.join(SUPPORT, "focus-request");
+
+// `open -a` reopens an already-running app without bringing it forward when the
+// caller is a background process: measured, the frontmost app did not change.
+// The menu bar binary can do it, for the same reason it can arrange windows.
+function focusApp(bundle) {
+    if (!bundle) return;
+    try {
+        fs.mkdirSync(SUPPORT, { recursive: true });
+        fs.writeFileSync(FOCUS_REQ, [Date.now(), bundle].join("\n"));
+    } catch (e) {
+        console.log("\u26a0 couldn't ask for focus: " + e.message);
+    }
+}
 
 async function arrangeWindows(appKey, split) {
     const bundle = appBundle(APPS[appKey].appGlob);
@@ -1247,6 +1261,7 @@ app.post("/api/open/:key", (req, res) => {
     const bundle = appBundle(a.appGlob);
     if (!bundle) return res.status(404).json({ error: `${a.label} isn't installed` });
     execFile("/usr/bin/open", ["-a", bundle]);
+    focusApp(bundle);
     res.json({ ok: true });
 });
 
@@ -1285,6 +1300,9 @@ const UDT_WORKSPACE = path.join(
     HOME, "Library", "Application Support", "Adobe", "Adobe UXP Developer Tool", "plugins_workspace.json"
 );
 const UDT_HOST = { photoshop: "PS", premiere: "premierepro" };
+// A folder in /Applications with the .app inside it, the way Adobe ships most
+// things. appBundle() unwraps that; a plain path join does not.
+const UDT_GLOB = "Adobe UXP Developer Tool";
 
 // Register a UXP plugin in Adobe's Developer Tool so the user only has to press
 // "Load". Adobe rejects unsigned .ccx packages outright (UPIA status -267), so
@@ -1331,12 +1349,12 @@ function setupUxp(key) {
         if (bundle) execFile("/usr/bin/open", ["-a", bundle]);
     }
 
-    const udt = fs.readdirSync("/Applications").find((n) => n.startsWith("Adobe UXP Developer Tool"));
+    const udt = appBundle(UDT_GLOB);
     if (!udt) {
         return { ok: true, udtMissing: true, wasClosed,
                  message: "Install Adobe's free UXP Developer Tool from Creative Cloud, then press Set up again." };
     }
-    execFile("/usr/bin/open", ["-a", path.join("/Applications", udt)]);
+    execFile("/usr/bin/open", ["-a", udt]);
     return { ok: true, wasClosed };
 }
 
@@ -1347,9 +1365,10 @@ function setupUxp(key) {
 // means Photoshop ends up on top, so by the time anyone reaches "press Load"
 // the window they need is behind the one they are told to ignore.
 app.post("/api/focus-uxp", (_req, res) => {
-    const udt = fs.readdirSync("/Applications").find((n) => n.startsWith("Adobe UXP Developer Tool"));
-    if (!udt) return res.status(404).json({ error: "The UXP Developer Tool isn't installed." });
-    execFile("/usr/bin/open", ["-a", path.join("/Applications", udt)]);
+    const bundle = appBundle(UDT_GLOB);
+    if (!bundle) return res.status(404).json({ error: "The UXP Developer Tool isn't installed." });
+    execFile("/usr/bin/open", ["-a", bundle]);   // launches it if it is closed
+    focusApp(bundle);                            // and this is what fronts it
     res.json({ ok: true });
 });
 
