@@ -1,0 +1,252 @@
+<title>Moskito MCP Usage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    /* The app's own Calypso accent, on a ground biased very slightly blue so
+       the neutrals read as chosen rather than inherited mid-grey. */
+    --ground: #f2f5fa;
+    --card: #ffffff;
+    --ink: #10141f;
+    --soft: #5d6b84;
+    --faint: #8794a8;
+    --line: #e1e7f0;
+    --accent: #2855ff;
+    --accent-soft: #dfe6ff;
+    --warn: #b4530a;
+    --shadow: 0 1px 2px rgba(16, 20, 31, .05), 0 10px 28px rgba(16, 20, 31, .05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0e1016;
+      --card: #171a22;
+      --ink: #eef1f7;
+      --soft: #98a3b8;
+      --faint: #6d7789;
+      --line: #262b36;
+      --accent: #8098ff;
+      --accent-soft: #232a45;
+      --warn: #e09a4e;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 28px rgba(0, 0, 0, .28);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0e1016; --card: #171a22; --ink: #eef1f7; --soft: #98a3b8;
+    --faint: #6d7789; --line: #262b36; --accent: #8098ff; --accent-soft: #232a45;
+    --warn: #e09a4e;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 28px rgba(0, 0, 0, .28);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font: 15px/1.55 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding-block: 36px 64px; padding-inline: 20px; }
+
+  header { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  h1 {
+    font-size: 21px; font-weight: 640; letter-spacing: -.015em; margin: 0;
+    flex: 1 1 260px; text-wrap: balance;
+  }
+  .when { font-size: 12.5px; color: var(--faint); margin: 3px 0 0; font-variant-numeric: tabular-nums; }
+
+  button {
+    font: inherit; font-size: 14px; font-weight: 560; cursor: pointer;
+    background: var(--accent); color: #fff; border: 0; border-radius: 9px;
+    padding: 9px 18px; transition: filter .12s;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .55; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* The three figures that answer "is anyone using this". Tiles only here,
+     because these are the numbers the page exists to show. */
+  .summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 26px 0 0; }
+  .tile {
+    flex: 1 1 150px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 15px 17px; box-shadow: var(--shadow);
+  }
+  .tile .n {
+    font-size: 27px; font-weight: 650; letter-spacing: -.02em; line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+  .tile .k {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--faint); font-weight: 620; margin-top: 3px;
+  }
+
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--faint); font-weight: 620; margin: 34px 0 9px;
+  }
+
+  .rows { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+          box-shadow: var(--shadow); overflow: hidden; }
+  .row {
+    display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center;
+    padding: 11px 17px; border-top: 1px solid var(--line);
+  }
+  .row:first-child { border-top: 0; }
+  .row .name { min-width: 0; overflow-wrap: anywhere; }
+  .row .num { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--soft);
+              text-align: right; white-space: nowrap; }
+  .row .num b { color: var(--ink); font-weight: 600; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 13px; }
+  /* A bar under the name, not a column: it encodes the same number the row
+     already states, so it should not take space from the figures. */
+  .bar { height: 3px; border-radius: 2px; background: var(--accent-soft); margin-top: 6px; }
+  .bar i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+  .fail { color: var(--warn); font-weight: 560; }
+
+  .empty { padding: 15px 17px; color: var(--soft); font-size: 14px; }
+  .note { margin-top: 26px; font-size: 12.5px; line-height: 1.6; color: var(--faint); }
+  .err {
+    margin-top: 20px; background: var(--card); border: 1px solid var(--line);
+    border-left: 3px solid var(--warn); border-radius: 10px; padding: 13px 16px;
+    font-size: 13.5px; color: var(--soft);
+  }
+</style>
+
+<main class="wrap">
+  <header>
+    <div style="flex:1 1 260px">
+      <h1>Moskito Easy MCP usage</h1>
+      <p class="when" id="when">Loading…</p>
+    </div>
+    <button id="refresh">Refresh</button>
+  </header>
+
+  <div class="summary" id="summary"></div>
+
+  <h2>By app</h2>
+  <div class="rows" id="apps"><div class="empty">Loading…</div></div>
+
+  <h2>Most used commands</h2>
+  <div class="rows" id="tools"><div class="empty">Loading…</div></div>
+
+  <div class="err" id="err" hidden></div>
+
+  <p class="note">
+    Last 30 days. Counts only — no document names, prompts, scripts, paths or artwork are
+    collected, and nothing here identifies a person. Counted per install, so a reinstall
+    looks like a new one.<br>
+    Tokens are estimated from the size of what the tools sent back: the share of an
+    assistant's context this app is responsible for, not anyone's plan usage.
+  </p>
+</main>
+
+<script>
+  // Same origin as the page, and the key is whatever got us here — so the
+  // page holds no secret of its own and a shared link carries its own access.
+  const ENDPOINT = "/usage.json";
+  const KEY = new URLSearchParams(location.search).get("k") || "";
+
+  const $ = (id) => document.getElementById(id);
+  const num = (n) => Number(n || 0).toLocaleString();
+
+  const APP_NAMES = {
+    illustrator: "Illustrator",
+    photoshop: "Photoshop",
+    aftereffects: "After Effects",
+    premiere: "Premiere Pro",
+  };
+
+  function row(name, calls, max, right, mono) {
+    const pct = max > 0 ? Math.max(2, Math.round((calls / max) * 100)) : 0;
+    const el = document.createElement("div");
+    el.className = "row";
+    const label = document.createElement("div");
+    label.className = "name";
+    const text = document.createElement("div");
+    if (mono) text.className = "mono";
+    text.textContent = name;
+    label.appendChild(text);
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    const fill = document.createElement("i");
+    fill.style.width = pct + "%";
+    bar.appendChild(fill);
+    label.appendChild(bar);
+    el.appendChild(label);
+    for (const cell of right) {
+      const d = document.createElement("div");
+      d.className = "num";
+      d.innerHTML = cell;
+      el.appendChild(d);
+    }
+    return el;
+  }
+
+  function fill(box, items, installs, withTokens) {
+    box.replaceChildren();
+    if (!items.length) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "Nothing recorded yet.";
+      box.appendChild(e);
+      return;
+    }
+    const max = Math.max(...items.map((i) => i.calls));
+    for (const it of items.slice(0, 20)) {
+      const failed = it.calls ? (it.errors / it.calls) * 100 : 0;
+      const cells = [
+        `<b>${num(it.calls)}</b> ${it.calls === 1 ? "call" : "calls"}`,
+        failed > 0 ? `<span class="fail">${failed.toFixed(0)}% failed</span>` : "",
+      ];
+      if (withTokens && installs) {
+        cells.push(`${num(Math.round(it.tokens / installs))} tok`);
+      }
+      const name = APP_NAMES[it.name] || it.name;
+      box.appendChild(row(name, it.calls, max, cells, !APP_NAMES[it.name]));
+    }
+  }
+
+  function tile(n, k) {
+    const t = document.createElement("div");
+    t.className = "tile";
+    t.innerHTML = `<div class="n">${n}</div><div class="k">${k}</div>`;
+    return t;
+  }
+
+  async function load() {
+    const btn = $("refresh");
+    btn.disabled = true;
+    btn.textContent = "Refreshing…";
+    $("err").hidden = true;
+    try {
+      const r = await fetch(`${ENDPOINT}?k=${encodeURIComponent(KEY)}`, { cache: "no-store" });
+      const d = await r.json();
+      if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
+
+      const calls = d.apps.reduce((n, a) => n + a.calls, 0);
+      const errors = d.apps.reduce((n, a) => n + a.errors, 0);
+      $("summary").replaceChildren(
+        tile(num(d.installs), d.installs === 1 ? "install" : "installs"),
+        tile(num(calls), "commands run"),
+        tile(calls ? ((errors / calls) * 100).toFixed(0) + "%" : "0%", "failed"),
+      );
+      fill($("apps"), d.apps, d.installs, true);
+      fill($("tools"), d.tools, d.installs, false);
+      $("when").textContent = "Updated " + new Date(d.updated).toLocaleString();
+    } catch (e) {
+      $("err").hidden = false;
+      $("err").textContent = "Couldn't load the figures: " + e.message
+        + ". Usage is posted every 15 minutes and takes a few more to become "
+        + "queryable, so a brand new install will not be here yet.";
+      $("when").textContent = "Not loaded";
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Refresh";
+    }
+  }
+
+  $("refresh").addEventListener("click", load);
+  load();
+</script>

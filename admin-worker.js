@@ -1,24 +1,42 @@
 /**
- * Moskito Easy MCP — usage figures as JSON, for the Artifact that displays them.
+ * Moskito Easy MCP — the usage figures, and the page that draws them.
  *
  * Separate from the public Worker because it holds the analytics credentials
  * and the public one does not need them.
  *
- * No Cloudflare Access: an Artifact is a page on claude.ai and cannot carry an
- * Access session. A long random key in the query string is the whole of the
- * lock, which is proportionate — this is one person reading counts about their
- * own tool, and the figures contain nothing about anybody's work.
+ * No Cloudflare Access: Access protects a Worker's whole production URL, so
+ * using it here would have meant a Zero Trust team for an audience of one. A
+ * long random key in the query string is the whole of the lock instead, which
+ * is proportionate — this is one person reading counts about their own tool,
+ * and the figures contain nothing about anybody's work.
+ *
+ * The page ships from here rather than from a claude.ai Artifact because an
+ * Artifact has no way to reach an external URL — published pages get no
+ * network capability at all. Served from the same origin as the data, it
+ * needs no CORS and holds no key: it reads the one that opened it.
  */
+
+import PAGE from "./admin-page.html";
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    if (url.pathname !== "/usage.json") {
+    const page = url.pathname === "/" || url.pathname === "/usage";
+    if (!page && url.pathname !== "/usage.json") {
       return new Response("Not found.", { status: 404 });
     }
+    // Wrong key: the same answer for the page and the data, so the URL tells
+    // a stranger nothing about what is behind it.
     if (!env.USAGE_KEY || url.searchParams.get("k") !== env.USAGE_KEY) {
-      return json({ error: "not authorised" }, 403);
+      return page
+        ? new Response("Not found.", { status: 404 })
+        : json({ error: "not authorised" }, 403);
+    }
+    if (page) {
+      return new Response(PAGE, {
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+      });
     }
     if (!env.CF_ACCOUNT_ID || !env.CF_API_TOKEN) {
       return json({ error: "analytics credentials are not set" }, 503);
@@ -78,11 +96,6 @@ function json(obj, status = 200) {
     status,
     headers: {
       "Content-Type": "application/json",
-      // Open on purpose: the Artifact that reads this renders on a sandboxed
-      // origin, not claude.ai, so naming an origin would block it. The key in
-      // the query string is the lock, and it is in the page's source anyway.
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET",
       "Cache-Control": "no-store",
     },
   });

@@ -1,10 +1,14 @@
 {
-  // The admin view, deployed separately so Cloudflare Access can protect it
-  // without also gating the public download page and /collect.
+  // The admin view, deployed separately so the analytics credentials stay off
+  // the public download page and /collect.
   // Deploy with: npx wrangler deploy -c wrangler.admin.jsonc
   "name": "adobe-mcp-admin",
   "main": "admin-worker.js",
   "compatibility_date": "2026-09-22",
+
+  // admin-page.html is imported into the Worker as a string, not served as a
+  // static asset, because it must not be reachable without the key.
+  "rules": [{ "type": "Text", "globs": ["**/*.html"] }],
 
   // Reads the same dataset the public Worker writes to.
   "analytics_engine_datasets": [
