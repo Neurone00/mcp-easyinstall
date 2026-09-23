@@ -1,0 +1,13 @@
+{
+  // The admin view, deployed separately so Cloudflare Access can protect it
+  // without also gating the public download page and /collect.
+  // Deploy with: npx wrangler deploy -c wrangler.admin.jsonc
+  "name": "adobe-mcp-admin",
+  "main": "admin-worker.js",
+  "compatibility_date": "2026-09-22",
+
+  // Reads the same dataset the public Worker writes to.
+  "analytics_engine_datasets": [
+    { "binding": "USAGE", "dataset": "moskito_easy_mcp_usage" }
+  ]
+}

@@ -231,7 +231,7 @@ button:focus-visible {
     <div id="applist" class="applist"></div>
     <p class="settings-note">Every app you leave on is described to the assistant on
       every message, whether you use it or not. Turning off the ones you don't drive
-      makes each request smaller and leaves more room for your actual work.</p>
+      makes each request smaller and leaves more room in the conversation.</p>
 
     <p class="settings-what">Anonymous usage is recorded</p>
     <p class="settings-note">This is a company tool and its use is measured, the same way
@@ -246,11 +246,10 @@ button:focus-visible {
       <li>Copies the MCP panels into <code>~/Library/Application Support/Adobe/CEP/extensions</code></li>
       <li>Turns on Adobe's <b>PlayerDebugMode</b>, a global Adobe preference, so unsigned
           panels are allowed to load</li>
-      <li>Adds this app's servers to Claude Desktop, Claude Code and Codex config files
-          &mdash; a timestamped backup of each is kept beside it</li>
+      <li>Adds this app's servers to Claude and ChatGPT's settings files &mdash; a
+          timestamped backup of each is kept beside it</li>
       <li>Downloads a small Python runtime on first run</li>
       <li>It never touches your documents</li>
-      <li>Records anonymous usage counts &mdash; apps and commands used, not your work</li>
     </ul>
   </section>
 
@@ -596,9 +595,11 @@ document.addEventListener("change", async (e) => {
   box.disabled = true;
   try {
     const r = await api("POST", "/api/app-enabled/" + key, { on: box.checked });
-    toast(box.checked
-      ? `${key} added \u2014 restart your assistants to pick it up.`
-      : `${key} removed \u2014 restart your assistants to pick it up.`);
+    // The app's name, not its key, and name the assistants rather than
+    // calling them "your assistants".
+    const label = (state.apps.find((a) => a.key === key) || {}).label || key;
+    toast(`${label} ${box.checked ? "added" : "removed"}. `
+        + "Restart Claude and ChatGPT to pick it up.");
     await refresh();
   } catch (err) {
     toast(err.message);
