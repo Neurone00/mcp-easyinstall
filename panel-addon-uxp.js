@@ -50,6 +50,11 @@
             var fn = r && r.id && pending[r.id];
             if (fn) { delete pending[r.id]; fn(r); }
         });
+        socket.on("amcp_clients", function (c) {
+            setAsk(claudeBtn, !!(c && c.claude), "Claude");
+            setAsk(gptBtn, !!(c && c.chatgpt), "ChatGPT");
+        });
+        pollClients();
     }
     setInterval(bindSocketOnce, 1000);
 
@@ -67,11 +72,32 @@
 
     var ui = el("div", "margin:0 0 10px");
 
-    var status = el("div", "font-size:11px;margin:0 0 8px;opacity:.75", "");
+    // Everything here fails with "Connect the panel first" when the socket is
+    // down, and the panel said nothing about it either way. Show the state.
+    var status = el("div", "font-size:11px;margin:0 0 10px;opacity:.75", "");
+    var transient = null;
+
+    function connected() {
+        return typeof socket !== "undefined" && socket && socket.connected;
+    }
+
+    function paintStatus() {
+        if (transient) return;
+        status.textContent = connected()
+            ? "\u25cf Connected"
+            : "\u25cb Not connected \u2014 open More and press Connect";
+        status.setAttribute("style",
+            "font-size:11px;margin:0 0 10px;opacity:" + (connected() ? ".75" : ".9"));
+    }
+    setInterval(paintStatus, 1000);
+    paintStatus();
+
     function say(text) {
+        transient = text || null;
+        if (!text) return paintStatus();
         status.textContent = text;
-        if (text) setTimeout(function () {
-            if (status.textContent === text) status.textContent = "";
+        setTimeout(function () {
+            if (transient === text) { transient = null; paintStatus(); }
         }, 3000);
     }
 
@@ -87,8 +113,28 @@
     }
 
     var askRow = el("div", ROW);
-    askRow.appendChild(action("Ask Claude", function () { ask("Claude"); }));
-    askRow.appendChild(action("Ask ChatGPT", function () { ask("ChatGPT"); }));
+    var claudeBtn = action("Ask Claude", function () { ask("Claude"); });
+    var gptBtn = action("Ask ChatGPT", function () { ask("ChatGPT"); });
+    askRow.appendChild(claudeBtn);
+    askRow.appendChild(gptBtn);
+
+    // An assistant that is not wired to this app would open and then not see
+    // it, which looks like our bug. Say so on the button, as the CEP panel does.
+    function setAsk(btn, ok, name) {
+        if (ok) {
+            btn.removeAttribute("disabled");
+            btn.setAttribute("title", "Open " + name + ", which can drive " + APP);
+        } else {
+            btn.setAttribute("disabled", "true");
+            btn.setAttribute("title",
+                name + " isn't connected to " + APP + ". Set it up in Moskito Easy MCP.");
+        }
+    }
+
+    function pollClients() {
+        if (connected()) socket.emit("amcp_clients");
+    }
+    setInterval(pollClients, 3000);
 
     function ask(name) {
         say("Opening " + name + "…");
@@ -122,9 +168,12 @@
 
     // Links, not buttons: these are ways to somewhere else, not things to do to
     // the document, and a third full-width button read as a third main action.
+    // margin, not the container's flex gap: gap does not reach these spans in
+    // UXP, so "Settings" and "More" rendered as the single word "SettingsMore".
     function link(label, onClick) {
         var a = el("span",
-            "font-size:11px;opacity:.65;text-decoration:underline;cursor:pointer", label);
+            "font-size:11px;opacity:.65;text-decoration:underline;cursor:pointer;"
+            + "margin-right:14px", label);
         a.addEventListener("click", onClick);
         return a;
     }
@@ -135,7 +184,7 @@
         moreLink.textContent = open ? "More" : "Less";
     });
 
-    var links = el("div", "display:flex;gap:12px;margin:10px 0 0");
+    var links = el("div", "margin:10px 0 0");
     links.appendChild(link("Settings", function () {
         bindSocketOnce();
         hubRequest({ type: "open_panel" }, function (r) {
