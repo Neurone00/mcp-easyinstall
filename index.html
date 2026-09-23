@@ -227,30 +227,14 @@ button:focus-visible {
   </div>
   <section id="settings" class="settings" hidden aria-label="Settings">
     <h3>Settings</h3>
-    <p class="settings-what">Which apps your assistants can drive:</p>
+    <p class="settings-what">Which apps your assistants can drive</p>
     <div id="applist" class="applist"></div>
-    <p class="settings-note">Every app you leave on is described to the assistant on
-      every message, whether you use it or not. Turning off the ones you don't drive
-      makes each request smaller and leaves more room in the conversation.</p>
+    <button class="quiet" id="restart-assistants">Restart Claude and ChatGPT</button>
+    <p class="settings-note">They read this list when they start, so a change only
+      takes effect after a restart. This closes any conversation in progress.</p>
 
-    <p class="settings-what">Anonymous usage is recorded</p>
-    <p class="settings-note">This is a company tool and its use is measured, the same way
-      Teams is. What is recorded: which Adobe apps and which commands are used, how often
-      they fail, and how much data the tools send back. It is tied to a random id, not to
-      you or your account.<br>
-      <b>Never recorded:</b> document names, your prompts, the scripts that run, file paths,
-      or any of your artwork.</p>
-
-    <p class="settings-what">What setting everything up changes on your Mac:</p>
-    <ul class="steps">
-      <li>Copies the MCP panels into <code>~/Library/Application Support/Adobe/CEP/extensions</code></li>
-      <li>Turns on Adobe's <b>PlayerDebugMode</b>, a global Adobe preference, so unsigned
-          panels are allowed to load</li>
-      <li>Adds this app's servers to Claude and ChatGPT's settings files &mdash; a
-          timestamped backup of each is kept beside it</li>
-      <li>Downloads a small Python runtime on first run</li>
-      <li>It never touches your documents</li>
-    </ul>
+    <p class="settings-note">Usage is recorded: which apps and commands, never your
+      documents, prompts or artwork. <a href="/help.html#setup">What setup changes</a></p>
   </section>
 
   <h2>Your Adobe apps</h2>
@@ -599,7 +583,7 @@ document.addEventListener("change", async (e) => {
     // calling them "your assistants".
     const label = (state.apps.find((a) => a.key === key) || {}).label || key;
     toast(`${label} ${box.checked ? "added" : "removed"}. `
-        + "Restart Claude and ChatGPT to pick it up.");
+        + "Use Restart below to pick it up.");
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -706,6 +690,12 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.codexnet) {
       await api("POST", "/api/codex-network");
       toast("Done. Restart ChatGPT or Codex to pick it up.");
+    } else if (b.id === "restart-assistants") {
+      b.textContent = "Restarting\u2026";
+      const r = await api("POST", "/api/restart-assistants");
+      toast(r.restarted.length
+        ? `Restarting ${r.restarted.join(" and ")}\u2026`
+        : "Neither Claude nor ChatGPT is running.");
     } else if (b.dataset.restart) {
       await api("POST", "/api/restart-claude");
       toast("Restarting Claude…");

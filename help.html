@@ -164,6 +164,22 @@ const CONTENT = {
     appsH2: "Your apps",
     imageH2: "Getting an image in",
     knowH2: "Worth knowing",
+    setupH2: "What setting up changes on your Mac",
+    setup: {
+      id: "setup",
+      name: "What setting up changes",
+      blurb: "Nothing here needs doing. It is written down because it is your Mac.",
+      can: [
+        ["Panels", "copies them into your Adobe extensions folder"],
+        ["An Adobe setting", "turns on PlayerDebugMode, which lets unsigned panels load"],
+        ["Claude and ChatGPT", "adds this app to their settings files, keeping a dated backup of each"],
+        ["Python", "downloads a small runtime the first time you run it"],
+        ["Usage", "records which apps and commands are used, against a random id \u2014 never document names, prompts, scripts, paths or artwork"],
+      ],
+      say: [],
+      cannotLabel: "It never",
+      cannot: "opens, reads or changes your documents unless you ask it to.",
+    },
     sayLabel: "Try saying",
     cannotLabel: "It cannot",
     copyLabel: "Copy this prompt",
@@ -277,6 +293,22 @@ const CONTENT = {
     appsH2: "Le tue app",
     imageH2: "Portare dentro un’immagine",
     knowH2: "Da sapere",
+    setupH2: "Cosa cambia sul tuo Mac",
+    setup: {
+      id: "setup",
+      name: "Cosa cambia la configurazione",
+      blurb: "Non c\u2019\u00e8 niente da fare qui. \u00c8 scritto perch\u00e9 \u00e8 il tuo Mac.",
+      can: [
+        ["Pannelli", "li copia nella cartella delle estensioni di Adobe"],
+        ["Un\u2019impostazione Adobe", "attiva PlayerDebugMode, che permette di caricare pannelli non firmati"],
+        ["Claude e ChatGPT", "aggiunge questa app ai loro file di impostazioni, tenendo una copia di backup datata"],
+        ["Python", "scarica un piccolo runtime al primo avvio"],
+        ["Utilizzo", "registra quali app e quali comandi vengono usati, con un id casuale \u2014 mai nomi di documenti, prompt, script, percorsi o lavori"],
+      ],
+      say: [],
+      cannotLabel: "Non",
+      cannot: "apre, legge o modifica i tuoi documenti se non glielo chiedi.",
+    },
     sayLabel: "Prova a dire",
     cannotLabel: "Non può",
     copyLabel: "Copia questo prompt",
@@ -443,6 +475,10 @@ function promptRow(text, t) {
 function cardEl(c, t) {
   const card = document.createElement("details");
   card.className = "card";
+  if (c.id) {
+    card.id = c.id;
+    if (location.hash === "#" + c.id) card.open = true;
+  }
 
   const summary = document.createElement("summary");
   if (c.icon) {
@@ -477,11 +513,13 @@ function cardEl(c, t) {
   }
   body.appendChild(ul);
 
-  const say = document.createElement("div");
-  say.className = "say";
-  say.innerHTML = '<div class="label">' + esc(t.sayLabel) + "</div>";
-  for (const s of c.say) say.appendChild(promptRow(s, t));
-  body.appendChild(say);
+  if (c.say && c.say.length) {
+    const say = document.createElement("div");
+    say.className = "say";
+    say.innerHTML = '<div class="label">' + esc(t.sayLabel) + "</div>";
+    for (const s of c.say) say.appendChild(promptRow(s, t));
+    body.appendChild(say);
+  }
 
   if (c.cannot) {
     const nope = document.createElement("div");
@@ -550,6 +588,9 @@ function render(lang) {
 
   heading(t.imageH2);
   page.appendChild(cardEl(t.image, t));
+
+  heading(t.setupH2);
+  page.appendChild(cardEl(t.setup, t));
 
   heading(t.knowH2);
   for (const n of t.know) page.appendChild(noteEl(n));

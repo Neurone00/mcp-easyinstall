@@ -614,14 +614,10 @@ function disconnectClient(clientId) {
 // Claude Desktop keeps its config in memory and writes the whole file back when
 // it quits, silently undoing anything we wrote while it was open. So the write
 // has to happen while it is closed. Cached: /api/status asks every two seconds.
-const claudeRunning = memo(() => {
-    try {
-        execFileSync("/usr/bin/pgrep", ["-x", "Claude"], { stdio: ["ignore", "pipe", "ignore"] });
-        return true;
-    } catch {
-        return false;
-    }
-}, 3000);
+// pgrep -x "Claude" matched nothing with Claude plainly running, so this
+// answered "closed" every time. See bundleRunning for the measurement.
+const claudeRunning = memo(
+    () => bundleRunning("/Applications/Claude.app"), 3000);
 
 /* ------------------------------------------------------- panel installing -- */
 
@@ -1525,6 +1521,38 @@ app.post("/api/open/:key", (req, res) => {
 
 // Quit Claude, write the config while it is closed, then reopen it. This is the
 // only reliable way to connect Claude Desktop — see claudeRunning() above.
+// Changing which apps are registered only takes effect when an assistant
+// starts, so the app should be able to do the restarting rather than telling
+// someone to go and do it.
+//
+// SIGTERM rather than an AppleScript quit: "tell application X to quit" needs
+// Automation permission, granted to whichever process asks, which is the trap
+// that made window arranging silently do nothing for weeks. A TERM is what
+// Quit sends anyway, and needs no permission.
+const ASSISTANT_APPS = { claude: "Claude", chatgpt: "ChatGPT" };
+
+app.post("/api/restart-assistants", async (req, res) => {
+    const want = (req.body && Array.isArray(req.body.which))
+        ? req.body.which : Object.keys(ASSISTANT_APPS);
+    const restarted = [];
+    for (const key of want) {
+        const name = ASSISTANT_APPS[key];
+        if (!name) continue;
+        const bundle = path.join("/Applications", name + ".app");
+        if (!fs.existsSync(bundle) || !bundleRunning(bundle)) continue;
+        try {
+            execFileSync("/usr/bin/pkill", ["-TERM", "-f", path.join(bundle, "Contents", "MacOS")],
+                { stdio: "ignore", timeout: 5000 });
+        } catch { /* it went away on its own */ }
+        for (let i = 0; i < 40 && bundleRunning(bundle); i++) {
+            await new Promise((r) => setTimeout(r, 500));
+        }
+        execFile("/usr/bin/open", ["-a", bundle]);
+        restarted.push(name);
+    }
+    res.json({ ok: true, restarted });
+});
+
 app.post("/api/restart-claude", (_req, res) => {
     execFile("/usr/bin/osascript", ["-e", 'tell application "Claude" to quit'], () => {
         let waited = 0;
@@ -1722,15 +1750,7 @@ async function autoLoadUxp() {
 }
 
 function udtRunning() {
-    const bundle = appBundle(UDT_GLOB);
-    if (!bundle) return false;
-    try {
-        execFileSync("/usr/bin/pgrep", ["-f", path.join(bundle, "Contents", "MacOS")],
-            { stdio: "ignore", timeout: 5000 });
-        return true;
-    } catch {
-        return false;
-    }
+    return bundleRunning(appBundle(UDT_GLOB));
 }
 
 // setupUxp has just restarted the Developer Tool, and its service takes a
@@ -1763,26 +1783,33 @@ app.post("/api/load-uxp/:key", async (req, res) => {
 // closed, Load fails with a bare "Plugin Load Failed" and no reason — which is
 // the likeliest way to be stuck here, since nothing in the flow says the app
 // has to be open.
-function appRunning(key) {
-    const bundle = appBundle(APPS[key].appGlob);
+// Is this bundle's application running?
+//
+// ps, not pgrep. `pgrep -f` does not match the main application process on
+// macOS: with Claude open, "Claude.app/Contents" matched fifteen helper
+// processes and "Claude.app/Contents/MacOS" matched none, while ps listed
+// /Applications/Claude.app/Contents/MacOS/Claude plainly. Everything asking
+// "is this app open" was therefore answering no for some apps, silently.
+//
+// A failure to ASK is also not a no: the first Set up once reported a running
+// Photoshop as closed because the probe timed out on a busy machine. Only a
+// clean listing that lacks the path counts as not running.
+function bundleRunning(bundle) {
     if (!bundle) return false;
     const probe = path.join(bundle, "Contents", "MacOS");
-
-    // "pgrep found nothing" and "pgrep could not be asked" are different
-    // answers, and treating both as not-running made the first Set up report
-    // a running Photoshop as closed: setupUxp had just killed the Developer
-    // Tool, the machine was busy, and the probe timed out. Exit status 1 is
-    // the real no; anything else is worth asking again.
     for (let attempt = 0; attempt < 2; attempt++) {
         try {
-            execFileSync("/usr/bin/pgrep", ["-f", probe], { stdio: "ignore", timeout: 10000 });
-            return true;
-        } catch (e) {
-            if (e.status === 1) return false;
-        }
+            const out = execFileSync("/bin/ps", ["-Ao", "command"],
+                { encoding: "utf8", timeout: 10000, maxBuffer: 8 * 1024 * 1024 });
+            return out.includes(probe);
+        } catch { /* could not ask: try once more */ }
     }
-    console.log(`\u26a0 couldn't tell whether ${APPS[key].label} is running`);
+    console.log(`\u26a0 couldn't tell whether ${path.basename(bundle)} is running`);
     return false;
+}
+
+function appRunning(key) {
+    return bundleRunning(appBundle(APPS[key].appGlob));
 }
 
 async function setupUxp(key) {
