@@ -263,40 +263,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let area = screen.visibleFrame
         let wide = (area.width * CGFloat(split)).rounded()
 
-        guard place(bundlePath: adobe,
-                    to: NSRect(x: area.minX, y: area.minY, width: wide, height: area.height))
-        else { return arrangeResult("no window to move \u{2014} is it open?") }
-
+        let left = NSRect(x: area.minX, y: area.minY, width: wide, height: area.height)
         // Every running assistant goes to the same right-hand column. Splitting
         // the remainder again between two of them leaves neither usable;
         // whichever you bring forward fills it.
         let right = NSRect(x: area.minX + wide, y: area.minY,
                            width: area.width - wide, height: area.height)
-        for a in assistants { _ = place(bundlePath: a, to: right) }
+        let jobs = [(adobe, left)] + assistants.map { ($0, right) }
 
-        arrangeResult("ok")
+        // A window that is zoomed or full-screen keeps that state after an AX
+        // resize, and AppKit puts the old frame back the moment the app is
+        // activated again — so the arrangement looked fine until you clicked on
+        // Illustrator. Clear the state first. Leaving full screen is animated,
+        // so the move has to wait for it to finish.
+        var animating = false
+        for (p, _) in jobs where unmaximize(bundlePath: p) { animating = true }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + (animating ? 1.0 : 0)) {
+            guard self.place(bundlePath: adobe, to: left) else {
+                return self.arrangeResult("no window to move \u{2014} is it open?")
+            }
+            for (p, frame) in jobs.dropFirst() { _ = self.place(bundlePath: p, to: frame) }
+            self.arrangeResult("ok")
+        }
     }
 
-    /// Move and resize an application's main window.
-    private func place(bundlePath: String, to frame: NSRect) -> Bool {
+    /// The window we should be moving: the main one, else the first.
+    ///
+    /// An Adobe app has its palettes and panels in this list too, and resizing
+    /// a palette to 80% of the screen would be a memorable bug.
+    private func mainWindow(bundlePath: String) -> AXUIElement? {
         guard let id = Bundle(path: bundlePath)?.bundleIdentifier,
               let app = NSRunningApplication.runningApplications(withBundleIdentifier: id).first
-        else { return false }
+        else { return nil }
 
         let ax = AXUIElementCreateApplication(app.processIdentifier)
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(ax, kAXWindowsAttribute as CFString, &value) == .success,
               let windows = value as? [AXUIElement], !windows.isEmpty
-        else { return false }
+        else { return nil }
 
-        // The main window, else the first one: an Adobe app has palettes and
-        // panels in this list too, and resizing a palette to 80% of the screen
-        // would be a memorable bug.
-        let target = windows.first { w in
+        return windows.first { w in
             var main: CFTypeRef?
             AXUIElementCopyAttributeValue(w, kAXMainAttribute as CFString, &main)
             return (main as? Bool) == true
         } ?? windows[0]
+    }
+
+    /// Take a window out of full screen or zoom, so our frame is the one it
+    /// keeps. Returns true if it left full screen, which is animated.
+    @discardableResult
+    private func unmaximize(bundlePath: String) -> Bool {
+        guard let w = mainWindow(bundlePath: bundlePath) else { return false }
+
+        func isSet(_ attr: String) -> Bool {
+            var v: CFTypeRef?
+            AXUIElementCopyAttributeValue(w, attr as CFString, &v)
+            return (v as? Bool) == true
+        }
+
+        // AXFullScreen is not in the kAX* constants but every AppKit window
+        // that has a green button exposes it.
+        var wasFullScreen = false
+        if isSet("AXFullScreen") {
+            AXUIElementSetAttributeValue(w, "AXFullScreen" as CFString, kCFBooleanFalse)
+            wasFullScreen = true
+        }
+        // Likewise AXZoomed: it has no Swift constant, only the string.
+        if isSet("AXZoomed") {
+            AXUIElementSetAttributeValue(w, "AXZoomed" as CFString, kCFBooleanFalse)
+        }
+        return wasFullScreen
+    }
+
+    /// Move and resize an application's main window.
+    private func place(bundlePath: String, to frame: NSRect) -> Bool {
+        guard let target = mainWindow(bundlePath: bundlePath) else { return false }
 
         // AX measures from the top-left of the PRIMARY screen downwards;
         // NSScreen measures from the bottom-left upwards.
