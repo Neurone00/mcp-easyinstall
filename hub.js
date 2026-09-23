@@ -1122,6 +1122,22 @@ io.on("connection", (socket) => {
                 }
                 return socket.emit("app_response", { id: req.id, ok: true });
             }
+            // The panels used to launch these themselves. CEP's createProcess
+            // runs `open -a`, which does not bring an already-running app to
+            // the front, and UXP has no equivalent at all. Here we can focus
+            // it properly, and both kinds of panel get the same behaviour.
+            if (req.type === "open_assistant") {
+                const name = req.which === "ChatGPT" ? "ChatGPT" : "Claude";
+                const bundle = path.join("/Applications", name + ".app");
+                if (!fs.existsSync(bundle)) {
+                    return socket.emit("app_response", {
+                        id: req.id, ok: false, error: `${name} isn't installed.`,
+                    });
+                }
+                execFile("/usr/bin/open", ["-a", bundle]);
+                focusApp(bundle);
+                return socket.emit("app_response", { id: req.id, ok: true });
+            }
             if (req.type === "open_accessibility") {
                 execFile("/usr/bin/open",
                     ["x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"]);

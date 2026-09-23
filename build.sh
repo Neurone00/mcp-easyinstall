@@ -137,6 +137,19 @@ for panel in "$HERE"/engine/cep/*/; do
   /usr/bin/sed -i '' 's|<Menu>[^<]*</Menu>|<Menu>Moskito Easy MCP</Menu>|' "$panel/CSXS/manifest.xml"
   /usr/bin/sed -i '' 's|<title>[^<]*</title>|<title>Moskito Easy MCP</title>|' "$panel/index.html"
 done
+# Same pristine-copy rule as the engine servers: append to a kept-clean main.js
+# every build, so editing the add-on actually ships instead of being skipped
+# because the file already carries it.
+say "Adding the panel actions to the UXP plugins"
+for d in "$HERE"/engine/uxp/*/; do
+  mj="$d/main.js"
+  [ -f "$mj" ] || continue
+  [ -f "$mj.orig" ] || cp "$mj" "$mj.orig"
+  cp "$mj.orig" "$mj"
+  printf '\n' >> "$mj"
+  cat "$HERE/panel-addon-uxp.js" >> "$mj"
+done
+
 for m in "$HERE"/engine/uxp/*/manifest.json; do
   [ -f "$m" ] || continue
   "$HERE/runtime/node" -e '
@@ -144,6 +157,28 @@ for m in "$HERE"/engine/uxp/*/manifest.json; do
     const j=JSON.parse(fs.readFileSync(f,"utf8"));
     j.name = "Moskito Easy MCP";
     if (Array.isArray(j.entrypoints)) j.entrypoints.forEach(e => { if (e.label) e.label = { default: "Moskito Easy MCP" }; });
+
+    // Upstream declares entrypoint icons that are not in the package:
+    // icons/icon_D.png and icons/icon_N.png, where the files shipped are
+    // dark@1x/@2x and light@1x/@2x. UXP refuses to load a plugin whose
+    // declared icons are missing, which is a "Load command failed" with no
+    // detail. Drop any icon whose files are not actually there, keeping the
+    // ones that are. Icons are optional; loading is not.
+    const dir = require("path").dirname(f);
+    const present = (icon) => (icon.scale || [1]).every((sc) => {
+      const ext = require("path").extname(icon.path);
+      const stem = icon.path.slice(0, -ext.length);
+      return fs.existsSync(require("path").join(dir, `${stem}@${sc}x${ext}`))
+          || fs.existsSync(require("path").join(dir, icon.path));
+    });
+    const prune = (list) => Array.isArray(list) ? list.filter(present) : list;
+    j.icons = prune(j.icons);
+    if (Array.isArray(j.entrypoints)) {
+      j.entrypoints.forEach((e) => {
+        const kept = prune(e.icons);
+        if (kept && kept.length) e.icons = kept; else delete e.icons;
+      });
+    }
     fs.writeFileSync(f, JSON.stringify(j, null, 2));
   ' "$m"
 done

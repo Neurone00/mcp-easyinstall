@@ -198,12 +198,24 @@
   var claude = document.createElement("button");
   withIcon(claude, "claude.png", "Ask Claude");
   claude.title = "Open the Claude desktop app, which can drive " + APP;
-  claude.onclick = function () { if (!openApp("Claude")) openUrl("https://claude.ai/new"); };
+  claude.onclick = function () { askAssistant("Claude", "https://claude.ai/new"); };
 
   var gpt = document.createElement("button");
   withIcon(gpt, "chatgpt.png", "Ask ChatGPT");
   gpt.title = "Open the ChatGPT desktop app, which can drive " + APP;
-  gpt.onclick = function () { if (!openApp("ChatGPT")) openUrl("https://chatgpt.com/"); };
+  gpt.onclick = function () { askAssistant("ChatGPT", "https://chatgpt.com/"); };
+
+  // Ask the hub, which can actually bring the app to the front: CEP's
+  // createProcess runs `open -a`, and that reopens a running app without
+  // activating it. Falls back to doing it here if the hub is unreachable,
+  // which is the one case where the old behaviour is better than nothing.
+  function askAssistant(name, url) {
+    bindSocketOnce();
+    hubRequest({ type: "open_assistant", which: name }, function (r) {
+      if (r && r.ok) return;
+      if (!openApp(name)) openUrl(url);
+    });
+  }
 
   bar.appendChild(claude);
   bar.appendChild(gpt);
