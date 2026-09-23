@@ -73,7 +73,10 @@
     // below everything. Make the chain full height and let the open sheet take
     // what is left. .container is already a flex column with two visible
     // children, so this only changes how the spare height is handed out.
-    "html,body{height:100%}",
+    // border-box, or height:100% plus the padding overflows by exactly the
+    // padding — the panel scrolled 20px with room to spare and the status bar
+    // sat half off the top.
+    "html,body{height:100%;box-sizing:border-box}",
     "body{padding:10px}",
     ".container{height:100%;min-height:0}",
     ".amcp{font-size:12px;color:var(--a-ink);display:flex;flex-direction:column;",
