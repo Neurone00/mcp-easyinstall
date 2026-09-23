@@ -601,7 +601,9 @@ document.addEventListener("click", async (e) => {
           focus: "/api/focus-uxp",
           ok: "Found it" },
         { text: "Click <b>Load</b>, at the right-hand end of that row.",
-          sub: "Its state changes from Not loaded to Loaded.",
+          sub: "Its state changes from Not loaded to Loaded. Or let this do it "
+             + "for you \u2014 same thing, one click.",
+          action: { label: "Load it for me", path: "/api/load-uxp/" + a.key },
           focus: "/api/focus-uxp",
           ok: "Done" },
         { text: `Back in ${a.label}, open <b>${a.panelMenu}</b>.`,

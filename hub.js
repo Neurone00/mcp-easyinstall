@@ -1320,6 +1320,107 @@ const UDT_HOST = { photoshop: "PS", premiere: "premierepro" };
 // things. appBundle() unwraps that; a plain path join does not.
 const UDT_GLOB = "Adobe UXP Developer Tool";
 
+// Press Load for them.
+//
+// A Developer Tool load lasts only as long as the host app's session, so
+// Photoshop and Premiere otherwise need a trip through Adobe's tool on every
+// launch — the thing that makes them worse to live with than Illustrator.
+//
+// The Developer Tool runs a local service, and that is what its own CLI drives.
+// Connecting to /socket/cli (the path decides the client type; the default is
+// "app", which is why a connection to / just sits there) announces every
+// connected host app, and a "proxy" message forwards a request to one of them.
+// Read out of the tool's own bundle, so: undocumented, and Adobe could change
+// it. Every failure here falls back to asking the user to click Load.
+const UXP_SERVICE = "ws://127.0.0.1:14001/socket/cli";
+const UXP_APP_ID = { photoshop: "PS", premiere: "PPRO" };
+
+// A connected panel is the only trustworthy signal that a plugin is loaded:
+// the service reports "already loaded" as the same flat failure string as a
+// real one, so the error text cannot tell them apart.
+function panelLive(key) {
+    const set = applicationClients[key];
+    return !!set && set.size > 0;
+}
+
+async function loadUxpPlugin(key) {
+    if (panelLive(key)) return { ok: true, already: true };
+    try {
+        return await loadUxpPluginOnce(key);
+    } catch (e) {
+        // Give the panel a moment to come up and say hello: a load that reports
+        // failure but produces a working panel is a success.
+        await new Promise((r) => setTimeout(r, 2500));
+        if (panelLive(key)) return { ok: true, already: true };
+        throw e;
+    }
+}
+
+function loadUxpPluginOnce(key) {
+    return new Promise((resolve, reject) => {
+        const engine = findEngine();
+        const manifest = engine && path.join(engine, "uxp", APPS[key].uxp, "manifest.json");
+        if (!manifest || !fs.existsSync(manifest)) return reject(new Error("Plugin source missing."));
+
+        let id;
+        try { id = readJSON(manifest, null).id; } catch { id = null; }
+        if (!id) return reject(new Error("Couldn't read the plugin id."));
+
+        let WebSocket;
+        try { WebSocket = require("ws"); } catch { return reject(new Error("ws unavailable.")); }
+
+        const want = UXP_APP_ID[key];
+        const ws = new WebSocket(UXP_SERVICE);
+        const reqId = Date.now() % 100000;
+        let hostId = null, settled = false;
+
+        const done = (err, value) => {
+            if (settled) return;
+            settled = true;
+            try { ws.close(); } catch { /* already closing */ }
+            err ? reject(err) : resolve(value);
+        };
+
+        ws.on("error", () => done(new Error(
+            "Adobe's UXP Developer Tool isn't running, so it can't load the panel.")));
+        ws.on("message", (raw) => {
+            let m;
+            try { m = JSON.parse(String(raw)); } catch { return; }
+            if (m.command === "didAddRuntimeClient" && m.app &&
+                String(m.app.appId || "").toUpperCase().startsWith(want)) {
+                hostId = m.id;
+            }
+            if (m.command === "didCompleteConnection") {
+                if (!hostId) {
+                    return done(new Error(`${APPS[key].label} isn't connected to the Developer Tool. `
+                        + "Turn on Developer Mode in its settings and restart it."));
+                }
+                ws.send(JSON.stringify({
+                    command: "proxy", clientId: hostId, requestId: reqId,
+                    message: {
+                        command: "Plugin", action: "load", breakOnStart: false,
+                        params: { provider: { type: "disk", id, path: manifest } },
+                    },
+                }));
+            }
+            if (m.requestId === reqId) {
+                if (m.error) return done(new Error(m.error));
+                done(null, { ok: true });
+            }
+        });
+        setTimeout(() => done(new Error("The Developer Tool didn't answer.")), 25000);
+    });
+}
+
+app.post("/api/load-uxp/:key", async (req, res) => {
+    if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
+    try {
+        res.json(await loadUxpPlugin(req.params.key));
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Register a UXP plugin in Adobe's Developer Tool so the user only has to press
 // "Load". Adobe rejects unsigned .ccx packages outright (UPIA status -267), so
 // this is as far as automation can go without an Adobe-signed plugin.
