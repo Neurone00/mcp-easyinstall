@@ -1362,9 +1362,10 @@ function loadUxpPluginOnce(key) {
         const manifest = engine && path.join(engine, "uxp", APPS[key].uxp, "manifest.json");
         if (!manifest || !fs.existsSync(manifest)) return reject(new Error("Plugin source missing."));
 
-        let id;
-        try { id = readJSON(manifest, null).id; } catch { id = null; }
-        if (!id) return reject(new Error("Couldn't read the plugin id."));
+        // The plugin FOLDER, not manifest.json. Its own PluginLoadCommand does
+        // path.dirname(manifest), and passing the manifest fails with the same
+        // flat "Failed to load the devtools plugin" you get for everything else.
+        const folder = path.dirname(manifest);
 
         let WebSocket;
         try { WebSocket = require("ws"); } catch { return reject(new Error("ws unavailable.")); }
@@ -1399,7 +1400,7 @@ function loadUxpPluginOnce(key) {
                     command: "proxy", clientId: hostId, requestId: reqId,
                     message: {
                         command: "Plugin", action: "load", breakOnStart: false,
-                        params: { provider: { type: "disk", id, path: manifest } },
+                        params: { provider: { type: "disk", path: folder } },
                     },
                 }));
             }
@@ -1410,6 +1411,67 @@ function loadUxpPluginOnce(key) {
         });
         setTimeout(() => done(new Error("The Developer Tool didn't answer.")), 25000);
     });
+}
+
+// Now that loading can be done for them, do it. A UXP panel dies with its host
+// app, so without this every Photoshop launch means a trip through Adobe's tool
+// — the thing that made these apps worse to live with than the CEP ones.
+//
+// Quiet on purpose: only for an app that is running, already set up, and not
+// already connected, and it backs off rather than retrying forever, because the
+// service is undocumented and a failure that repeats is noise, not information.
+const autoLoad = {};   // key -> { next, wait }
+
+async function autoLoadUxp() {
+    for (const [key, a] of Object.entries(APPS)) {
+        if (a.kind !== "uxp") continue;
+
+        const state = autoLoad[key] || (autoLoad[key] = { next: 0, wait: 15000 });
+        if (!appRunning(key)) { state.next = 0; state.wait = 15000; continue; }
+        if (panelLive(key)) { state.wait = 15000; continue; }
+        if (Date.now() < state.next) continue;
+
+        // Only if they have been through setup: the workspace entry is what
+        // the Developer Tool loads from.
+        let registered = false;
+        try {
+            registered = (readJSON(UDT_WORKSPACE, { plugins: [] }).plugins || [])
+                .some((p) => p.hostParam === UDT_HOST[key]);
+        } catch { registered = false; }
+        if (!registered) { state.next = Date.now() + 60000; continue; }
+
+        // The service belongs to the Developer Tool, so it has to be running.
+        // -g so it does not steal focus from whatever they are doing.
+        if (!udtRunning()) {
+            const udt = appBundle(UDT_GLOB);
+            if (!udt) { state.next = Date.now() + 60000; continue; }
+            execFile("/usr/bin/open", ["-g", "-a", udt]);
+            state.next = Date.now() + 8000;   // let it come up, then try
+            continue;
+        }
+
+        state.next = Date.now() + state.wait;
+        try {
+            await loadUxpPlugin(key);
+            console.log(`\u2713 loaded the ${a.label} panel`);
+            state.wait = 15000;
+        } catch (e) {
+            state.wait = Math.min(state.wait * 2, 300000);
+            console.log(`\u26a0 couldn't load the ${a.label} panel: ${e.message}`);
+        }
+    }
+}
+
+function udtRunning() {
+    const bundle = appBundle(UDT_GLOB);
+    if (!bundle) return false;
+    try {
+        execFileSync("/usr/bin/pgrep", ["-f", path.join(bundle, "Contents", "MacOS")],
+            { stdio: "ignore", timeout: 5000 });
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 app.post("/api/load-uxp/:key", async (req, res) => {
@@ -1671,6 +1733,7 @@ server.listen(PORT, "127.0.0.1", () => {
     setInterval(repairClientPaths, 30000).unref();
     refreshPanelOpen();
     setInterval(refreshPanelOpen, 5000).unref();
+    setInterval(autoLoadUxp, 5000).unref();
     checkForUpdate();
     setInterval(checkForUpdate, 6 * 3600 * 1000);
 });
