@@ -87,9 +87,18 @@ function _find(doc, ref){
     }
     throw new Error("Nothing matches '" + ref + "'. Use list_items to see what is in the document.");
 }
-function _brief(it){
+/* Reported in the SAME space the setters accept: pixels from the top-left of
+   the artboard, y downward. This returned raw document coordinates — y-up,
+   document origin — while move_item and every create_* tool took
+   artboard-relative y-down. So reading a position and writing it straight back
+   moved the item somewhere else entirely, and "nudge it right a bit" after a
+   move compounded the error. move_item even returned _brief, answering in a
+   different system from the one it was just given. */
+function _brief(it, idx){
+    var r = _r(_doc(), (idx===undefined || idx===null) ? -1 : idx);
     return { id:_handle(it), name:it.name, type:it.typename,
-             x:Math.round(it.position[0]), y:Math.round(it.position[1]),
+             x:Math.round(it.position[0] - r[0]),
+             y:Math.round(r[1] - it.position[1]),
              width:Math.round(it.width), height:Math.round(it.height) };
 }
 
@@ -260,7 +269,7 @@ def list_items(artboard: int = -1, limit: int = 200):
         for(var i=0;i<doc.pageItems.length && out.length<$LIMIT;i++){
             var it=doc.pageItems[i], p=it.position;
             if(p[0] >= r[0]-1 && p[0] <= r[2]+1 && p[1] <= r[1]+1 && p[1] >= r[3]-1){
-                out.push(_brief(it));
+                out.push(_brief(it, $AB));
             }
         }
         return JSON.stringify({ items:out, truncated:(out.length>=$LIMIT) });
