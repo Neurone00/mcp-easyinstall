@@ -943,6 +943,38 @@ async function checkForUpdate() {
 
 // The app can't overwrite itself while it is running, so hand the swap to a
 // detached script that waits for this process to exit first.
+// Updating without being asked.
+//
+// The banner only exists inside the control panel, and a working install gives
+// you no reason to open it — so an old version could sit there indefinitely,
+// which is how someone ends up running a build whose Photoshop server cannot
+// even start. The swap below is already careful: it checks the architecture,
+// moves the old app aside rather than deleting it, and puts it back if the
+// copy fails. So do it, and pick the moment.
+let lastCommandAt = 0;
+let autoUpdateAt = 0;
+
+async function autoUpdate() {
+    const found = await checkForUpdate();
+    if (!found) return;
+
+    // Not mid-task: the app restarts itself, and doing that under someone's
+    // hands while they are driving Illustrator is worse than being a day old.
+    if (Date.now() - lastCommandAt < 60000) return;
+    if (venvBuilding) return;
+    if (Date.now() - autoUpdateAt < 30 * 60 * 1000) return;   // one go per half hour
+    autoUpdateAt = Date.now();
+
+    console.log(`Updating to ${found.version}\u2026`);
+    try {
+        await applyUpdate();
+    } catch (e) {
+        // The banner stays as the way out: a failing auto-update should not
+        // also take away the button.
+        console.log(`\u26a0 couldn't update automatically: ${e.message}`);
+    }
+}
+
 async function applyUpdate() {
     if (!update) throw new Error("No update available.");
     const bundle = path.resolve(HERE, "..", "..");
@@ -1156,6 +1188,7 @@ io.on("connection", (socket) => {
     });
 
     socket.on("command_packet", ({ application, command }) => {
+        lastCommandAt = Date.now();   // the updater waits for a quiet moment
         const packet = { senderId: socket.id, application, command };
         const clients = applicationClients[application];
         const label = APPS[application] ? APPS[application].label : application;
@@ -1800,6 +1833,8 @@ server.listen(PORT, "127.0.0.1", () => {
     refreshPanelOpen();
     setInterval(refreshPanelOpen, 5000).unref();
     setInterval(autoLoadUxp, 5000).unref();
-    checkForUpdate();
-    setInterval(checkForUpdate, 6 * 3600 * 1000);
+    // Give the app a moment to finish starting — panels, venv, config repair —
+    // before it considers restarting itself.
+    setTimeout(autoUpdate, 45000);
+    setInterval(autoUpdate, 6 * 3600 * 1000);
 });
