@@ -8,15 +8,9 @@
 
   // Write-heavy, read-rare, and free at this scale. It also cannot become a
   // place a document name ends up by accident.
-  //
-  // Commented out until Analytics Engine is enabled on the account, at
-  // dash.cloudflare.com -> Workers -> Analytics Engine. Deploying with this
-  // binding before that fails the whole deploy and would take the site down
-  // with it; without it the worker still serves the page and /collect simply
-  // stores nothing.
-  // "analytics_engine_datasets": [
-  //   { "binding": "USAGE", "dataset": "moskito_easy_mcp_usage" }
-  // ]
+  "analytics_engine_datasets": [
+    { "binding": "USAGE", "dataset": "moskito_easy_mcp_usage" }
+  ]
 
   // /admin needs Cloudflare Access in front of it, restricted to the
   // moskitodesign.it domain, plus two secrets for the SQL API:
