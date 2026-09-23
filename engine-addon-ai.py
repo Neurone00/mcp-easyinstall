@@ -1025,3 +1025,45 @@ def fetch_image(url: str, filename: str = "", folder: str = "", place: bool = Fa
     if place:
         place_image(path=path, x=x, y=y, width=width)
     return {"path": path, "bytes": len(data), "placed": place}
+
+
+@mcp.tool()
+def paste_clipboard(x: float = None, y: float = None, width: float = None,
+                    name: str = None, artboard: int = -1):
+    """
+    Pastes whatever is on the clipboard into the document.
+
+    The way to get an image in from somewhere with no file and no link — an
+    image in a chat window, a screenshot, artwork from another app. The user
+    copies it, then asks for this.
+
+    Args:
+        x, y: where to put the top-left, from the artboard's top-left. Omit
+            both to centre it on the artboard.
+        width: scale proportionally to this width. Omit for native size.
+        name: name the pasted item.
+    """
+    return _run(_js("""
+        var doc=_doc(), r=_r(doc, $AB);
+        var before=doc.pageItems.length;
+        app.paste();
+        if(doc.pageItems.length<=before) throw new Error(
+            "Nothing was pasted. Copy an image or some artwork first — the clipboard " +
+            "may be empty, or hold something Illustrator can't place.");
+
+        /* paste() leaves the new artwork selected, which is the only reliable
+           way to find it: it is not always a single item and not always first. */
+        var sel=doc.selection;
+        if(!sel || !sel.length) throw new Error("Pasted, but Illustrator did not report what.");
+        var it = sel.length===1 ? sel[0] : doc.groupItems.add();
+        if(sel.length>1){ for(var i=sel.length-1;i>=0;i--){ sel[i].moveToBeginning(it); } }
+
+        if($WIDTH){ var s=($WIDTH/it.width)*100; it.resize(s,s); }
+        if($X===null && $Y===null){
+            it.position=[ r[0]+((r[2]-r[0])-it.width)/2, r[1]-((r[1]-r[3])-it.height)/2 ];
+        } else {
+            it.position=[ r[0]+($X||0), r[1]-($Y||0) ];
+        }
+        if($NAME) it.name=$NAME;
+        return JSON.stringify(_brief(it));
+    """, AB=artboard, X=x, Y=y, WIDTH=width, NAME=name))

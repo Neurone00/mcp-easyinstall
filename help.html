@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What can I do with this? — Moskito Easy MCP</title>
+<title>What can I do with this?</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -37,238 +37,538 @@ body {
 .wrap { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
 
 a { color: var(--accent); }
-.back {
-  display: inline-block; margin-bottom: 26px; font-size: 13.5px;
-  color: var(--ink-soft); text-decoration: none;
-}
+.topbar { display: flex; align-items: baseline; gap: 12px; margin-bottom: 26px; }
+.back { flex: 1 1 auto; font-size: 13.5px; color: var(--ink-soft); text-decoration: none; }
 .back:hover { color: var(--ink); }
+/* The page takes its language from the system; this is for the people that
+   setting is wrong for. */
+.langs { display: flex; gap: 4px; }
+.langs button {
+  border: 0; background: none; padding: 3px 7px; border-radius: 6px; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: var(--ink-soft);
+}
+.langs button:hover { color: var(--ink); }
+.langs button[aria-pressed="true"] { background: var(--card); color: var(--ink); font-weight: 560; }
 
 h1 { font-size: 28px; line-height: 1.25; margin: 0 0 10px; letter-spacing: -.02em; }
 .lede { font-size: 16px; color: var(--ink-soft); margin: 0 0 30px; }
 
 h2 {
   font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
-  color: var(--ink-soft); font-weight: 620; margin: 40px 0 12px;
+  color: var(--ink-soft); font-weight: 620; margin: 36px 0 10px;
 }
 
+/* <details> rather than a hand-rolled toggle: the keyboard handling, the
+   open state and the semantics come free with the element. */
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 14px;
+  box-shadow: var(--shadow); margin-bottom: 8px; overflow: hidden;
 }
-.card h3 {
-  margin: 0 0 4px; font-size: 17px; font-weight: 600;
-  display: flex; align-items: center; gap: 10px;
+.card > summary {
+  list-style: none; cursor: pointer; padding: 14px 18px;
+  display: flex; align-items: center; gap: 11px;
 }
-.card h3 img { width: 26px; height: 26px; border-radius: 6px; }
-.card > p { margin: 0 0 14px; color: var(--ink-soft); font-size: 14px; }
+.card > summary::-webkit-details-marker { display: none; }
+.card > summary:hover { background: var(--bg); }
+.card > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.card summary img { width: 24px; height: 24px; border-radius: 6px; flex: none; }
+.card summary .name { font-size: 16px; font-weight: 600; flex: 1 1 auto; }
+.card summary .chev {
+  flex: none; width: 13px; height: 13px; color: var(--ink-soft);
+  transition: transform .15s;
+}
+.card[open] > summary .chev { transform: rotate(90deg); }
+.card[open] > summary { border-bottom: 1px solid var(--line); }
+.body { padding: 16px 18px 18px; }
+.body > p { margin: 0 0 14px; color: var(--ink-soft); font-size: 14px; }
 
-.can { margin: 0 0 4px; padding: 0; list-style: none; }
+.can { margin: 0; padding: 0; list-style: none; }
 .can li { margin: 7px 0; padding-left: 16px; position: relative; font-size: 14.5px; }
 .can li::before {
   content: ""; position: absolute; left: 0; top: .62em;
   width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
 }
+.can b { font-weight: 600; }
 
 /* Example prompts are the point of the page: they show the register to write
    in, which is the thing people get wrong. */
 .say { margin: 14px 0 0; border-top: 1px solid var(--line); padding-top: 14px; }
-.say .label {
+.say .label, .nope .label {
   font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
   color: var(--ink-soft); font-weight: 620; margin-bottom: 8px;
 }
 .say q {
-  display: block; margin: 6px 0; font-size: 14.5px; quotes: "\201c" "\201d";
-  color: var(--ink);
+  display: block; margin: 3px 0; font-size: 14.5px; quotes: "\201c" "\201d";
+  color: var(--ink); flex: 1 1 auto;
 }
 .say q::before, .say q::after { color: var(--ink-soft); }
 
-.nope { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
-.nope .label {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  color: var(--ink-soft); font-weight: 620; margin-bottom: 6px;
+/* The prompts are here to be used, so make taking one a click. The row is the
+   hit area; the icon only says where. */
+.say .row {
+  display: flex; align-items: baseline; gap: 8px; border-radius: 7px;
+  margin: 0 -8px; padding: 3px 8px;
 }
+.say .row:hover { background: var(--bg); }
+.copy {
+  flex: none; border: 0; background: none; padding: 4px; border-radius: 6px;
+  color: var(--ink-soft); opacity: .45; cursor: pointer; line-height: 0;
+  transition: opacity .12s, color .12s;
+}
+.say .row:hover .copy, .copy:focus-visible { opacity: 1; }
+.copy:hover { color: var(--accent); }
+.copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.copy.done { color: var(--accent); opacity: 1; }
+.copy svg { width: 14px; height: 14px; display: block; }
+
+.nope { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
 .nope p { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
 .nope b { color: var(--ink); font-weight: 560; }
 
 .note {
   background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-  padding: 16px 18px; font-size: 14px; color: var(--ink-soft); margin-bottom: 14px;
+  padding: 16px 18px; font-size: 14px; color: var(--ink-soft); margin-bottom: 8px;
 }
 .note b { color: var(--ink); font-weight: 560; }
-footer { margin-top: 40px; font-size: 13px; color: var(--ink-soft); }
+
+footer { margin-top: 44px; font-size: 13.5px; text-align: center; }
+.sr {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
 </style>
 </head>
 <body>
 <main class="wrap">
-
-  <a class="back" href="/">&larr; Back</a>
-
-  <h1>What can I do with this?</h1>
-  <p class="lede">
-    Ask Claude or ChatGPT in your own words. You never name a command — describe
-    what you want in the document you have open, the way you would to a colleague
-    looking over your shoulder.
-  </p>
-
-  <div class="note">
-    <b>Say which app you mean if it could be either.</b> &ldquo;Export a PNG&rdquo;
-    could be Illustrator or After Effects, and the assistant will ask. Naming it
-    saves a round trip.
+  <div class="topbar">
+    <a class="back" href="/" id="back">&larr; Back</a>
+    <div class="langs" id="langs"></div>
   </div>
-
-  <h2>Illustrator</h2>
-  <div class="card">
-    <h3><img src="/api/icon/illustrator" alt="">Illustrator</h3>
-    <p>The most complete of the four. It can read your document and change it.</p>
-    <ul class="can">
-      <li><b>Read</b> — what is on each artboard, what you have selected, layers, swatches, fonts</li>
-      <li><b>Draw</b> — rectangles, ellipses, lines, text, placed images, artboards, layers</li>
-      <li><b>Change</b> — colour, position, size, rotation, opacity, alignment, spacing, grouping, type and font</li>
-      <li><b>Export</b> — PNG at any scale, SVG, or save a copy</li>
-      <li><b>Fetch</b> — download an image from a link, save it next to your file, and place it</li>
-    </ul>
-    <div class="say">
-      <div class="label">Try saying</div>
-      <q>Make a 1200&times;630 artboard and centre the logo on it</q>
-      <q>Everything on this artboard that is orange, change it to #2855ff</q>
-      <q>Space these six icons evenly across the artboard</q>
-      <q>Set the headline in Inter Semibold at 48pt and tighten the tracking</q>
-      <q>Export this artboard as a PNG at 2&times; onto my desktop</q>
-    </div>
-    <div class="nope">
-      <div class="label">It cannot</div>
-      <p>
-        <b>Pathfinder</b>, <b>Offset Path</b>, <b>Outline Stroke</b>, the whole
-        <b>Effect menu</b> (drop shadows, warps, blurs) and the
-        <b>Appearance panel</b>. Adobe gives these no scripting access at all, so
-        nothing built on scripting can reach them &mdash; ours included. The
-        assistant will say so rather than produce something that only looks right.
-        Image Trace does work.
-      </p>
-    </div>
-  </div>
-
-  <h2>After Effects</h2>
-  <div class="card">
-    <h3><img src="/api/icon/aftereffects" alt="">After Effects</h3>
-    <p>
-      Built around effects, because that is what After Effects gives scripts
-      access to. It reads the effects installed on <em>your</em> machine, so
-      Video Copilot, Red Giant and Boris FX work the same as Adobe&rsquo;s own.
-    </p>
-    <ul class="can">
-      <li><b>Read</b> — compositions, layers, and what is already applied to a layer</li>
-      <li><b>Apply</b> — any installed effect, including third-party plugins</li>
-      <li><b>Adjust</b> — set any parameter on an applied effect</li>
-      <li><b>Animate</b> — keyframe an effect parameter or a transform, with easing</li>
-      <li><b>Presets</b> — apply an .ffx animation preset</li>
-    </ul>
-    <div class="say">
-      <div class="label">Try saying</div>
-      <q>What effects do I have installed with &ldquo;glow&rdquo; in the name?</q>
-      <q>Put a Gaussian Blur on the logo layer and take it from 40 to 0 over the first second</q>
-      <q>Fade this layer up over 12 frames with an ease out</q>
-      <q>What is already applied to the background layer?</q>
-    </div>
-    <div class="nope">
-      <div class="label">It cannot</div>
-      <p>
-        <b>Roto Brush</b>, <b>Content-Aware Fill</b> and <b>mask tracking</b>.
-        It also cannot read rendered pixels, so it cannot tell you how something
-        looks &mdash; only what is set.
-      </p>
-    </div>
-  </div>
-
-  <h2>Photoshop and Premiere Pro</h2>
-  <div class="card">
-    <h3><img src="/api/icon/photoshop" alt="">Photoshop</h3>
-    <p>Layers, selections, masks, adjustments and export.</p>
-    <ul class="can">
-      <li><b>Layers</b> — create, duplicate, group, rename, move, scale, rotate, flip</li>
-      <li><b>Selections</b> — rectangle, ellipse, polygon, subject, sky; turn one into a mask</li>
-      <li><b>Adjustments</b> — brightness and contrast, colour balance, vibrance, black and white</li>
-      <li><b>Styles</b> — drop shadow, stroke, gradient</li>
-      <li><b>Generate</b> — make an image from a description with Adobe Firefly, on its own layer</li>
-      <li><b>Generative fill</b> — describe what should go inside a selection and let it blend in</li>
-      <li><b>Clean up</b> — remove a background, harmonise a pasted layer with the scene</li>
-      <li><b>Export</b> — PNG of the document or of single layers</li>
-    </ul>
-    <div class="say">
-      <div class="label">Try saying</div>
-      <q>Select the subject, mask it, and drop the background out</q>
-      <q>Generate a soft grey studio backdrop on a new layer behind the product</q>
-      <q>Select the sky, then fill it with an overcast sky at dusk</q>
-      <q>Export each layer as its own PNG</q>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3><img src="/api/icon/premiere" alt="">Premiere Pro</h3>
-    <p>Projects, bins, sequences and the basics of cutting.</p>
-    <ul class="can">
-      <li><b>Project</b> — create, open, save, import media, organise into bins</li>
-      <li><b>Sequences</b> — build one from clips, add markers, close gaps</li>
-      <li><b>Clips</b> — set in and out points, disable, change position and scale</li>
-      <li><b>Effects</b> — Gaussian blur, motion blur, tint, black and white, transitions</li>
-      <li><b>Export</b> — a frame, or the whole sequence</li>
-    </ul>
-    <div class="say">
-      <div class="label">Try saying</div>
-      <q>Import everything in this folder and put it in a bin called Rushes</q>
-      <q>Build a sequence from these clips in order and close the gaps</q>
-      <q>Add a cross dissolve between every clip</q>
-    </div>
-  </div>
-
-  <h2>Using two apps together</h2>
-  <div class="card">
-    <h3>Make an image in Photoshop, use it in Illustrator</h3>
-    <p>
-      Photoshop can generate images with Firefly. Illustrator cannot, but it can
-      place a file. So the route between them is a saved PNG.
-    </p>
-    <div class="say">
-      <div class="label">Ask Photoshop</div>
-      <q>Generate a hand-drawn palm leaf on a white background and save it as a PNG on my desktop</q>
-      <div class="label" style="margin-top:12px">Then ask Illustrator</div>
-      <q>Place that PNG on the artboard and scale it to 400px wide</q>
-    </div>
-    <div class="nope">
-      <div class="label">If the image is a link</div>
-      <p>
-        Ask Illustrator to fetch it. It saves the file next to your document
-        &mdash; or in a subfolder you name &mdash; and can place it in the same
-        step. It only accepts web links, and never overwrites a file you already
-        have.
-      </p>
-    </div>
-  </div>
-
-  <h2>Worth knowing</h2>
-  <div class="note">
-    <b>It works on the document you have open.</b> There is no separate copy and
-    nothing is uploaded. Changes land in the file in front of you.
-  </div>
-  <div class="note">
-    <b>You can undo it.</b> Everything the assistant changes in After Effects is
-    grouped into a single undo. In the others, undo works as it normally does.
-  </div>
-  <div class="note">
-    <b>Not while something is rendering.</b> Adobe blocks scripting during a
-    render, so wait for it to finish.
-  </div>
-  <div class="note">
-    <b>When there is no tool for something</b>, the assistant can still write
-    Illustrator or After Effects scripting directly. That covers gradients,
-    blends and unusual path work. It is slower and likelier to need a second
-    attempt, so it is a fallback, not the usual route.
-  </div>
-
-  <footer>
-    Moskito Easy MCP &middot; <a href="/">Back to setup</a>
-  </footer>
-
+  <div id="page"></div>
 </main>
+
+<div id="said" role="status" aria-live="polite" class="sr"></div>
+
+<script>
+/* The two languages live side by side in one structure rather than in two HTML
+   files, because two files drift: someone fixes a sentence in one and the
+   other quietly becomes wrong. Adding a third language is adding a key. */
+
+const CONTENT = {
+  en: {
+    label: "English",
+    back: "← Back",
+    title: "What can I do with this?",
+    lede: "Ask Claude or ChatGPT in your own words. You never name a command — describe what you want in the document you have open, the way you would to a colleague looking over your shoulder.",
+    topNote: ["Say which app you mean if it could be either.", "“Export a PNG” could be Illustrator or After Effects, and the assistant will ask. Naming it saves a round trip."],
+    appsH2: "Your apps",
+    imageH2: "Getting an image in",
+    knowH2: "Worth knowing",
+    sayLabel: "Try saying",
+    cannotLabel: "It cannot",
+    copyLabel: "Copy this prompt",
+    copied: "Copied",
+    backToSetup: "← Back to setup",
+    apps: [
+      {
+        icon: "illustrator", name: "Illustrator",
+        blurb: "The most complete of the four. It can read your document and change it.",
+        can: [
+          ["Read", "what is on each artboard, what you have selected, layers, swatches, fonts"],
+          ["Draw", "rectangles, ellipses, lines, text, placed images, artboards, layers"],
+          ["Change", "colour, position, size, rotation, opacity, alignment, spacing, grouping, type and font"],
+          ["Export", "PNG at any scale, SVG, or save a copy"],
+          ["Bring in", "paste what you have copied, or download an image from a link and place it"],
+        ],
+        say: [
+          "Make a 1200x630 artboard and centre the logo on it",
+          "Everything on this artboard that is orange, change it to #2855ff",
+          "Space these six icons evenly across the artboard",
+          "Set the headline in Inter Semibold at 48pt and tighten the tracking",
+          "Export this artboard as a PNG at 2x onto my desktop",
+        ],
+        cannot: "<b>Pathfinder</b>, <b>Offset Path</b>, <b>Outline Stroke</b>, the whole <b>Effect menu</b> (drop shadows, warps, blurs) and the <b>Appearance panel</b>. Adobe gives these no scripting access at all, so nothing built on scripting can reach them — ours included. The assistant will say so rather than produce something that only looks right. Image Trace does work.",
+      },
+      {
+        icon: "aftereffects", name: "After Effects",
+        blurb: "Built around effects, because that is what After Effects gives scripts access to. It reads the effects installed on your machine, so Video Copilot, Red Giant and Boris FX work the same as Adobe’s own.",
+        can: [
+          ["Read", "compositions, layers, and what is already applied to a layer"],
+          ["Apply", "any installed effect, including third-party plugins"],
+          ["Adjust", "set any parameter on an applied effect"],
+          ["Animate", "keyframe an effect parameter or a transform, with easing"],
+          ["Presets", "apply an .ffx animation preset"],
+        ],
+        say: [
+          "What effects do I have installed with glow in the name?",
+          "Put a Gaussian Blur on the logo layer and take it from 40 to 0 over the first second",
+          "Fade this layer up over 12 frames with an ease out",
+          "What is already applied to the background layer?",
+        ],
+        cannot: "<b>Roto Brush</b>, <b>Content-Aware Fill</b> and <b>mask tracking</b>. It also cannot read rendered pixels, so it cannot tell you how something looks — only what is set.",
+      },
+      {
+        icon: "photoshop", name: "Photoshop",
+        blurb: "Layers, selections, masks, adjustments, export — and Adobe Firefly.",
+        can: [
+          ["Layers", "create, duplicate, group, rename, move, scale, rotate, flip"],
+          ["Selections", "rectangle, ellipse, polygon, subject, sky; turn one into a mask"],
+          ["Adjustments", "brightness and contrast, colour balance, vibrance, black and white"],
+          ["Styles", "drop shadow, stroke, gradient"],
+          ["Generate", "make an image from a description with Firefly, on its own layer"],
+          ["Generative fill", "describe what should go inside a selection and let it blend in"],
+          ["Export", "PNG of the document or of single layers"],
+        ],
+        say: [
+          "Select the subject, mask it, and drop the background out",
+          "For every image I have open, isolate the subject on transparency and export it as a PNG next to the original",
+          "Generate a soft grey studio backdrop on a new layer behind the product",
+          "Select the sky, then fill it with an overcast sky at dusk",
+        ],
+      },
+      {
+        icon: "premiere", name: "Premiere Pro",
+        blurb: "Projects, bins, sequences and the basics of cutting.",
+        can: [
+          ["Project", "create, open, save, import media, organise into bins"],
+          ["Sequences", "build one from clips, add markers, close gaps"],
+          ["Clips", "set in and out points, disable, change position and scale"],
+          ["Effects", "Gaussian blur, motion blur, tint, black and white, transitions"],
+          ["Export", "a frame, or the whole sequence"],
+        ],
+        say: [
+          "Import everything in this folder and put it in a bin called Rushes",
+          "Build a sequence from these clips in order and close the gaps",
+          "Add a cross dissolve between every clip",
+        ],
+      },
+    ],
+    image: {
+      name: "From a chat, a link, or Photoshop",
+      blurb: "Illustrator cannot generate images, but it can take one in three ways. Use whichever fits where the image already is.",
+      can: [
+        ["Copied", "copy the image anywhere — a chat window, a browser, another app — then ask Illustrator to paste it"],
+        ["A link", "give Illustrator the address and it downloads the file next to your document, then places it"],
+        ["Photoshop", "generate it with Firefly, save a PNG, and place that"],
+      ],
+      say: [
+        "Paste what I just copied onto the artboard and scale it to 400px wide",
+        "Fetch this image and place it on the artboard, saving it in an assets folder next to my file",
+        "Place the PNG I just saved and centre it on the artboard",
+      ],
+      cannotLabel: "Where files go",
+      cannot: "A fetched image is saved beside the open document, or in a subfolder you name. If the document has never been saved it goes to Downloads. It never overwrites a file you already have.",
+    },
+    know: [
+      ["It works on the document you have open.", "There is no separate copy and nothing is uploaded. Changes land in the file in front of you."],
+      ["You can undo it.", "Everything the assistant changes in After Effects is grouped into a single undo. In the others, undo works as it normally does."],
+      ["It can work through several open files.", "Photoshop can list what you have open and switch between documents, so “do this to all of them” works. It happens one document at a time, so ten files take roughly ten times as long as one — worth starting with a couple to check the result before turning it loose on a folder."],
+      ["Not while something is rendering.", "Adobe blocks scripting during a render, so wait for it to finish."],
+      ["When there is no tool for something", "the assistant can still write Illustrator or After Effects scripting directly. That covers gradients, blends and unusual path work. It is slower and likelier to need a second attempt, so it is a fallback, not the usual route."],
+    ],
+  },
+
+  it: {
+    label: "Italiano",
+    back: "← Indietro",
+    title: "Cosa posso farci?",
+    lede: "Chiedi a Claude o ChatGPT con parole tue. Non devi mai nominare un comando — descrivi cosa vuoi nel documento che hai aperto, come lo diresti a un collega che ti guarda lavorare.",
+    topNote: ["Di’ quale app intendi, se potrebbe essere più di una.", "“Esporta un PNG” può valere per Illustrator o After Effects, e l’assistente te lo chiederà. Dirlo subito risparmia un passaggio."],
+    appsH2: "Le tue app",
+    imageH2: "Portare dentro un’immagine",
+    knowH2: "Da sapere",
+    sayLabel: "Prova a dire",
+    cannotLabel: "Non può",
+    copyLabel: "Copia questo prompt",
+    copied: "Copiato",
+    backToSetup: "← Torna alla configurazione",
+    apps: [
+      {
+        icon: "illustrator", name: "Illustrator",
+        blurb: "Il più completo dei quattro. Sa leggere il tuo documento e modificarlo.",
+        can: [
+          ["Legge", "cosa c’è su ogni tavola da disegno, cosa hai selezionato, livelli, campioni, font"],
+          ["Disegna", "rettangoli, ellissi, linee, testo, immagini inserite, tavole da disegno, livelli"],
+          ["Modifica", "colore, posizione, dimensione, rotazione, opacità, allineamento, distribuzione, gruppi, testo e font"],
+          ["Esporta", "PNG a qualsiasi scala, SVG, o salva una copia"],
+          ["Importa", "incolla quello che hai copiato, oppure scarica un’immagine da un link e la inserisce"],
+        ],
+        say: [
+          "Crea una tavola da disegno 1200x630 e centraci il logo",
+          "Tutto quello che è arancione su questa tavola, cambialo in #2855ff",
+          "Distribuisci queste sei icone a distanze uguali sulla tavola",
+          "Metti il titolo in Inter Semibold a 48pt e stringi la crenatura",
+          "Esporta questa tavola come PNG a 2x sulla scrivania",
+        ],
+        cannot: "<b>Elaborazione tracciati</b> (Pathfinder), <b>Scostamento tracciato</b>, <b>Espandi traccia</b>, tutto il <b>menu Effetto</b> (ombre, distorsioni, sfocature) e il <b>pannello Aspetto</b>. Adobe non dà alcun accesso da script a queste funzioni, quindi nessuno strumento basato su script può raggiungerle — il nostro compreso. L’assistente te lo dirà, invece di produrre qualcosa che sembra giusto e non lo è. Il Ricalco immagine invece funziona.",
+      },
+      {
+        icon: "aftereffects", name: "After Effects",
+        blurb: "Costruito intorno agli effetti, perché è quello a cui After Effects dà accesso via script. Legge gli effetti installati sul tuo computer, quindi Video Copilot, Red Giant e Boris FX funzionano come quelli di Adobe.",
+        can: [
+          ["Legge", "composizioni, livelli, e cosa è già applicato a un livello"],
+          ["Applica", "qualsiasi effetto installato, plugin di terze parti compresi"],
+          ["Regola", "imposta qualsiasi parametro di un effetto applicato"],
+          ["Anima", "mette fotogrammi chiave su un parametro o su una trasformazione, con easing"],
+          ["Preset", "applica un preset di animazione .ffx"],
+        ],
+        say: [
+          "Quali effetti ho installati che hanno glow nel nome?",
+          "Metti una sfocatura gaussiana sul livello del logo e portala da 40 a 0 nel primo secondo",
+          "Fai comparire in dissolvenza questo livello in 12 fotogrammi con un ease out",
+          "Cosa c’è già applicato al livello di sfondo?",
+        ],
+        cannot: "<b>Pennello Roto</b>, <b>Riempimento in base al contenuto</b> e il <b>tracciamento delle maschere</b>. Non può nemmeno leggere i pixel renderizzati, quindi non può dirti come viene una cosa — solo com’è impostata.",
+      },
+      {
+        icon: "photoshop", name: "Photoshop",
+        blurb: "Livelli, selezioni, maschere, regolazioni, esportazione — e Adobe Firefly.",
+        can: [
+          ["Livelli", "crea, duplica, raggruppa, rinomina, sposta, scala, ruota, riflette"],
+          ["Selezioni", "rettangolo, ellisse, poligono, soggetto, cielo; e le trasforma in maschera"],
+          ["Regolazioni", "luminosità e contrasto, bilanciamento colore, vividezza, bianco e nero"],
+          ["Stili", "ombra esterna, traccia, sfumatura"],
+          ["Genera", "crea un’immagine da una descrizione con Firefly, su un livello dedicato"],
+          ["Riempimento generativo", "descrivi cosa deve comparire dentro una selezione e lascia che si integri"],
+          ["Esporta", "PNG del documento o dei singoli livelli"],
+        ],
+        say: [
+          "Seleziona il soggetto, mascheralo e togli lo sfondo",
+          "Per ogni immagine che ho aperta, isola il soggetto su trasparenza ed esportala come PNG accanto all’originale",
+          "Genera uno sfondo da studio grigio tenue su un nuovo livello dietro al prodotto",
+          "Seleziona il cielo, poi riempilo con un cielo coperto al tramonto",
+        ],
+      },
+      {
+        icon: "premiere", name: "Premiere Pro",
+        blurb: "Progetti, raccoglitori, sequenze e le basi del montaggio.",
+        can: [
+          ["Progetto", "crea, apri, salva, importa media, organizza in raccoglitori"],
+          ["Sequenze", "creane una dalle clip, aggiungi marcatori, chiudi i vuoti"],
+          ["Clip", "imposta punti di attacco e stacco, disattiva, cambia posizione e scala"],
+          ["Effetti", "sfocatura gaussiana, sfocatura movimento, tinta, bianco e nero, transizioni"],
+          ["Esporta", "un fotogramma, o la sequenza intera"],
+        ],
+        say: [
+          "Importa tutto quello che c’è in questa cartella e mettilo in un raccoglitore chiamato Girato",
+          "Crea una sequenza con queste clip in ordine e chiudi i vuoti",
+          "Metti una dissolvenza incrociata fra tutte le clip",
+        ],
+      },
+    ],
+    image: {
+      name: "Da una chat, da un link, o da Photoshop",
+      blurb: "Illustrator non genera immagini, ma può riceverne una in tre modi. Usa quello che corrisponde a dov’è già l’immagine.",
+      can: [
+        ["Copiata", "copia l’immagine da dove vuoi — una chat, il browser, un’altra app — poi chiedi a Illustrator di incollarla"],
+        ["Un link", "dai l’indirizzo a Illustrator: scarica il file accanto al tuo documento e lo inserisce"],
+        ["Photoshop", "generala con Firefly, salva un PNG, e inserisci quello"],
+      ],
+      say: [
+        "Incolla quello che ho appena copiato sulla tavola da disegno e portalo a 400px di larghezza",
+        "Scarica questa immagine e inseriscila nella tavola, salvandola in una cartella assets accanto al mio file",
+        "Inserisci il PNG che ho appena salvato e centralo sulla tavola",
+      ],
+      cannotLabel: "Dove finiscono i file",
+      cannot: "Un’immagine scaricata viene salvata accanto al documento aperto, o in una sottocartella che indichi tu. Se il documento non è mai stato salvato finisce in Download. Non sovrascrive mai un file che hai già.",
+    },
+    know: [
+      ["Lavora sul documento che hai aperto.", "Non c’è nessuna copia separata e non viene caricato niente. Le modifiche arrivano nel file che hai davanti."],
+      ["Puoi annullare.", "Tutto quello che l’assistente cambia in After Effects sta in un unico annulla. Negli altri, annulla funziona come sempre."],
+      ["Può lavorare su più file aperti.", "Photoshop sa elencare quello che hai aperto e passare da un documento all’altro, quindi “fallo su tutti” funziona. Procede un documento alla volta, quindi dieci file richiedono circa dieci volte il tempo di uno — meglio provare con un paio prima di lanciarlo su una cartella intera."],
+      ["Non mentre è in corso un rendering.", "Adobe blocca gli script durante il rendering, quindi aspetta che finisca."],
+      ["Quando per una cosa non c’è uno strumento", "l’assistente può comunque scrivere direttamente script per Illustrator o After Effects. Copre sfumature, fusioni e tracciati insoliti. È più lento e più facile che serva un secondo tentativo, quindi è un ripiego, non la via normale."],
+    ],
+  },
+};
+
+const COPY_ICON =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"'
+  + ' stroke-linecap="round" stroke-linejoin="round">'
+  + '<rect x="5.5" y="5.5" width="8" height="8" rx="1.8"/>'
+  + '<path d="M10.5 3.2A1.7 1.7 0 0 0 8.8 2H4a2 2 0 0 0-2 2v4.8c0 .8.5 1.4 1.2 1.6"/></svg>';
+const TICK_ICON =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"'
+  + ' stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3.2L13 5"/></svg>';
+const CHEVRON =
+  '<svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"'
+  + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>';
+
+const said = document.getElementById("said");
+
+function esc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function promptRow(text, t) {
+  const row = document.createElement("div");
+  row.className = "row";
+
+  const q = document.createElement("q");
+  q.textContent = text;
+  row.appendChild(q);
+
+  const btn = document.createElement("button");
+  btn.className = "copy";
+  btn.type = "button";
+  btn.innerHTML = COPY_ICON;
+  btn.title = t.copyLabel;
+  btn.setAttribute("aria-label", t.copyLabel);
+  btn.onclick = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Not every context grants the clipboard API; the old way still works.
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } catch {}
+      ta.remove();
+    }
+    btn.innerHTML = TICK_ICON;
+    btn.classList.add("done");
+    said.textContent = t.copied;
+    setTimeout(() => {
+      btn.innerHTML = COPY_ICON;
+      btn.classList.remove("done");
+    }, 1400);
+  };
+  row.appendChild(btn);
+  return row;
+}
+
+function cardEl(c, t) {
+  const card = document.createElement("details");
+  card.className = "card";
+
+  const summary = document.createElement("summary");
+  if (c.icon) {
+    const img = document.createElement("img");
+    img.src = "/api/icon/" + c.icon;
+    img.alt = "";
+    img.onerror = () => img.remove();
+    summary.appendChild(img);
+  }
+  const name = document.createElement("span");
+  name.className = "name";
+  name.textContent = c.name;
+  summary.appendChild(name);
+  summary.insertAdjacentHTML("beforeend", CHEVRON);
+  card.appendChild(summary);
+
+  const body = document.createElement("div");
+  body.className = "body";
+
+  if (c.blurb) {
+    const p = document.createElement("p");
+    p.textContent = c.blurb;
+    body.appendChild(p);
+  }
+
+  const ul = document.createElement("ul");
+  ul.className = "can";
+  for (const [bold, rest] of c.can) {
+    const li = document.createElement("li");
+    li.innerHTML = "<b>" + esc(bold) + "</b> — " + esc(rest);
+    ul.appendChild(li);
+  }
+  body.appendChild(ul);
+
+  const say = document.createElement("div");
+  say.className = "say";
+  say.innerHTML = '<div class="label">' + esc(t.sayLabel) + "</div>";
+  for (const s of c.say) say.appendChild(promptRow(s, t));
+  body.appendChild(say);
+
+  if (c.cannot) {
+    const nope = document.createElement("div");
+    nope.className = "nope";
+    nope.innerHTML =
+      '<div class="label">' + esc(c.cannotLabel || t.cannotLabel) + "</div><p>" + c.cannot + "</p>";
+    body.appendChild(nope);
+  }
+
+  card.appendChild(body);
+  return card;
+}
+
+function noteEl([bold, rest]) {
+  const d = document.createElement("div");
+  d.className = "note";
+  d.innerHTML = "<b>" + esc(bold) + "</b> " + esc(rest);
+  return d;
+}
+
+function render(lang) {
+  const t = CONTENT[lang];
+  document.documentElement.lang = lang;
+  document.title = t.title;
+  document.getElementById("back").textContent = t.back;
+
+  const langs = document.getElementById("langs");
+  langs.replaceChildren();
+  for (const key of Object.keys(CONTENT)) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = CONTENT[key].label;
+    b.setAttribute("aria-pressed", String(key === lang));
+    b.onclick = () => {
+      // Remembered, because the system language is not always the language
+      // someone wants to read a manual in.
+      try { localStorage.setItem("amcp-help-lang", key); } catch {}
+      render(key);
+    };
+    langs.appendChild(b);
+  }
+
+  const page = document.createElement("div");
+
+  const h1 = document.createElement("h1");
+  h1.textContent = t.title;
+  page.appendChild(h1);
+
+  const lede = document.createElement("p");
+  lede.className = "lede";
+  lede.textContent = t.lede;
+  page.appendChild(lede);
+
+  page.appendChild(noteEl(t.topNote));
+
+  const heading = (text) => {
+    const h = document.createElement("h2");
+    h.textContent = text;
+    page.appendChild(h);
+  };
+
+  // All closed: the point of the accordion is that you open the one app you
+  // came for instead of scrolling past three you did not.
+  heading(t.appsH2);
+  for (const a of t.apps) page.appendChild(cardEl(a, t));
+
+  heading(t.imageH2);
+  page.appendChild(cardEl(t.image, t));
+
+  heading(t.knowH2);
+  for (const n of t.know) page.appendChild(noteEl(n));
+
+  const foot = document.createElement("footer");
+  const a = document.createElement("a");
+  a.href = "/";
+  a.textContent = t.backToSetup;
+  foot.appendChild(a);
+  page.appendChild(foot);
+
+  document.getElementById("page").replaceChildren(page);
+}
+
+let stored = null;
+try { stored = localStorage.getItem("amcp-help-lang"); } catch {}
+const fromUrl = new URLSearchParams(location.search).get("lang");
+const auto = (navigator.language || "en").toLowerCase().startsWith("it") ? "it" : "en";
+render(CONTENT[fromUrl] ? fromUrl : (CONTENT[stored] ? stored : auto));
+</script>
 </body>
 </html>
