@@ -69,7 +69,15 @@
     "[data-amcp='light']{--a-bg:#ebebee;--a-line:#c2c2ca;--a-ink:#1d1d20;--a-soft:#55555f;",
     "  --a-accent:#2855ff;--a-warn:#8a5d00;--a-ok:#1f7a44;--a-err:#c0392b}",
 
-    ".amcp{font-size:12px;color:var(--a-ink)}",
+    // The upstream panel is content-height, so a tall panel left dead space
+    // below everything. Make the chain full height and let the open sheet take
+    // what is left. .container is already a flex column with two visible
+    // children, so this only changes how the spare height is handed out.
+    "html,body{height:100%}",
+    "body{padding:10px}",
+    ".container{height:100%;min-height:0}",
+    ".amcp{font-size:12px;color:var(--a-ink);display:flex;flex-direction:column;",
+    "  flex:1 1 auto;min-height:0}",
     ".amcp button{font:inherit;font-size:12px;font-weight:600;padding:9px 10px;",
     "  border-radius:6px;border:1px solid var(--a-line);background:var(--a-bg);",
     "  color:var(--a-ink);cursor:pointer;transition:.12s}",
@@ -109,6 +117,8 @@
     ".amcp-sheet{margin:8px 0 0;padding:9px 10px;border:1px solid var(--a-line);",
     "  border-radius:6px;background:var(--a-bg);font-size:11px;line-height:1.5;color:var(--a-ink)}",
     ".amcp-sheet[hidden]{display:none}",
+    ".amcp-sheet.grow:not([hidden]){display:flex;flex-direction:column;",
+    "  flex:1 1 auto;min-height:0}",
     ".amcp-sheet h4{margin:0 0 5px;font-size:11px;font-weight:700}",
     ".amcp-sheet-head{display:flex;align-items:baseline;gap:8px}",
     ".amcp-sheet-head h4{flex:1}",
@@ -119,9 +129,9 @@
     ".amcp-sheet li{margin:3px 0}",
     ".amcp-sheet .ex{color:var(--a-soft);font-style:italic}",
     ".amcp-sheet .warn{color:var(--a-warn)}",
-    ".amcp-log{max-height:150px;overflow:auto;font:10px/1.5 ui-monospace,Menlo,monospace;",
-    "  color:var(--a-soft);background:var(--a-bg);border:1px solid var(--a-line);",
-    "  border-radius:6px;padding:6px 8px;white-space:pre-wrap;word-break:break-word}",
+    ".amcp-log{flex:1 1 auto;min-height:60px;overflow:auto;",
+    "  font:10px/1.5 ui-monospace,Menlo,monospace;color:var(--a-soft);",
+    "  white-space:pre-wrap;word-break:break-word}",
     ".amcp-log .err{color:var(--a-err)}",
     ".amcp-sheet .menuitem{display:block;width:100%;text-align:left;margin:3px 0;",
     "  background:transparent;border-color:transparent;font-weight:500}",
@@ -273,6 +283,7 @@
   var moreSheet = sheet();
 
   var logSheet = sheet();
+  logSheet.className += " grow";   // the one sheet worth giving spare height to
 
   /* -------------------------------------------------------------- footer -- */
 
