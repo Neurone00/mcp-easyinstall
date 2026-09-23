@@ -65,9 +65,9 @@
     // prefersDark:false while the panel behind this was rgb(42,42,42), so the
     // OS query produced light text boxes on a dark panel.
     "[data-amcp='dark']{--a-bg:#3a3a42;--a-line:#55555f;--a-ink:#ededf0;--a-soft:#a8a8b2;",
-    "  --a-accent:#2855ff;--a-warn:#e8b45a;--a-ok:#4ade80}",
+    "  --a-accent:#2855ff;--a-warn:#e8b45a;--a-ok:#4ade80;--a-err:#ff7a7a}",
     "[data-amcp='light']{--a-bg:#ebebee;--a-line:#c2c2ca;--a-ink:#1d1d20;--a-soft:#55555f;",
-    "  --a-accent:#2855ff;--a-warn:#8a5d00;--a-ok:#1f7a44}",
+    "  --a-accent:#2855ff;--a-warn:#8a5d00;--a-ok:#1f7a44;--a-err:#c0392b}",
 
     ".amcp{font-size:12px;color:var(--a-ink)}",
     ".amcp button{font:inherit;font-size:12px;font-weight:600;padding:9px 10px;",
@@ -77,7 +77,11 @@
     ".amcp button:focus-visible{outline:2px solid var(--a-accent);outline-offset:2px}",
     ".amcp button:disabled{opacity:.55;cursor:default}",
     ".amcp-row{display:flex;gap:6px;margin:0 0 8px}",
-    ".amcp-row button{flex:1}",
+    ".amcp-row button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px}",
+    ".amcp-row button img,.amcp-row button svg{width:15px;height:15px;flex:none}",
+    // A disabled assistant's icon should read as off too, not sit there in
+    // full colour above a greyed label.
+    ".amcp-row button:disabled img{filter:grayscale(1)}",
     ".amcp-row button.icon{flex:0 0 36px;padding:9px 0;font-size:13px}",
 
     // Last activity: the strongest signal that any of this is actually working.
@@ -96,8 +100,10 @@
     ".amcp-foot button:hover{color:var(--a-ink);background:var(--a-bg)}",
     ".amcp-foot .sp{flex:1}",
     ".amcp-appicon{width:22px;height:22px;border-radius:5px;flex:none;margin-right:2px}",
-    ".amcp-badge{display:inline-block;min-width:15px;padding:0 4px;margin-left:5px;",
-    "  border-radius:8px;background:var(--a-warn);color:#1d1d20;font-size:10px;",
+    ".amcp-badge[hidden]{display:none}",
+    ".amcp-badge.err{background:var(--a-err);color:#fff}",
+    ".amcp-badge{display:inline-block;min-width:13px;padding:0 4px;margin-left:5px;",
+    "  border-radius:7px;background:var(--a-line);color:var(--a-ink);font-size:9px;",
     "  font-weight:700;text-align:center}",
 
     ".amcp-sheet{margin:8px 0 0;padding:9px 10px;border:1px solid var(--a-line);",
@@ -108,6 +114,10 @@
     ".amcp-sheet li{margin:3px 0}",
     ".amcp-sheet .ex{color:var(--a-soft);font-style:italic}",
     ".amcp-sheet .warn{color:var(--a-warn)}",
+    ".amcp-log{max-height:150px;overflow:auto;font:10px/1.5 ui-monospace,Menlo,monospace;",
+    "  color:var(--a-soft);background:var(--a-bg);border:1px solid var(--a-line);",
+    "  border-radius:6px;padding:6px 8px;white-space:pre-wrap;word-break:break-word}",
+    ".amcp-log .err{color:var(--a-err)}",
     ".amcp-sheet .menuitem{display:block;width:100%;text-align:left;margin:3px 0;",
     "  background:transparent;border-color:transparent;font-weight:500}",
     ".amcp-sheet .menuitem:hover{background:var(--a-line)}",
@@ -156,13 +166,24 @@
 
   // Two ways to do the same thing, so they look and read the same. Styling one
   // as the primary action said "use Claude", which is not ours to say.
+  // Each assistant's own icon, copied in beside the panel by the hub. If it
+  // isn't there the button is just a label, which is what it was before.
+  function withIcon(btn, file, label) {
+    var img = document.createElement("img");
+    img.src = file;
+    img.alt = "";
+    img.onerror = function () { img.remove(); };
+    btn.appendChild(img);
+    btn.appendChild(document.createTextNode(label));
+  }
+
   var claude = document.createElement("button");
-  claude.textContent = "Ask Claude";
+  withIcon(claude, "claude.png", "Ask Claude");
   claude.title = "Open the Claude desktop app, which can drive " + APP;
   claude.onclick = function () { if (!openApp("Claude")) openUrl("https://claude.ai/new"); };
 
   var gpt = document.createElement("button");
-  gpt.textContent = "Ask ChatGPT";
+  withIcon(gpt, "chatgpt.png", "Ask ChatGPT");
   gpt.title = "Open the ChatGPT desktop app, which can drive " + APP;
   gpt.onclick = function () { if (!openApp("ChatGPT")) openUrl("https://chatgpt.com/"); };
 
@@ -174,7 +195,13 @@
   var arrangeRow = document.createElement("div");
   arrangeRow.className = "amcp-row";
   var arrange = document.createElement("button");
-  arrange.textContent = "Arrange windows";
+  // The layout it produces, drawn: a wide pane and a narrow one. No icon set
+  // ships a picture of this, and it says more than a generic window glyph.
+  arrange.innerHTML =
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">' +
+    '<rect x="1" y="2.5" width="9" height="11" rx="1.5"/>' +
+    '<rect x="11.5" y="2.5" width="3.5" height="11" rx="1.2"/></svg>';
+  arrange.appendChild(document.createTextNode("Arrange windows"));
   arrange.title = APP + " on the left, Claude and ChatGPT on the right";
   arrange.onclick = function () {
     arrange.disabled = true;
@@ -289,7 +316,7 @@
     [helpSheet, logSheet, moreSheet].forEach(function (s) {
       s.hidden = (s !== which) ? true : !s.hidden;
     });
-    if (!logSheet.hidden) { errorCount = 0; paintBadge(); }
+    if (!logSheet.hidden) { unread = 0; unreadErr = false; paintBadge(); }
   }
   helpBtn.onclick = function () { toggle(helpSheet); };
   logBtn.onclick = function () { toggle(logSheet); };
@@ -328,10 +355,16 @@
   }));
   moreSheet.appendChild(menuItem("Open the control panel in a browser", function () { openUrl(HUB); }));
   moreSheet.appendChild(menuItem("Copy log to clipboard", function () {
-    var t = $("messageLog");
-    if (!t) return;
-    t.select();
+    // Copies what you can see. It used to select the upstream <textarea>,
+    // which is now display:none — and you cannot select inside that.
+    var scratch = document.createElement("textarea");
+    scratch.value = logView.innerText;
+    scratch.style.position = "fixed";
+    scratch.style.opacity = "0";
+    document.body.appendChild(scratch);
+    scratch.select();
     try { document.execCommand("copy"); } catch (e) {}
+    scratch.remove();
     flash("Log copied");
   }));
   moreSheet.appendChild(autoLabel);
@@ -340,15 +373,30 @@
 
   // The log stays — it is genuinely useful when something is wrong — but it
   // lives behind a button and only asks for attention when it has errors.
-  var errorCount = 0;
+  var unread = 0, unreadErr = false;
   var badge = document.createElement("span");
   badge.className = "amcp-badge";
   badge.hidden = true;
   logBtn.appendChild(badge);
 
   function paintBadge() {
-    badge.hidden = errorCount === 0;
-    badge.textContent = errorCount > 9 ? "9+" : String(errorCount);
+    badge.hidden = unread === 0;
+    badge.textContent = unread > 9 ? "9+" : String(unread);
+    badge.className = "amcp-badge" + (unreadErr ? " err" : "");
+  }
+
+  function isError(line) { return /error|fail|refused|timed out/i.test(line); }
+
+  var logView = document.createElement("div");
+  logView.className = "amcp-log";
+  logView.setAttribute("aria-label", "Connection messages");
+
+  function addLogLine(line) {
+    var row = document.createElement("div");
+    if (isError(line)) row.className = "err";
+    row.textContent = line;
+    logView.appendChild(row);
+    logView.scrollTop = logView.scrollHeight;
   }
 
   if (logSection) {
@@ -356,12 +404,16 @@
     logSection.querySelectorAll("label").forEach
       ? logSection.querySelectorAll("label").forEach(function (l) { l.style.display = "none"; })
       : null;
+    // The upstream textarea stays in the DOM but out of sight: it is still what
+    // main.js writes to, and what "Copy log to clipboard" selects.
+    logSection.style.display = "none";
     logSheet.appendChild(logSection);
+    logSheet.appendChild(logView);
     var ta = $("messageLog");
     if (ta) {
-      ta.setAttribute("aria-label", "Connection messages");
-      ta.style.width = "100%";
-      ta.style.height = "120px";
+      String(ta.value || "").split("\n").forEach(function (l) {
+        if (l.trim()) addLogLine(l);
+      });
     }
   }
 
@@ -393,14 +445,18 @@
   }
 
   function onLogLine(line) {
+    addLogLine(line);
+    // The pill counts everything, so it reads as "there is new log", and turns
+    // red only when some of it went wrong.
+    if (logSheet.hidden) {
+      unread++;
+      if (isError(line)) unreadErr = true;
+      paintBadge();
+    }
     var m = line.match(/Received command:\s*(\w+)/);
     if (m) return flash("<b>" + m[1] + "</b> — just now");
     if (/Response sent/.test(line)) return;
-    if (/error/i.test(line)) {
-      errorCount++;
-      paintBadge();
-      flash("Connection trouble — see Log", "warn");
-    }
+    if (isError(line)) flash("Connection trouble — see Log", "warn");
   }
 
   /* --------------------------------------------- requests to the hub -- */
@@ -497,3 +553,36 @@
     d.style.display = "none";
   });
 })();
+
+/* ------------------------------------------------------ compact document -- */
+
+// Every response used to carry a full document dump — 47% of the payload, on
+// each turn, for a state the model already had. build.sh rewrites main.js to
+// call this instead of getActiveDocumentInfo directly, so it has to be global:
+// deliberately OUTSIDE the IIFE above.
+//
+// If you remove this, remove the sed in build.sh with it. It was dropped once
+// and left main.js calling a function that no longer existed, which broke
+// getActiveDocumentInfo in every CEP panel; build.sh now refuses to build
+// without it.
+async function mcpCompactDocument(getInfo) {
+  try {
+    let d = await getInfo();
+    if (d && d.content && d.content[0] && typeof d.content[0].text === "string") {
+      d = JSON.parse(d.content[0].text);
+    } else if (typeof d === "string") {
+      d = JSON.parse(d);
+    }
+    if (!d || typeof d !== "object") return null;
+    return {
+      name: d.name,
+      width: d.width,
+      height: d.height,
+      artboards: d.numArtboards,
+      layers: d.numLayers,
+      saved: d.saved,
+    };
+  } catch (e) {
+    return null;
+  }
+}

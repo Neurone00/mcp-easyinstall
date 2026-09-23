@@ -74,6 +74,13 @@ fi
 # Inject our "Ask Claude / ChatGPT" row into the CEP panels. Done by appending a
 # script tag rather than editing their markup, so an engine update can't break it.
 say "Adding the Ask buttons to the panels"
+# The sed below points main.js at a function panel-addon.js defines. When that
+# definition was once deleted, the build still succeeded and every CEP panel
+# failed at run time with "mcpCompactDocument is not defined". Fail here instead.
+grep -q "function mcpCompactDocument" "$HERE/panel-addon.js" || {
+  echo "panel-addon.js no longer defines mcpCompactDocument, which main.js is patched to call."
+  exit 1
+}
 for panel in "$HERE"/engine/cep/*/; do
   cp "$HERE/panel-addon.js" "$panel/panel-addon.js"
   # Shrink the state blob attached to every response (see panel-addon.js).

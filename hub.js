@@ -309,14 +309,12 @@ async function connectPanel(key) {
 // shells out and /api/status is polled constantly.
 const ICON_DIR = path.join(SUPPORT, "icons");
 
-function appIconPath(key) {
-    const a = APPS[key];
-    if (!a) return null;
-    const dest = path.join(ICON_DIR, `${key}.png`);
+// Any .app, not just the Adobe ones: the panel puts Claude's and ChatGPT's own
+// icons on its two Ask buttons.
+function iconFor(name, bundle) {
+    const dest = path.join(ICON_DIR, `${name}.png`);
     if (fs.existsSync(dest)) return dest;
-
-    const bundle = appBundle(a.appGlob);
-    if (!bundle) return null;
+    if (!bundle || !fs.existsSync(bundle)) return null;
     try {
         let name = execFileSync("/usr/libexec/PlistBuddy",
             ["-c", "Print CFBundleIconFile", path.join(bundle, "Contents", "Info.plist")],
@@ -333,6 +331,13 @@ function appIconPath(key) {
         return null;
     }
 }
+
+function appIconPath(key) {
+    return APPS[key] ? iconFor(key, appBundle(APPS[key].appGlob)) : null;
+}
+
+// The two assistants, by the name of their bundle in /Applications.
+const ASSISTANT_ICONS = { claude: "Claude", chatgpt: "ChatGPT" };
 
 /* ------------------------------------------------------------ json helper -- */
 
@@ -585,10 +590,14 @@ function installPanel(key) {
     const dest = path.join(CEP_DIR, a.cep);
     fs.cpSync(src, dest, { recursive: true, force: true });
 
-    // The panel shows the host app's own icon; a CEP panel can only load files
-    // sitting next to it, so put a copy there.
+    // A CEP panel can only load files sitting next to it, so the icons it shows
+    // — the host app's, and the two assistants' — are copied in beside it.
     const icon = appIconPath(key);
     if (icon) fs.copyFileSync(icon, path.join(dest, "appicon.png"));
+    for (const [name, app] of Object.entries(ASSISTANT_ICONS)) {
+        const f = iconFor(name, path.join("/Applications", app + ".app"));
+        if (f) fs.copyFileSync(f, path.join(dest, name + ".png"));
+    }
 
     // Adobe refuses to load unsigned panels unless debug mode is on.
     for (const v of ["10", "11", "12", "13"]) {
