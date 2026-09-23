@@ -793,14 +793,62 @@ function removeRetired(id) {
     }
 }
 
+// Which assistants the user actually wants wired up.
+//
+// Needed to tell "Claude Desktop threw our servers away" apart from "the user
+// pressed Disconnect". Without it, restoring what went missing would also undo
+// every deliberate disconnect.
+const WANTED = path.join(SUPPORT, "connected-clients.json");
+
+function wantedClients() {
+    try {
+        const v = readJSON(WANTED, []);
+        return Array.isArray(v) ? v : [];
+    } catch {
+        return [];
+    }
+}
+
+function rememberClient(id, on) {
+    const set = new Set(wantedClients());
+    on ? set.add(id) : set.delete(id);
+    try {
+        fs.mkdirSync(SUPPORT, { recursive: true });
+        writeJSON(WANTED, [...set]);
+    } catch (e) {
+        console.log(`\u26a0 couldn't record the assistant list: ${e.message}`);
+    }
+}
+
 function repairClientPaths() {
     const want = serverDef(Object.keys(APPS)[0]);
     if (!want) return;
     for (const id of Object.keys(CLIENTS)) {
-        // Claude Desktop would overwrite us while it is open — leave it alone.
-        if (id === "claude-desktop" && claudeRunning()) continue;
-        if (removeRetired(id)) console.log(`✓ removed retired servers from ${CLIENTS[id].label}`);
+        // This used to skip Claude Desktop entirely whenever Claude was
+        // running, because Claude Desktop rewrites that file itself. But
+        // someone using Claude has it running essentially always, so the skip
+        // was permanent: a retired server sat in that config for weeks, and
+        // when Claude dropped our four servers nothing ever put them back.
+        // We only write when something is actually wrong, so there is nothing
+        // to churn when everything is fine — and if Claude clobbers it again,
+        // we restore within the next pass.
+        if (removeRetired(id)) console.log(`\u2713 removed retired servers from ${CLIENTS[id].label}`);
+
         const connected = connectedApps(id);
+        // Restoring only makes sense for an assistant the user connected; a
+        // deliberate Disconnect has to stick.
+        const missing = wantedClients().includes(id)
+            ? registerableApps().filter((k) => !connected.includes(k))
+            : [];
+        if (missing.length) {
+            try {
+                connectClient(id, [...new Set([...connected, ...missing])]);
+                console.log(`\u2713 put ${missing.join(", ")} back into ${CLIENTS[id].label}`);
+            } catch (e) {
+                console.log(`\u26a0 could not restore ${CLIENTS[id].label}: ${e.message}`);
+            }
+            continue;
+        }
         if (!connected.length) continue;
         // This runs on a 30s timer: anything thrown here is an uncaught
         // exception that kills the hub, so the read is inside the try too.
@@ -1288,6 +1336,7 @@ app.post("/api/client/:id", (req, res) => {
         if (!keys.length) throw new Error("No Adobe apps found in /Applications, so there's nothing to connect.");
         if (!serverDef(keys[0])) throw new Error("Engine or uv not found — run Setup first.");
         connectClient(req.params.id, keys);
+        rememberClient(req.params.id, true);
         res.json({ ok: true, connected: keys });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1298,6 +1347,7 @@ app.delete("/api/client/:id", (req, res) => {
     if (!CLIENTS[req.params.id]) return res.status(404).json({ error: "Unknown assistant." });
     try {
         disconnectClient(req.params.id);
+        rememberClient(req.params.id, false);   // and do not put it back
         res.json({ ok: true });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -1712,6 +1762,7 @@ app.post("/api/setup", async (_req, res) => {
             if (!has && id !== "claude-code") continue;
             try {
                 connectClient(id, keys);
+                rememberClient(id, true);
                 wired.push(CLIENTS[id].label);
             } catch (e) {
                 failed.push(`${CLIENTS[id].label} (${e.message})`);
