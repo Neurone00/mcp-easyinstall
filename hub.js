@@ -629,8 +629,12 @@ const debugModeOn = memo(() => {
 //          so an unpinned install now fails on `from mcp.server.fastmcp
 //          import FastMCP` — which broke every new install the day 2.0
 //          shipped, while existing venvs carried on working.
+// numpy is ps-mcp.py's alone, and was missing: the Photoshop server could
+// never import, so it has never started for anyone. Found by probing each
+// server's initialize response rather than by anyone reporting it, because
+// Photoshop also needs the UXP step, so nobody had got that far.
 const PY_DEPS = ["fonttools", "python-socketio", "mcp[cli]<2", "requests",
-                 "websocket-client", "pillow"];
+                 "websocket-client", "pillow", "numpy"];
 let venvReady = false;        // proven by venvWorks(), never assumed
 let venvBuilding = false;
 let venvError = null;
@@ -642,7 +646,7 @@ function venvWorks() {
     const py = path.join(VENV, "bin", "python");
     if (!fs.existsSync(py) || !fs.existsSync(path.join(VENV, "bin", "mcp"))) return false;
     try {
-        execFileSync(py, ["-c", "import mcp, socketio, requests, PIL, fontTools, websocket"],
+        execFileSync(py, ["-c", "import mcp, socketio, requests, PIL, fontTools, websocket, numpy"],
             { timeout: 30000, stdio: "ignore" });
         return true;
     } catch {
@@ -693,7 +697,13 @@ function ensureVenv(done = () => {}) {
         return line ? line.replace(/^(error|cause):\s*/i, "") : "see the log for details";
     };
 
-    execFile(uv, ["venv", VENV], { timeout: 300000 }, (e1) => {
+    // --allow-existing: without it `uv venv` refuses outright when the folder
+    // is already there, so an environment that exists but is missing a package
+    // could never be repaired — every launch failed with "a virtual
+    // environment already exists" and venvReady stayed false forever. That is
+    // the state every user upgrading to a build with a new dependency would
+    // have landed in.
+    execFile(uv, ["venv", "--allow-existing", VENV], { timeout: 300000 }, (e1) => {
         if (e1) return finish(new Error("Couldn't create the Python environment — " + why(e1)));
         execFile(uv, ["pip", "install", "--python", path.join(VENV, "bin", "python"), ...PY_DEPS],
             { timeout: 600000 }, (e2) => {

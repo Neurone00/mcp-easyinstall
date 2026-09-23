@@ -101,10 +101,11 @@ done
 # Additive and marker-guarded, like the panel injection above, so re-running the
 # build or updating the engine cannot duplicate or clobber them.
 say "Adding Illustrator tools and instructions to the engine"
-add_engine() {   # $1 = server file, $2 = addon file
+add_engine() {   # $1 = server file, $2 = addon file, $3 = marker to test for
   local target="$HERE/engine/mcp/$1"
+  local marker="${3:-Adobe MCP additions}"
   [ -f "$target" ] || { echo "Missing engine server: $1"; exit 1; }
-  if ! grep -q "Adobe MCP additions" "$target"; then
+  if ! grep -q "$marker" "$target"; then
     printf '\n' >> "$target"
     cat "$HERE/$2" >> "$target"
   fi
@@ -142,6 +143,12 @@ done
 
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
+# Every server, not just the two we extended: the app the model should be using
+# is a question for Photoshop and Premiere too. Its own marker, or the check
+# above would see the Illustrator addon's and skip it.
+for s in ai ae ps pr; do
+  add_engine "$s-mcp.py" engine-addon-common.py "Adobe MCP shared additions"
+done
 
 # Route the raw-script tool's result through our error check too, so a thrown
 # script fails instead of returning a SUCCESS with an error object inside.
