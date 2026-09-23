@@ -120,25 +120,34 @@
     // those elements, and the Connect button's label is updated by name.
     var more = el("div", "display:none;margin:2px 0 0");
 
-    var moreBtn = action("More", function () {
+    // Links, not buttons: these are ways to somewhere else, not things to do to
+    // the document, and a third full-width button read as a third main action.
+    function link(label, onClick) {
+        var a = el("span",
+            "font-size:11px;opacity:.65;text-decoration:underline;cursor:pointer", label);
+        a.addEventListener("click", onClick);
+        return a;
+    }
+
+    var moreLink = link("More", function () {
         var open = more.style.display !== "none";
         more.style.display = open ? "none" : "block";
-        moreBtn.textContent = open ? "More" : "Close";
+        moreLink.textContent = open ? "More" : "Less";
     });
 
-    var bottomRow = el("div", ROW);
-    bottomRow.appendChild(action("Settings", function () {
+    var links = el("div", "display:flex;gap:12px;margin:10px 0 0");
+    links.appendChild(link("Settings", function () {
         bindSocketOnce();
         hubRequest({ type: "open_panel" }, function (r) {
             say(r && r.ok ? "" : "Open Moskito Easy MCP from the menu bar.");
         });
     }));
-    bottomRow.appendChild(moreBtn);
+    links.appendChild(moreLink);
 
     ui.appendChild(askRow);
     ui.appendChild(arrangeRow);
-    ui.appendChild(bottomRow);
     ui.appendChild(status);
+    ui.appendChild(links);
     ui.appendChild(more);
 
     if (document.body.firstChild) {
