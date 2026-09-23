@@ -163,6 +163,7 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
 #wizard .wz-body { padding: 16px 20px 4px; font-size: 15px; line-height: 1.5; }
 #wizard .wz-body b { font-weight: 640; }
 #wizard .wz-sub { margin-top: 8px; font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+#wizard .wz-act { margin-top: 12px; }
 #wizard .wz-foot { display: flex; gap: 8px; align-items: center; padding: 16px 20px 18px; }
 #wizard .wz-foot .sp { flex: 1; }
 
@@ -281,6 +282,8 @@ function wizard(a, steps) {
         <div class="wz-body">
           <div>${st.text}</div>
           ${st.sub ? `<div class="wz-sub">${st.sub}</div>` : ""}
+          ${st.action ? `<button class="suggest wz-act" type="button"
+                 data-wz="act" data-path="${st.action.path}">${st.action.label}</button>` : ""}
         </div>
         <div class="wz-foot">
           <button class="quiet" type="button" data-wz="back" ${i ? "" : "disabled"}>Back</button>
@@ -295,6 +298,13 @@ function wizard(a, steps) {
   wizEl.onclick = (e) => {
     const b = e.target.closest("[data-wz]");
     if (!b) return;
+    if (b.dataset.wz === "act") {
+      b.disabled = true;
+      api("POST", b.dataset.path)
+        .catch((err) => toast(err.message))
+        .finally(() => { b.disabled = false; });
+      return;
+    }
     if (b.dataset.wz === "back") { i--; draw(); return; }
     if (i < steps.length - 1) { i++; draw(); return; }
     wizEl.close();
@@ -541,17 +551,29 @@ document.addEventListener("click", async (e) => {
       toast("Connected \u2014 and set to connect by itself from now on.");
     } else if (b.dataset.uxp) {
       const a = state.apps.find((x) => x.key === b.dataset.uxp);
-      await api("POST", "/api/uxp/" + b.dataset.uxp);
-      wizard(a, [
-        { text: "In the <b>UXP Developer Tool</b> window, find the row <b>Moskito Easy MCP</b>.",
-          sub: "Opening now. Check the Dock if it isn't in front.",
-          ok: "Found it" },
+      const r = await api("POST", "/api/uxp/" + b.dataset.uxp);
+      // Without the Developer Tool there is no window to look in, so saying
+      // "find the row" first sent people hunting for something that could not
+      // be there. Ask them to install it, and only then start the steps.
+      const steps = r.udtMissing
+        ? [{ text: "Adobe's free <b>UXP Developer Tool</b> isn't installed. "
+                 + `It is what loads the panel into ${a.label}.`,
+             sub: "It comes from Creative Cloud, under All apps. Opening both for you.",
+             action: { label: "Open Creative Cloud and Adobe's instructions", path: "/api/uxp-help" },
+             ok: "I've installed it" },
+           { text: "Open the <b>UXP Developer Tool</b> and find the row <b>Moskito Easy MCP</b>.",
+             action: { label: "Open it for me", path: "/api/uxp/" + a.key },
+             ok: "Found it" }]
+        : [{ text: "In the <b>UXP Developer Tool</b> window, find the row <b>Moskito Easy MCP</b>.",
+             sub: "Opening now. Check the Dock if it isn't in front.",
+             ok: "Found it" }];
+      wizard(a, steps.concat([
         { text: "Click <b>Load</b> at the end of that row.",
           sub: "Its status changes to Loaded.",
           ok: "Done" },
         { text: `In ${a.label}, open <b>${a.panelMenu}</b>.`,
           sub: "The panel connects by itself." },
-      ]);
+      ]));
     } else if (b.dataset.open) {
       const a = state.apps.find((x) => x.key === b.dataset.open);
       await api("POST", "/api/open/" + b.dataset.open);

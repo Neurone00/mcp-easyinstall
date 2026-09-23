@@ -1311,6 +1311,21 @@ function setupUxp(key) {
     return { ok: true };
 }
 
+// Adobe ships the UXP Developer Tool through Creative Cloud, not as a download,
+// so the useful thing is to open Creative Cloud if it is there and Adobe's
+// install page either way. No URL comes from the client: nothing to sanitise.
+app.post("/api/uxp-help", (_req, res) => {
+    // By bundle id, not path: Creative Cloud.app lives in
+    // /Applications/Utilities/Adobe Creative Cloud/ACC/, which is not where
+    // anyone would guess, and Adobe has moved it before.
+    execFile("/usr/bin/open", ["-b", "com.adobe.acc.AdobeCreativeCloud"], (err) => {
+        if (err) console.log("\u26a0 couldn't open Creative Cloud: " + err.message);
+    });
+    execFile("/usr/bin/open",
+        ["https://developer.adobe.com/photoshop/uxp/2022/guides/devtool/installation/"]);
+    res.json({ ok: true });
+});
+
 app.post("/api/uxp/:key", (req, res) => {
     if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
     try {

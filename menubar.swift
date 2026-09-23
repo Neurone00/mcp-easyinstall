@@ -42,8 +42,11 @@ final class ControlWindow: NSWindowController, NSWindowDelegate {
     func reload() { web.reload() }
 
     func present() {
-        // An accessory app has to ask for focus explicitly, or the window
-        // appears behind whatever the user was working in.
+        // Become a normal app for as long as the window is up: a Dock icon, a
+        // menu bar, cmd-tab. As an accessory the window stayed open when you
+        // clicked away, but there was no way back to it — no Dock icon, not in
+        // cmd-tab — so it read as having closed itself.
+        NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
@@ -53,6 +56,9 @@ final class ControlWindow: NSWindowController, NSWindowDelegate {
     // and the page keeps its scroll position.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         sender.orderOut(nil)
+        // Back to living in the menu bar only, so a background service does not
+        // keep a Dock icon for a window that is not there.
+        NSApp.setActivationPolicy(.accessory)
         return false
     }
 }
@@ -188,6 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// is false, so the very first request did nothing at all.
     func applicationDidBecomeActive(_ note: Notification) {
         guard launched else { return }   // don't fight the first-run sequence
+        // Only while we are an accessory. Once the window is up we are a normal
+        // app, and re-opening on every activation would fight a window the user
+        // had just closed.
+        guard NSApp.activationPolicy() == .accessory else { return }
         if control == nil || control?.window?.isVisible != true { openPanel() }
     }
 
