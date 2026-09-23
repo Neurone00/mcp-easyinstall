@@ -426,8 +426,36 @@ function serverDef(key) {
 }
 
 // Which apps are worth registering: the Adobe app is actually on this machine.
+// Which apps to expose to the assistants.
+//
+// Every tool definition of every registered app rides on every request, so an
+// app you own but never drive is a permanent tax: Photoshop alone is about
+// 9,000 tokens. Installed is the default, but it should not be the only
+// option — hence a list the user controls.
+const ENABLED = path.join(SUPPORT, "enabled-apps.json");
+
+function enabledApps() {
+    try {
+        const v = readJSON(ENABLED, null);
+        // No file yet means "everything installed", which is what it did before.
+        return Array.isArray(v) ? v : null;
+    } catch {
+        return null;
+    }
+}
+
+function setAppEnabled(key, on) {
+    const current = enabledApps() || Object.keys(APPS).filter((k) => appInstalled(APPS[k].appGlob));
+    const set = new Set(current);
+    on ? set.add(key) : set.delete(key);
+    fs.mkdirSync(SUPPORT, { recursive: true });
+    writeJSON(ENABLED, [...set]);
+}
+
 function registerableApps() {
-    return Object.keys(APPS).filter((k) => appInstalled(APPS[k].appGlob));
+    const allowed = enabledApps();
+    return Object.keys(APPS).filter((k) =>
+        appInstalled(APPS[k].appGlob) && (!allowed || allowed.includes(k)));
 }
 
 /* ------------------------------------------------------------- ai clients -- */
@@ -479,6 +507,11 @@ function connectClient(clientId, keys) {
     if (c.format === "json") {
         const cfg = readJSON(c.file, {});
         cfg[c.key] = cfg[c.key] || {};
+        // Drop ours that are no longer wanted. Without this, switching an app
+        // off left its server behind and cost exactly as much as before.
+        for (const k of Object.keys(APPS)) {
+            if (!keys.includes(k)) delete cfg[c.key][k];
+        }
         for (const k of keys) cfg[c.key][k] = serverDef(k);
         writeJSON(c.file, cfg);
         return;
@@ -801,12 +834,17 @@ function removeRetired(id) {
 const WANTED = path.join(SUPPORT, "connected-clients.json");
 
 function wantedClients() {
+    let listed = [];
     try {
         const v = readJSON(WANTED, []);
-        return Array.isArray(v) ? v : [];
-    } catch {
-        return [];
-    }
+        listed = Array.isArray(v) ? v : [];
+    } catch { /* unreadable: fall back to what is on disk */ }
+
+    // Everyone who set this up before the record existed has servers in their
+    // configs and no entry here. Treat a client that already carries ours as
+    // wanted, or they would be left out of every rewrite from now on.
+    const onDisk = Object.keys(CLIENTS).filter((id) => connectedApps(id).length);
+    return [...new Set([...listed, ...onDisk])];
 }
 
 function rememberClient(id, on) {
@@ -1301,6 +1339,7 @@ app.get("/api/status", (_req, res) => {
             kind: a.kind,
             panelMenu: a.panelMenu,
             installed: appInstalled(a.appGlob),
+            enabled: registerableApps().includes(key),
             panelInstalled: panelInstalled(key),
             live: !!applicationClients[key],
             // open but not live means "the panel is showing, it just hasn't
@@ -1325,6 +1364,29 @@ app.post("/api/panel/:key", (req, res) => {
         res.json({ ok: true });
     } catch (e) {
         res.status(e.message === "uxp" ? 400 : 500).json({ error: e.message });
+    }
+});
+
+// Turning an app off has to rewrite the configs, or it saves nothing until
+// something else happens to trigger a write.
+app.post("/api/app-enabled/:key", (req, res) => {
+    const key = req.params.key;
+    if (!APPS[key]) return res.status(404).json({ error: "Unknown app." });
+    try {
+        setAppEnabled(key, req.body && req.body.on !== false);
+        const keys = registerableApps();
+        const rewired = [];
+        for (const id of wantedClients()) {
+            try {
+                keys.length ? connectClient(id, keys) : disconnectClient(id);
+                rewired.push(CLIENTS[id].label);
+            } catch (e) {
+                console.log(`\u26a0 couldn't update ${CLIENTS[id].label}: ${e.message}`);
+            }
+        }
+        res.json({ ok: true, apps: keys, rewired });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
     }
 });
 

@@ -143,6 +143,15 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
 .settings h3 { margin: 0 0 4px; font-size: 14px; font-weight: 620; }
 .settings-what { margin: 10px 0 2px; font-size: 13px; color: var(--ink-soft); }
 .settings > button { margin-bottom: 4px; }
+.applist { margin: 8px 0 2px; }
+.applist label {
+  display: flex; align-items: center; gap: 9px; padding: 6px 2px;
+  font-size: 14px; cursor: pointer;
+}
+.applist label.off { color: var(--ink-soft); }
+.applist .cost { margin-left: auto; font-size: 12.5px; color: var(--ink-soft); }
+.applist input { width: 15px; height: 15px; accent-color: var(--accent); }
+.settings-note { margin: 6px 0 2px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
 .hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 /* When everything is set up the button moves into Settings and the line is
    blank, so the row has nothing left to show. */
@@ -218,6 +227,12 @@ button:focus-visible {
   </div>
   <section id="settings" class="settings" hidden aria-label="Settings">
     <h3>Settings</h3>
+    <p class="settings-what">Which apps your assistants can drive:</p>
+    <div id="applist" class="applist"></div>
+    <p class="settings-note">Every app you leave on is described to the assistant on
+      every message, whether you use it or not. Turning off the ones you don't drive
+      makes each request smaller and leaves more room for your actual work.</p>
+
     <p class="settings-what">What setting everything up changes on your Mac:</p>
     <ul class="steps">
       <li>Copies the MCP panels into <code>~/Library/Application Support/Adobe/CEP/extensions</code></li>
@@ -249,6 +264,7 @@ const TINT = {
   premiere:    "#2a0634,#ea77ff",
 };
 const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr" };
+const COST = { photoshop: 9300, premiere: 6200, illustrator: 4700, aftereffects: 1700 };
 
 let state = null;
 
@@ -344,6 +360,27 @@ function el(html) {
 }
 
 /* ---------------------------------------------------------------- render -- */
+
+// Lives in Settings rather than on the rows: it is a decision you make once,
+// not part of reading whether things are working.
+function renderAppList() {
+  const box = document.getElementById("applist");
+  const installed = state.apps.filter((a) => a.installed);
+  if (!installed.length) {
+    box.replaceChildren(el('<p class="settings-note">No Adobe apps found.</p>'));
+    return;
+  }
+  const total = installed.filter((a) => a.enabled)
+    .reduce((n, a) => n + (COST[a.key] || 0), 0);
+  box.replaceChildren(...installed.map((a) => el(`
+    <label class="${a.enabled ? "" : "off"}">
+      <input type="checkbox" data-appon="${a.key}" ${a.enabled ? "checked" : ""}>
+      <span>${a.label}</span>
+      <span class="cost">~${(COST[a.key] || 0).toLocaleString()} tokens</span>
+    </label>`)),
+    el(`<p class="settings-note">Currently about
+        <b>${total.toLocaleString()}</b> tokens on every message.</p>`));
+}
 
 function renderBanner() {
   const b = document.getElementById("banner");
@@ -492,6 +529,7 @@ function render() {
   const apps = document.getElementById("apps");
   const clients = document.getElementById("clients");
   apps.replaceChildren(...state.apps.map(appRow));
+  renderAppList();
   clients.replaceChildren(...state.clients.map(clientRow));
 
 
@@ -539,6 +577,25 @@ function render() {
 }
 
 /* --------------------------------------------------------------- actions -- */
+
+document.addEventListener("change", async (e) => {
+  const box = e.target.closest("[data-appon]");
+  if (!box) return;
+  const key = box.dataset.appon;
+  box.disabled = true;
+  try {
+    const r = await api("POST", "/api/app-enabled/" + key, { on: box.checked });
+    toast(box.checked
+      ? `${key} added \u2014 restart your assistants to pick it up.`
+      : `${key} removed \u2014 restart your assistants to pick it up.`);
+    await refresh();
+  } catch (err) {
+    toast(err.message);
+    box.checked = !box.checked;
+  } finally {
+    box.disabled = false;
+  }
+});
 
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");

@@ -57,3 +57,60 @@ except Exception:
     # Never let orientation text stop the server from starting: without it the
     # model guesses the application, which is how it behaved before.
     pass
+
+
+# ===========================================================================
+# Adobe MCP shared additions — trimming what the model is sent
+# ===========================================================================
+#
+# Every tool definition rides along on every request. Measured across the four
+# servers: ~27,000 tokens before the user has typed anything. Two parts of that
+# are pure restatement and can go without losing meaning:
+#
+#   "title" on every schema property. The key is already `anti_aliasing`; a
+#   sibling "title": "Anti Aliasing" tells the model nothing it cannot read.
+#
+#   "Returns:" and "Raises:" blocks, and the "(str, optional)" and "Defaults to
+#   X." fragments inside "Args:". Types and defaults are in the schema, and the
+#   model sees the actual return value when it calls the tool.
+#
+# What is NOT touched: the summary, and the prose in Args:. Those carry things
+# a schema cannot say — ranges like (1-1000), the shape of a dict, coordinate
+# conventions — and dropping them would buy tokens with wrong calls.
+
+import re as _re
+
+_TAIL = _re.compile(r"\n\s*(Returns|Raises|Yields)\s*:.*", _re.S | _re.I)
+_TYPES = _re.compile(
+    r"\s*\((?:str|int|float|bool|dict|list|any|object|number|string|boolean|integer)[^)]*\)\s*:",
+    _re.I)
+_DEFAULTS = _re.compile(r"\s*Defaults? to [^.\n]+\.", _re.I)
+_BLANKS = _re.compile(r"\n{3,}")
+
+
+def _drop_titles(node):
+    if isinstance(node, dict):
+        node.pop("title", None)
+        for value in node.values():
+            _drop_titles(value)
+    elif isinstance(node, list):
+        for value in node:
+            _drop_titles(value)
+
+
+def _slim(text):
+    if not text:
+        return text
+    out = _TAIL.sub("", text)
+    out = _TYPES.sub(":", out)
+    out = _DEFAULTS.sub("", out)
+    return _BLANKS.sub("\n\n", out).strip()
+
+
+try:
+    for _tool in mcp._tool_manager._tools.values():
+        _drop_titles(_tool.parameters)
+        _tool.description = _slim(_tool.description)
+except Exception:
+    # Never let a saving stop the server from starting.
+    pass
