@@ -110,6 +110,11 @@
     "  border-radius:6px;background:var(--a-bg);font-size:11px;line-height:1.5;color:var(--a-ink)}",
     ".amcp-sheet[hidden]{display:none}",
     ".amcp-sheet h4{margin:0 0 5px;font-size:11px;font-weight:700}",
+    ".amcp-sheet-head{display:flex;align-items:baseline;gap:8px}",
+    ".amcp-sheet-head h4{flex:1}",
+    ".amcp-sheet .linkish{border:0;background:none;padding:0;color:var(--a-soft);",
+    "  font-size:10px;font-weight:600;text-decoration:underline;cursor:pointer}",
+    ".amcp-sheet .linkish:hover{color:var(--a-ink)}",
     ".amcp-sheet ol,.amcp-sheet ul{margin:4px 0 8px;padding-left:15px}",
     ".amcp-sheet li{margin:3px 0}",
     ".amcp-sheet .ex{color:var(--a-soft);font-style:italic}",
@@ -354,19 +359,6 @@
     hubRequest({ type: "open_panel" }, function (r) { if (!r || !r.ok) openUrl(HUB); });
   }));
   moreSheet.appendChild(menuItem("Open the control panel in a browser", function () { openUrl(HUB); }));
-  moreSheet.appendChild(menuItem("Copy log to clipboard", function () {
-    // Copies what you can see. It used to select the upstream <textarea>,
-    // which is now display:none — and you cannot select inside that.
-    var scratch = document.createElement("textarea");
-    scratch.value = logView.innerText;
-    scratch.style.position = "fixed";
-    scratch.style.opacity = "0";
-    document.body.appendChild(scratch);
-    scratch.select();
-    try { document.execCommand("copy"); } catch (e) {}
-    scratch.remove();
-    flash("Log copied");
-  }));
   moreSheet.appendChild(autoLabel);
 
   /* ----------------------------------------------------------------- log -- */
@@ -387,6 +379,20 @@
 
   function isError(line) { return /error|fail|refused|timed out/i.test(line); }
 
+  // Copies what you can see. Selecting the upstream <textarea> is not an
+  // option any more: it is display:none, and you cannot select inside that.
+  function copyLog() {
+    var scratch = document.createElement("textarea");
+    scratch.value = logView.innerText;
+    scratch.style.position = "fixed";
+    scratch.style.opacity = "0";
+    document.body.appendChild(scratch);
+    scratch.select();
+    try { document.execCommand("copy"); } catch (e) {}
+    scratch.remove();
+    flash("Log copied");
+  }
+
   var logView = document.createElement("div");
   logView.className = "amcp-log";
   logView.setAttribute("aria-label", "Connection messages");
@@ -400,7 +406,21 @@
   }
 
   if (logSection) {
-    logSheet.innerHTML = "<h4>Connection messages</h4>";
+    // Copy sits in the log's own header: you want it while you are looking at
+    // the log, which is exactly when it is on screen.
+    logSheet.innerHTML = "";
+    var logHead = document.createElement("div");
+    logHead.className = "amcp-sheet-head";
+    var logTitle = document.createElement("h4");
+    logTitle.textContent = "Connection messages";
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "linkish";
+    copyBtn.textContent = "Copy";
+    copyBtn.title = "Copy these messages to the clipboard";
+    copyBtn.onclick = copyLog;
+    logHead.appendChild(logTitle);
+    logHead.appendChild(copyBtn);
+    logSheet.appendChild(logHead);
     logSection.querySelectorAll("label").forEach
       ? logSection.querySelectorAll("label").forEach(function (l) { l.style.display = "none"; })
       : null;
