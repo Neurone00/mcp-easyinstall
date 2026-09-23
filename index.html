@@ -444,7 +444,7 @@ function appRow(a) {
     status = "Unavailable"; tone = "";
   } else if (a.live) {
     status = "Ready"; tone = "live";
-    action = `<button class="quiet" data-open="${a.key}">Open app</button>`;
+    action = `<button class="quiet" data-open="${a.key}">Open</button>`;
   } else if (needsPanel) {
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
@@ -453,7 +453,9 @@ function appRow(a) {
     action = `<button class="primary" data-connectpanel="${a.key}">Connect</button>`;
   } else if (a.kind === "cep") {
     status = "Panel closed"; tone = "";
-    action = `<button class="suggest" data-open="${a.key}">Open ${a.label}</button>`;
+    // Just "Open": the row already says which app, and repeating it made the
+    // button as wide as the name it repeated.
+    action = `<button class="suggest" data-open="${a.key}">Open</button>`;
   } else {
     status = "Not set up"; tone = "";
     action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
