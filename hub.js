@@ -1519,11 +1519,24 @@ function appRunning(key) {
     }
 }
 
-function setupUxp(key) {
+async function setupUxp(key) {
     const engine = findEngine();
     if (!engine) throw new Error("Can't find the adb-mcp engine folder.");
     const manifest = path.join(engine, "uxp", APPS[key].uxp, "manifest.json");
     if (!fs.existsSync(manifest)) throw new Error(`Plugin source missing: ${manifest}`);
+
+    // The Developer Tool OWNS this file: it reads it at startup and writes its
+    // own copy back when it quits. Registering Premiere while it was running
+    // looked fine on disk, showed no row, and was then silently erased on quit.
+    // So close it first, write, and start it again — it does not unload any
+    // plugin it has already loaded, so nothing is lost by this.
+    if (udtRunning()) {
+        try { execFileSync("/usr/bin/pkill", ["-f", path.join(appBundle(UDT_GLOB), "Contents", "MacOS")]); }
+        catch { /* already gone */ }
+        for (let i = 0; i < 25 && udtRunning(); i++) {
+            await new Promise((r) => setTimeout(r, 200));
+        }
+    }
 
     const ws = readJSON(UDT_WORKSPACE, { version: 1, plugins: [] });
     // Also drop entries we retired, and any whose manifest is gone — a plugin
@@ -1580,10 +1593,10 @@ app.post("/api/uxp-help", (_req, res) => {
     res.json({ ok: true });
 });
 
-app.post("/api/uxp/:key", (req, res) => {
+app.post("/api/uxp/:key", async (req, res) => {
     if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
     try {
-        res.json(setupUxp(req.params.key));
+        res.json(await setupUxp(req.params.key));
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -1614,7 +1627,7 @@ app.post("/api/setup", async (_req, res) => {
                     installPanel(key);
                     done.push(a.label);
                 } else {
-                    setupUxp(key);
+                    await setupUxp(key);
                     todo.push(a.label);
                 }
             } catch (e) {
