@@ -1491,6 +1491,20 @@ function udtRunning() {
     }
 }
 
+// setupUxp has just restarted the Developer Tool, and its service takes a
+// moment to come up. Worth a few tries before deciding it cannot be done.
+async function loadWhenReady(key, tries = 4) {
+    let last;
+    for (let i = 0; i < tries; i++) {
+        try { return await loadUxpPlugin(key); }
+        catch (e) {
+            last = e;
+            await new Promise((r) => setTimeout(r, 2000));
+        }
+    }
+    throw last;
+}
+
 app.post("/api/load-uxp/:key", async (req, res) => {
     if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
     try {
@@ -1628,7 +1642,19 @@ app.post("/api/setup", async (_req, res) => {
                     done.push(a.label);
                 } else {
                     await setupUxp(key);
-                    todo.push(a.label);
+                    // Registering is not the finish line any more: we can press
+                    // Load ourselves, so do it rather than sending them to
+                    // Adobe's tool for a click we are able to make.
+                    if (!appRunning(key)) {
+                        todo.push(`${a.label} \u2014 open it and its panel loads itself`);
+                    } else {
+                        try {
+                            await loadWhenReady(key);
+                            done.push(a.label);
+                        } catch (e) {
+                            todo.push(`${a.label} \u2014 ${e.message}`);
+                        }
+                    }
                 }
             } catch (e) {
                 failed.push(`${a.label} (${e.message})`);
@@ -1650,7 +1676,7 @@ app.post("/api/setup", async (_req, res) => {
         }
         let message = `Ready: ${done.join(", ") || "no auto-installable apps"}.`;
         if (wired.length) message += ` Connected to ${wired.join(", ")}.`;
-        if (todo.length) message += ` ${todo.join(" & ")} need one Load click in the UXP tool.`;
+        if (todo.length) message += ` Still needs you: ${todo.join("; ")}.`;
         if (failed.length) message += ` Couldn't do: ${failed.join("; ")}.`;
         res.json({ ok: true, message, done, todo, wired, failed });
     } catch (e) {
