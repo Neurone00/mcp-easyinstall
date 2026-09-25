@@ -39,9 +39,14 @@ final class ControlWindow: NSWindowController, NSWindowDelegate {
         web.load(URLRequest(url: url))
     }
 
-    func reload() { web.reload() }
+    func reload() { web.reloadFromOrigin() }
 
     func present() {
+        // The window is built once and kept, so without this it shows whatever
+        // page it loaded at launch — for the whole life of the app, and right
+        // through an update that replaced the page underneath it.
+        if window?.isVisible != true { web.reloadFromOrigin() }
+
         // Become a normal app for as long as the window is up: a Dock icon, a
         // menu bar, cmd-tab. As an accessory the window stayed open when you
         // clicked away, but there was no way back to it — no Dock icon, not in

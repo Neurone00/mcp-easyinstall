@@ -2025,7 +2025,14 @@ app.post("/api/quit", (_req, res) => {
     }, 200);
 });
 
-app.use(express.static(HERE));
+// No caching: the control window is a long-lived WKWebView, and a cached
+// index.html there outlives every update to it. Nothing here is fetched over
+// a network worth saving bytes on.
+app.use(express.static(HERE, {
+    etag: false,
+    lastModified: false,
+    setHeaders: (res) => res.setHeader("Cache-Control", "no-store"),
+}));
 
 // This is a background daemon whose only supervisor gives up after five
 // restarts, so an unhandled rejection must not be the thing that kills it.
