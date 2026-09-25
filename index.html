@@ -175,11 +175,34 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
 
 #toast {
   position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 90px);
-  background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px;
-  font-size: 13.5px; font-weight: 500; transition: transform .22s cubic-bezier(.2,.8,.3,1);
-  box-shadow: var(--shadow); max-width: 90vw;
+  background: var(--ink); color: var(--bg); border-radius: 12px;
+  /* Less on the right, where the dismiss sits: its own padding makes up the
+     difference, so the text is inset evenly on both sides. */
+  padding: 11px 12px 12px 16px;
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 13.5px; font-weight: 500; line-height: 1.45;
+  box-shadow: var(--shadow);
+  /* 90vw put a two-line message across the whole window, so the eye had to
+     travel back the full width to find the second line. */
+  max-width: min(360px, calc(100vw - 32px));
+  /* Off-screen is not out of the tab order: without this the dismiss stayed
+     focusable while invisible. */
+  visibility: hidden;
+  transition: transform .22s cubic-bezier(.2,.8,.3,1), visibility 0s .22s;
 }
-#toast.show { transform: translate(-50%, 0); }
+#toast.show {
+  transform: translate(-50%, 0); visibility: visible;
+  transition: transform .22s cubic-bezier(.2,.8,.3,1);
+}
+/* Even lines rather than one full and one orphaned word. */
+#toast-msg { text-wrap: pretty; }
+#toast-close {
+  flex: none; width: 24px; height: 24px; margin: -2px 0 0; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: inherit;
+  font-size: 15px; line-height: 1; opacity: .6; cursor: pointer;
+}
+#toast-close:hover { opacity: 1; background: rgba(255,255,255,.14); }
+#toast-close:focus-visible { outline: 2px solid currentColor; outline-offset: 1px; opacity: 1; }
 @media (max-width: 520px) {
   .wrap { padding-top: 28px; }
   /* Wrapping pushed the status and button onto a second line, left-aligned
@@ -234,7 +257,10 @@ button:focus-visible {
 </main>
 
 <dialog id="wizard" aria-labelledby="wz-title"></dialog>
-<div id="toast" role="status" aria-live="polite"></div>
+<div id="toast" role="status" aria-live="polite">
+  <span id="toast-msg"></span>
+  <button id="toast-close" type="button" aria-label="Dismiss">&#10005;</button>
+</div>
 
 <script>
 const TINT = {
@@ -249,12 +275,19 @@ const COST = { photoshop: 9300, premiere: 6200, illustrator: 4700, aftereffects:
 let state = null;
 
 const toastEl = document.getElementById("toast");
+const toastMsg = document.getElementById("toast-msg");
 let toastTimer;
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastEl.classList.remove("show");
+}
 function toast(msg) {
-  toastEl.textContent = msg;
+  toastMsg.textContent = msg;
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove("show"), 3200);
+  // The longest of these names two apps and an instruction over two lines —
+  // more reading than 3.2s allowed for.
+  toastTimer = setTimeout(hideToast, 5200);
 }
 
 // The UXP steps used to sit in an accordion above the button, so the reader had
@@ -593,6 +626,7 @@ document.addEventListener("change", async (e) => {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
+  if (b.id === "toast-close") { hideToast(); return; }
   const was = b.textContent;
   b.disabled = true;
   try {
