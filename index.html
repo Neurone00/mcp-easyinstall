@@ -280,7 +280,6 @@ button:focus-visible {
 
   <h2>Your Adobe apps</h2>
   <div class="list" id="apps"></div>
-  <p class="settings-note" id="apps-note"></p>
 
   <div class="h2row">
     <h2>Your AI assistants</h2>
@@ -321,7 +320,6 @@ const TINT = {
   premiere:    "#2a0634,#ea77ff",
 };
 const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr" };
-const COST = { photoshop: 9300, premiere: 6200, illustrator: 4700, aftereffects: 1700 };
 
 let state = null;
 
@@ -435,18 +433,6 @@ function el(html) {
 }
 
 /* ---------------------------------------------------------------- render -- */
-
-// The ticks moved onto the rows, so all that is left under the list is what
-// they cost you. Applying a change is offered twice over: on the toast the
-// change itself raises, and permanently above the assistants it restarts.
-function renderAppsNote() {
-  const box = document.getElementById("apps-note");
-  const installed = state.apps.filter((a) => a.installed);
-  if (!installed.length) { box.textContent = ""; return; }
-  const total = installed.filter((a) => a.enabled)
-    .reduce((n, a) => n + (COST[a.key] || 0), 0);
-  box.innerHTML = `About <b>${total.toLocaleString()}</b> tokens on every message.`;
-}
 
 function renderBanner() {
   const b = document.getElementById("banner");
@@ -633,7 +619,6 @@ function render() {
   const apps = document.getElementById("apps");
   const clients = document.getElementById("clients");
   apps.replaceChildren(...state.apps.map(appRow));
-  renderAppsNote();
   clients.replaceChildren(...clientRows());
 
 
