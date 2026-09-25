@@ -141,16 +141,9 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
   box-shadow: var(--shadow); padding: 16px 18px; margin-top: 16px; }
 .settings[hidden] { display: none; }
 .settings h3 { margin: 0 0 4px; font-size: 14px; font-weight: 620; }
-.settings-what { margin: 10px 0 2px; font-size: 13px; color: var(--ink-soft); }
 .settings > button { margin-bottom: 4px; }
-.applist { margin: 8px 0 2px; }
-.applist label {
-  display: flex; align-items: center; gap: 9px; padding: 6px 2px;
-  font-size: 14px; cursor: pointer;
-}
-.applist label.off { color: var(--ink-soft); }
-.applist .cost { margin-left: auto; font-size: 12.5px; color: var(--ink-soft); }
-.applist input { width: 15px; height: 15px; accent-color: var(--accent); }
+.row .tick { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.row span.tick { visibility: hidden; }
 .settings-note { margin: 6px 0 2px; font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
 .hero { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 /* When everything is set up the button moves into Settings and the line is
@@ -227,18 +220,13 @@ button:focus-visible {
   </div>
   <section id="settings" class="settings" hidden aria-label="Settings">
     <h3>Settings</h3>
-    <p class="settings-what">Which apps your assistants can drive</p>
-    <div id="applist" class="applist"></div>
-    <button class="quiet" id="restart-assistants">Restart Claude and ChatGPT</button>
-    <p class="settings-note">They read this list when they start, so a change only
-      takes effect after a restart. This closes any conversation in progress.</p>
-
     <p class="settings-note">Usage is recorded: which apps and commands, never your
       documents, prompts or artwork. <a href="/help.html#setup">What setup changes</a></p>
   </section>
 
   <h2>Your Adobe apps</h2>
   <div class="list" id="apps"></div>
+  <p class="settings-note" id="apps-note"></p>
 
   <h2>Your AI assistants</h2>
   <div class="list" id="clients"></div>
@@ -353,25 +341,23 @@ function el(html) {
 
 /* ---------------------------------------------------------------- render -- */
 
-// Lives in Settings rather than on the rows: it is a decision you make once,
-// not part of reading whether things are working.
-function renderAppList() {
-  const box = document.getElementById("applist");
+// The ticks moved onto the rows, so all that is left under the list is what
+// they cost you — and, once you change one, the restart that applies it.
+// pendingRestart is deliberately per-page-load: it asks after a change you
+// just made, and stops asking when you reload having decided not to.
+let pendingRestart = false;
+
+function renderAppsNote() {
+  const box = document.getElementById("apps-note");
   const installed = state.apps.filter((a) => a.installed);
-  if (!installed.length) {
-    box.replaceChildren(el('<p class="settings-note">No Adobe apps found.</p>'));
-    return;
-  }
+  if (!installed.length) { box.textContent = ""; return; }
   const total = installed.filter((a) => a.enabled)
     .reduce((n, a) => n + (COST[a.key] || 0), 0);
-  box.replaceChildren(...installed.map((a) => el(`
-    <label class="${a.enabled ? "" : "off"}">
-      <input type="checkbox" data-appon="${a.key}" ${a.enabled ? "checked" : ""}>
-      <span>${a.label}</span>
-      <span class="cost">~${(COST[a.key] || 0).toLocaleString()} tokens</span>
-    </label>`)),
-    el(`<p class="settings-note">Currently about
-        <b>${total.toLocaleString()}</b> tokens on every message.</p>`));
+  box.innerHTML = `About <b>${total.toLocaleString()}</b> tokens on every message.`
+    + (pendingRestart
+        ? ` Claude and ChatGPT read this list when they start.
+            <button class="quiet" id="restart-assistants">Restart them</button>`
+        : "");
 }
 
 function renderBanner() {
@@ -428,12 +414,17 @@ function escapeHtml(s) {
 function appRow(a) {
   const [bg, fg] = TINT[a.key].split(",");
   const needsPanel = a.kind === "cep" && a.panelInstalled === false;
+  const off = a.installed && !a.enabled;
 
   // Each state names itself. "Ready" is not a warning; an app that simply
   // isn't running is not a problem to be fixed.
   let status, tone, action = "";
   if (!a.installed) {
     status = "Unavailable"; tone = "";
+  } else if (off) {
+    // Untick an app and its server is not registered at all, so Set up and
+    // Open would both be inviting a click that cannot lead anywhere.
+    status = "Off"; tone = "";
   } else if (a.live) {
     status = "Ready"; tone = "live";
     action = `<button class="quiet" data-open="${a.key}">Open</button>`;
@@ -454,7 +445,12 @@ function appRow(a) {
   }
 
   const row = el(`
-    <div class="row ${a.installed ? "" : "off"}">
+    <div class="row ${a.installed && !off ? "" : "off"}">
+      ${a.installed
+        ? `<input type="checkbox" class="tick" data-appon="${a.key}"
+             ${a.enabled ? "checked" : ""}
+             aria-label="Let your assistants drive ${a.label}">`
+        : `<span class="tick"></span>`}
       <div class="glyph" style="background:${bg};color:${fg}" aria-hidden="true">
         <img src="/api/icon/${a.key}" alt="" width="34" height="34"
              onerror="this.replaceWith(document.createTextNode('${SHORT[a.key]}'))">
@@ -523,12 +519,12 @@ function render() {
   const apps = document.getElementById("apps");
   const clients = document.getElementById("clients");
   apps.replaceChildren(...state.apps.map(appRow));
-  renderAppList();
+  renderAppsNote();
   clients.replaceChildren(...state.clients.map(clientRow));
 
 
   if (focusKey && focusKey !== "{}") {
-    for (const b of document.querySelectorAll("button")) {
+    for (const b of document.querySelectorAll("button, input")) {
       if (JSON.stringify(b.dataset) === focusKey) { b.focus(); break; }
     }
   }
@@ -554,7 +550,7 @@ function render() {
   const panel = document.getElementById("settings");
   const heroRow = document.querySelector(".hero");
   if (ready && setupBtn.parentElement === heroRow) {
-    panel.insertBefore(setupBtn, panel.querySelector(".settings-what"));
+    panel.insertBefore(setupBtn, panel.querySelector(".settings-note"));
   } else if (!ready && setupBtn.parentElement === panel) {
     heroRow.insertBefore(setupBtn, heroRow.firstChild);
   }
@@ -582,8 +578,9 @@ document.addEventListener("change", async (e) => {
     // The app's name, not its key, and name the assistants rather than
     // calling them "your assistants".
     const label = (state.apps.find((a) => a.key === key) || {}).label || key;
+    pendingRestart = true;
     toast(`${label} ${box.checked ? "added" : "removed"}. `
-        + "Use Restart below to pick it up.");
+        + "Restart Claude and ChatGPT below to pick it up.");
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -693,6 +690,7 @@ document.addEventListener("click", async (e) => {
     } else if (b.id === "restart-assistants") {
       b.textContent = "Restarting\u2026";
       const r = await api("POST", "/api/restart-assistants");
+      pendingRestart = false;
       toast(r.restarted.length
         ? `Restarting ${r.restarted.join(" and ")}\u2026`
         : "Neither Claude nor ChatGPT is running.");
