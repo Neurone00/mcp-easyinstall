@@ -66,6 +66,10 @@ final class ControlWindow: NSWindowController, NSWindowDelegate {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var control: ControlWindow?
     var item: NSStatusItem!
+    /// Held rather than attached: a status item with `menu` set swallows the
+    /// click, so the button's own action never runs and there is no way to
+    /// tell a click on the icon from a click that opened a menu.
+    var menu: NSMenu!
     var hub: Process?
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -92,7 +96,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Moskito Easy MCP",
                                 action: #selector(quit), keyEquivalent: "q"))
-        item.menu = menu
+        self.menu = menu
+        item.button?.target = self
+        item.button?.action = #selector(iconClicked)
+        item.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
         launched = true
         watchForShowRequests()
@@ -434,9 +441,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         image.isTemplate = true
         item.button?.image = image
-        item.button?.toolTip = alert ? "Moskito Easy MCP — stopped" : "Moskito Easy MCP"
+        // The tooltip is the only place right-click is discoverable.
+        item.button?.toolTip = alert
+            ? "Moskito Easy MCP — stopped. Click to open, right-click for more."
+            : "Moskito Easy MCP — click to open, right-click for more."
         if item.button?.image == nil { item.button?.title = "MCP" }
         item.button?.appearsDisabled = alert
+    }
+
+    /// Clicking the icon opens the window, which is what people came for;
+    /// right- or control-click still gives the full menu.
+    ///
+    /// A literal double-click gesture would mean holding every single click
+    /// for NSEvent.doubleClickInterval — half a second by default — before
+    /// the menu could appear, to see whether a second click was coming. One
+    /// click that opens it straight away is faster than the two that were
+    /// asked for, and a double-click lands here too: the second click just
+    /// raises a window that is already up.
+    @objc func iconClicked() {
+        let event = NSApp.currentEvent
+        let secondary = event?.type == .rightMouseUp
+            || event?.modifierFlags.contains(.control) == true
+        if secondary {
+            // Attach, click, detach — leaving it attached would swallow the
+            // next left click and the icon would stop opening the window.
+            item.menu = menu
+            item.button?.performClick(nil)
+            item.menu = nil
+        } else {
+            openPanel()
+        }
     }
 
     @objc func openLog() {
