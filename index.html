@@ -70,6 +70,11 @@ h2 {
   font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
   color: var(--ink-soft); font-weight: 620; margin: 40px 0 12px;
 }
+/* A heading with a line under it, like the h1 and .sub at the top of the
+   page. The instruction belongs before the list it governs, not as a
+   footnote below it where it floats between two cards. */
+h2.deck { margin-bottom: 6px; }
+.note { margin: 0 0 12px; font-size: 13px; color: var(--ink-soft); }
 /* A heading with an action on the far right. The heading keeps its margins;
    the button borrows them, so it sits on the heading's baseline. */
 .h2row { display: flex; align-items: baseline; gap: 16px; }
@@ -280,10 +285,10 @@ button:focus-visible {
       documents, prompts or artwork. <a href="/help.html#setup">What setup changes</a></p>
   </section>
 
-  <h2>Your Adobe apps</h2>
+  <h2 class="deck">Your Adobe apps</h2>
+  <p class="note">Switch off the apps you don't use &mdash; each one takes up space
+    in every message your assistants send.</p>
   <div class="list" id="apps"></div>
-  <p class="settings-note">Switch off the apps you don't use. Each one takes up
-    space in every message your assistants send.</p>
 
   <div class="h2row">
     <h2>Your AI assistants</h2>
