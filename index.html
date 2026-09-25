@@ -74,16 +74,9 @@ h2 {
    the button borrows them, so it sits on the heading's baseline. */
 .h2row { display: flex; align-items: baseline; gap: 16px; }
 .h2row h2 { flex: 1; }
-.h2row button {
-  border-color: transparent; background: none; color: var(--ink-soft);
-  font-size: 13px; font-weight: 500; padding: 5px 10px;
-  display: inline-flex; align-items: center; gap: 6px;
-}
-/* Without this the generic button:hover border lands on it, and a ghost
-   button on a heading grows an outline nothing else on the page has. */
-.h2row button:hover:not(:disabled) {
-  color: var(--ink); background: var(--card); border-color: transparent;
-}
+/* The default button, the same one "Check everything again" uses. Only the
+   icon needs anything extra. */
+.h2row button { display: inline-flex; align-items: center; gap: 7px; }
 .h2row button svg { width: 14px; height: 14px; }
 
 .list { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
