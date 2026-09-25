@@ -70,6 +70,17 @@ h2 {
   font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
   color: var(--ink-soft); font-weight: 620; margin: 40px 0 12px;
 }
+/* A heading with an action on the far right. The heading keeps its margins;
+   the button borrows them, so it sits on the heading's baseline. */
+.h2row { display: flex; align-items: baseline; gap: 16px; }
+.h2row h2 { flex: 1; }
+.h2row button {
+  border-color: transparent; background: none; color: var(--ink-soft);
+  font-size: 13px; font-weight: 500; padding: 4px 6px; margin-right: -6px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.h2row button:hover:not(:disabled) { color: var(--ink); background: var(--card); }
+.h2row button svg { width: 14px; height: 14px; }
 
 .list { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
         box-shadow: var(--shadow); overflow: hidden; }
@@ -179,7 +190,7 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Less on the right, where the dismiss sits: its own padding makes up the
      difference, so the text is inset evenly on both sides. */
   padding: 11px 12px 12px 16px;
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 10px;
   font-size: 13.5px; font-weight: 500; line-height: 1.45;
   box-shadow: var(--shadow);
   /* 90vw put a two-line message across the whole window, so the eye had to
@@ -196,6 +207,15 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 /* Even lines rather than one full and one orphaned word. */
 #toast-msg { text-wrap: pretty; }
+/* The message and its action stack; the dismiss stays centred on the pair. */
+#toast-body { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
+#toast-action {
+  border: 0; border-radius: 7px; padding: 6px 11px;
+  background: rgba(255, 255, 255, .15); color: inherit;
+  font: inherit; font-size: 12.5px; font-weight: 560; cursor: pointer;
+}
+#toast-action:hover:not(:disabled) { background: rgba(255, 255, 255, .26); }
+#toast-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 #toast-close {
   flex: none; width: 24px; height: 24px; padding: 0;
   border: 0; border-radius: 6px; background: none; color: inherit;
@@ -251,14 +271,25 @@ button:focus-visible {
   <div class="list" id="apps"></div>
   <p class="settings-note" id="apps-note"></p>
 
-  <h2>Your AI assistants</h2>
+  <div class="h2row">
+    <h2>Your AI assistants</h2>
+    <button type="button" data-restartall="1">Restart assistants
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2.5 12a9.5 9.5 0 1 1 3 6.9"/><path d="M2.5 19.5v-6h6"/>
+      </svg>
+    </button>
+  </div>
   <div class="list" id="clients"></div>
 
 </main>
 
 <dialog id="wizard" aria-labelledby="wz-title"></dialog>
 <div id="toast" role="status" aria-live="polite">
-  <span id="toast-msg"></span>
+  <div id="toast-body">
+    <span id="toast-msg"></span>
+    <button id="toast-action" type="button" class="hidden"></button>
+  </div>
   <button id="toast-close" type="button" aria-label="Dismiss">&#10005;</button>
 </div>
 
@@ -276,18 +307,25 @@ let state = null;
 
 const toastEl = document.getElementById("toast");
 const toastMsg = document.getElementById("toast-msg");
+const toastAction = document.getElementById("toast-action");
 let toastTimer;
 function hideToast() {
   clearTimeout(toastTimer);
   toastEl.classList.remove("show");
 }
-function toast(msg) {
+// `action` is a label; pressing it restarts the assistants. Everything that
+// currently ends "…restart to pick it up" can hand you the restart instead of
+// telling you where to find it.
+function toast(msg, action) {
   toastMsg.textContent = msg;
+  toastAction.textContent = action || "";
+  toastAction.classList.toggle("hidden", !action);
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
   // The longest of these names two apps and an instruction over two lines —
-  // more reading than 3.2s allowed for.
-  toastTimer = setTimeout(hideToast, 5200);
+  // more reading than 3.2s allowed for. A toast you are meant to click waits
+  // longer still, since it is gone the moment you reach for it otherwise.
+  toastTimer = setTimeout(hideToast, action ? 9000 : 5200);
 }
 
 // The UXP steps used to sit in an accordion above the button, so the reader had
@@ -375,22 +413,15 @@ function el(html) {
 /* ---------------------------------------------------------------- render -- */
 
 // The ticks moved onto the rows, so all that is left under the list is what
-// they cost you — and, once you change one, the restart that applies it.
-// pendingRestart is deliberately per-page-load: it asks after a change you
-// just made, and stops asking when you reload having decided not to.
-let pendingRestart = false;
-
+// they cost you. Applying a change is offered twice over: on the toast the
+// change itself raises, and permanently above the assistants it restarts.
 function renderAppsNote() {
   const box = document.getElementById("apps-note");
   const installed = state.apps.filter((a) => a.installed);
   if (!installed.length) { box.textContent = ""; return; }
   const total = installed.filter((a) => a.enabled)
     .reduce((n, a) => n + (COST[a.key] || 0), 0);
-  box.innerHTML = `About <b>${total.toLocaleString()}</b> tokens on every message.`
-    + (pendingRestart
-        ? ` Claude and ChatGPT read this list when they start.
-            <button class="quiet" id="restart-assistants">Restart them</button>`
-        : "");
+  box.innerHTML = `About <b>${total.toLocaleString()}</b> tokens on every message.`;
 }
 
 function renderBanner() {
@@ -498,6 +529,31 @@ function appRow(a) {
   return row;
 }
 
+// Two config files, because they genuinely are two — but one product to
+// anyone using this. Merged on the way to the screen, never in the hub.
+const CLAUDE = ["claude-desktop", "claude-code"];
+
+function clientRows() {
+  const claude = CLAUDE
+    .map((id) => state.clients.find((c) => c.id === id))
+    .filter(Boolean);
+  const rest = state.clients.filter((c) => !CLAUDE.includes(c.id));
+  const rows = rest.map(clientRow);
+  if (!claude.length) return rows;
+
+  const on = claude.filter((c) => c.connected.length);
+  // Half connected is not connected. Saying so is how you find out that one
+  // of the two quietly lost its servers.
+  rows.unshift(clientRow({
+    id: claude.map((c) => c.id).join(","),
+    ids: claude.map((c) => c.id),
+    label: "Claude",
+    connected: on.length === claude.length ? on[0].connected : [],
+    partial: on.length > 0 && on.length < claude.length,
+  }));
+  return rows;
+}
+
 function clientRow(c) {
   const n = c.connected.length;
   const gpt = c.id === "codex";
@@ -506,6 +562,7 @@ function clientRow(c) {
 
   let status = n ? "Connected" : "Not connected";
   let tone = n ? "live" : "";
+  if (c.partial) { status = "Partly connected"; tone = "part"; }
   if (blocked) { status = "Blocked"; tone = "part"; }
 
   const row = el(`
@@ -535,7 +592,7 @@ function clientRow(c) {
          network too. Your call &mdash; a backup of the config is kept either way.
        </div>`));
   }
-  if (c.id === "claude-desktop" && state.claudeRunning && !n) {
+  if ((c.ids || [c.id]).includes("claude-desktop") && state.claudeRunning && !n) {
     acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-restart="1">Quit &amp; connect</button> `);
   }
   return row;
@@ -553,7 +610,7 @@ function render() {
   const clients = document.getElementById("clients");
   apps.replaceChildren(...state.apps.map(appRow));
   renderAppsNote();
-  clients.replaceChildren(...state.clients.map(clientRow));
+  clients.replaceChildren(...clientRows());
 
 
   if (focusKey && focusKey !== "{}") {
@@ -611,9 +668,9 @@ document.addEventListener("change", async (e) => {
     // The app's name, not its key, and name the assistants rather than
     // calling them "your assistants".
     const label = (state.apps.find((a) => a.key === key) || {}).label || key;
-    pendingRestart = true;
     toast(`${label} ${box.checked ? "added" : "removed"}. `
-        + "Restart Claude and ChatGPT below to pick it up.");
+        + "Claude and ChatGPT read this list when they start.",
+          "Restart assistants");
     await refresh();
   } catch (err) {
     toast(err.message);
@@ -627,7 +684,7 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.id === "toast-close") { hideToast(); return; }
-  const was = b.textContent;
+  const was = b.innerHTML;
   b.disabled = true;
   try {
     if (b.dataset.panel) {
@@ -712,19 +769,22 @@ document.addEventListener("click", async (e) => {
         : "Opening…");
     } else if (b.dataset.connect) {
       b.textContent = "Connecting…";
-      const r = await api("POST", "/api/client/" + b.dataset.connect);
-      toast(`Connected ${r.connected.length} apps.` +
-            (b.dataset.connect === "claude-desktop" ? " Restart Claude Desktop to finish." : ""));
+      const ids = b.dataset.connect.split(",");
+      let apps = 0;
+      for (const id of ids) apps = (await api("POST", "/api/client/" + id)).connected.length;
+      toast(`Connected ${apps} apps.`,
+            ids.includes("claude-desktop") ? "Restart assistants" : "");
     } else if (b.dataset.disconnect) {
-      await api("DELETE", "/api/client/" + b.dataset.disconnect);
+      for (const id of b.dataset.disconnect.split(",")) {
+        await api("DELETE", "/api/client/" + id);
+      }
       toast("Disconnected.");
     } else if (b.dataset.codexnet) {
       await api("POST", "/api/codex-network");
       toast("Done. Restart ChatGPT or Codex to pick it up.");
-    } else if (b.id === "restart-assistants") {
+    } else if (b.dataset.restartall) {
       b.textContent = "Restarting\u2026";
       const r = await api("POST", "/api/restart-assistants");
-      pendingRestart = false;
       toast(r.restarted.length
         ? `Restarting ${r.restarted.join(" and ")}\u2026`
         : "Neither Claude nor ChatGPT is running.");
@@ -757,7 +817,7 @@ document.addEventListener("click", async (e) => {
     toast(err.message);
   } finally {
     b.disabled = false;
-    b.textContent = was;
+    b.innerHTML = was;
     refresh();
   }
 });
