@@ -179,7 +179,7 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Less on the right, where the dismiss sits: its own padding makes up the
      difference, so the text is inset evenly on both sides. */
   padding: 11px 12px 12px 16px;
-  display: flex; align-items: flex-start; gap: 8px;
+  display: flex; align-items: center; gap: 8px;
   font-size: 13.5px; font-weight: 500; line-height: 1.45;
   box-shadow: var(--shadow);
   /* 90vw put a two-line message across the whole window, so the eye had to
@@ -197,7 +197,7 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
 /* Even lines rather than one full and one orphaned word. */
 #toast-msg { text-wrap: pretty; }
 #toast-close {
-  flex: none; width: 24px; height: 24px; margin: -2px 0 0; padding: 0;
+  flex: none; width: 24px; height: 24px; padding: 0;
   border: 0; border-radius: 6px; background: none; color: inherit;
   font-size: 15px; line-height: 1; opacity: .6; cursor: pointer;
 }
