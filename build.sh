@@ -351,19 +351,39 @@ if [ "${1:-}" = "--zip" ] || [ "${1:-}" = "--release" ]; then
   rm -f "$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip"
   ( cd "$HERE/dist" && ditto -c -k --sequesterRsrc --keepParent "Moskito Easy MCP.app" "Moskito-Easy-MCP-macOS-$ARCH.zip" )
   say "Zipped: $HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip ($(du -sh "$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip" | cut -f1))"
+
+  # A .dmg as well, because a zip leaves the app wherever the browser put it —
+  # usually Downloads, where it keeps updating itself for as long as nobody
+  # tidies up. The disk image opens with an Applications shortcut beside the
+  # app, which is how a Mac expects to be given software.
+  #
+  # BOTH assets ship. People take the .dmg; the updater in hub.js filters for
+  # .zip and ignores everything else, so releasing only a .dmg would silently
+  # strand every existing install.
+  say "Building the disk image"
+  DMG="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.dmg"
+  STAGE="$(mktemp -d)"
+  ditto "$APP" "$STAGE/Moskito Easy MCP.app"
+  ln -s /Applications "$STAGE/Applications"
+  rm -f "$DMG"
+  hdiutil create -volname "Moskito Easy MCP" -srcfolder "$STAGE" \
+                 -ov -format UDZO -quiet "$DMG"
+  rm -rf "$STAGE"
+  say "Disk image: $DMG ($(du -sh "$DMG" | cut -f1))"
 fi
 
 # --------------------------------------------------------------- release ----
 # Tag and publish, so the update check in hub.js has something to find.
 if [ "${1:-}" = "--release" ]; then
   ZIP="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip"
+  DMG="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.dmg"
   if gh release view "v$VER" >/dev/null 2>&1; then
     say "Updating release v$VER"
-    gh release upload "v$VER" "$ZIP" --clobber
+    gh release upload "v$VER" "$ZIP" "$DMG" --clobber
   else
     say "Publishing release v$VER"
     git tag -f "v$VER" && git push -q --force origin "v$VER"
-    gh release create "v$VER" "$ZIP" --title "Moskito Easy MCP $VER" --generate-notes
+    gh release create "v$VER" "$ZIP" "$DMG" --title "Moskito Easy MCP $VER" --generate-notes
   fi
   say "Released v$VER"
 fi

@@ -78,6 +78,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var hub: Process?
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        // Launched straight from the disk image: everything would appear to
+        // work, and then the app would vanish on eject, taking its panels'
+        // idea of where the hub lives with it. It also cannot update itself
+        // on a read-only volume. Say so once, open the image, and stop.
+        if Bundle.main.bundlePath.hasPrefix("/Volumes/") {
+            let alert = NSAlert()
+            alert.messageText = "Move Moskito Easy MCP to your Applications folder"
+            alert.informativeText = "It is running from the disk image, which is "
+                + "read-only \u{2014} it cannot set itself up or update from there. "
+                + "Drag it onto the Applications shortcut beside it, then open it "
+                + "from Applications."
+            alert.addButton(withTitle: "Show me")
+            alert.addButton(withTitle: "Quit")
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(URL(fileURLWithPath: Bundle.main.bundlePath)
+                                            .deletingLastPathComponent())
+            }
+            NSApp.terminate(nil)
+            return
+        }
+
         startHub()
 
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

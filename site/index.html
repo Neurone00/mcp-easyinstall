@@ -119,8 +119,10 @@ footer a{color:var(--soft)}
       the rest.
     </p>
     <ol class="steps">
-      <li><b>Download and drag to Applications.</b>
-          <span>No Node, no Python, no terminal. First run downloads a small Python
+      <li><b>Open the download and drag the app onto Applications.</b>
+          <span>Both are in the window that opens. Run it from Applications, not from
+          the disk image &mdash; it can't set itself up or update from there.
+          <br>No Node, no Python, no terminal. First run downloads a small Python
           runtime, so it needs the internet once.</span></li>
       <li><b>Double-click it. macOS will refuse the first time &mdash; that's expected.</b>
           <span>Then go to <b>System Settings &rarr; Privacy &amp; Security</b>, scroll down, and click
@@ -191,17 +193,23 @@ footer a{color:var(--soft)}
 </div>
 
 <script>
-// Point the button straight at the latest .zip when the API is reachable.
+// Point the button straight at the latest .dmg when the API is reachable.
+// The .zip in the same release is what installed copies update themselves
+// from; a person should be given the disk image.
 fetch("https://api.github.com/repos/Neurone00/mcp-easyinstall/releases/latest")
   .then((r) => r.ok ? r.json() : Promise.reject())
   .then((d) => {
     // Prefer the universal build; never hand someone a zip that names the
     // other architecture.
-    const zips = (d.assets || []).filter((a) => a.name.endsWith(".zip"));
-    const zip = zips.find((a) => /universal/i.test(a.name)) ||
-                zips.find((a) => !/arm64|aarch64|x64|x86_64|intel/i.test(a.name)) ||
-                zips[0];
-    if (zip) document.getElementById("dl").href = zip.browser_download_url;
+    const pick = (ext) => {
+      const all = (d.assets || []).filter((a) => a.name.endsWith(ext));
+      return all.find((a) => /universal/i.test(a.name)) ||
+             all.find((a) => !/arm64|aarch64|x64|x86_64|intel/i.test(a.name)) ||
+             all[0];
+    };
+    // Older releases have no .dmg, so fall back rather than offering nothing.
+    const asset = pick(".dmg") || pick(".zip");
+    if (asset) document.getElementById("dl").href = asset.browser_download_url;
   })
   .catch(() => {});
 </script>
