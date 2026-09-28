@@ -1033,8 +1033,16 @@ async function checkForUpdate() {
 // even start. The swap below is already careful: it checks the architecture,
 // moves the old app aside rather than deleting it, and puts it back if the
 // copy fails. So do it, and pick the moment.
-let lastCommandAt = 0;
+// Anything that counts as someone working: a command from Claude or ChatGPT,
+// and any write from the control panel. /api/status is a GET polled every two
+// seconds, so it is deliberately not activity.
+let lastActivityAt = 0;
 let autoUpdateAt = 0;
+
+// A minute was nowhere near enough. Reading a reply, looking at the artboard
+// and typing the next prompt passes a minute constantly, and the restart would
+// have landed in the middle of it.
+const QUIET_FOR = 10 * 60 * 1000;
 
 async function autoUpdate() {
     const found = await checkForUpdate();
@@ -1042,7 +1050,12 @@ async function autoUpdate() {
 
     // Not mid-task: the app restarts itself, and doing that under someone's
     // hands while they are driving Illustrator is worse than being a day old.
-    if (Date.now() - lastCommandAt < 60000) return;
+    //
+    // lastActivityAt is stamped when a command ARRIVES, so on its own it would
+    // still allow a restart in the middle of a long export. Outstanding
+    // commands are tracked anyway, for attributing replies — so ask them.
+    if (inFlight.size) return;
+    if (Date.now() - lastActivityAt < QUIET_FOR) return;
     if (venvBuilding) return;
     if (Date.now() - autoUpdateAt < 30 * 60 * 1000) return;   // one go per half hour
     autoUpdateAt = Date.now();
@@ -1225,6 +1238,13 @@ const ALLOWED_ORIGINS = new Set([
     `http://[::1]:${PORT}`,
 ]);
 
+// Pressing buttons in the control panel is working too — setting an app up or
+// connecting a client should not be interrupted any more than a command should.
+app.use((req, _res, next) => {
+    if (req.method !== "GET") lastActivityAt = Date.now();
+    next();
+});
+
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     // No Origin at all is a same-origin navigation or curl, which is fine.
@@ -1364,7 +1384,7 @@ io.on("connection", (socket) => {
     });
 
     socket.on("command_packet", ({ application, command }) => {
-        lastCommandAt = Date.now();   // the updater waits for a quiet moment
+        lastActivityAt = Date.now();   // the updater waits for a quiet moment
         const packet = { senderId: socket.id, application, command };
         // command.tool is set by the Python side: every Illustrator tool arrives
         // as action "executeExtendScript", so the action alone counts nothing.
@@ -2084,5 +2104,9 @@ server.listen(PORT, "127.0.0.1", () => {
     // Give the app a moment to finish starting — panels, venv, config repair —
     // before it considers restarting itself.
     setTimeout(autoUpdate, 45000);
-    setInterval(autoUpdate, 6 * 3600 * 1000);
+    // Every five minutes, not every six hours. checkForUpdate caches the
+    // GitHub call for six hours, so this costs nothing — it just means that
+    // once there IS an update, it goes in at the first quiet ten minutes
+    // instead of whenever the next six-hourly tick happens to find one.
+    setInterval(autoUpdate, 5 * 60 * 1000);
 });
