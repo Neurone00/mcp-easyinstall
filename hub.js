@@ -1025,57 +1025,56 @@ async function checkForUpdate() {
 
 // The app can't overwrite itself while it is running, so hand the swap to a
 // detached script that waits for this process to exit first.
-// Updating without being asked.
 //
-// The banner only exists inside the control panel, and a working install gives
-// you no reason to open it — so an old version could sit there indefinitely,
-// which is how someone ends up running a build whose Photoshop server cannot
-// even start. The swap below is already careful: it checks the architecture,
-// moves the old app aside rather than deleting it, and puts it back if the
-// copy fails. So do it, and pick the moment.
-// Anything that counts as someone working: a command from Claude or ChatGPT,
-// and any write from the control panel. /api/status is a GET polled every two
-// seconds, so it is deliberately not activity.
+// DOWNLOADING happens by itself; RESTARTING never does. A restart drops the
+// Adobe panels' connection and ends whatever conversation is open, and no
+// amount of guessing at a quiet moment makes that someone else's call to take.
+// So the new version is fetched, checked and parked, and the person is asked —
+// in the control panel, and by the menu bar app, which they will see without
+// having to open anything.
+
+// Anything that counts as someone working. Nothing restarts on its own any
+// more, but a download still waits for the first run's setup to finish.
 let lastActivityAt = 0;
 let autoUpdateAt = 0;
 
-// A minute was nowhere near enough. Reading a reply, looking at the artboard
-// and typing the next prompt passes a minute constantly, and the restart would
-// have landed in the middle of it.
-const QUIET_FOR = 10 * 60 * 1000;
+// A version downloaded and verified, waiting for someone to say when.
+let staged = null;                                          // { version, path }
+const STAGED_DIR = path.join(SUPPORT, "staged-update");
+const UPDATE_READY = path.join(SUPPORT, "update-ready");    // the menu bar app watches this
 
 async function autoUpdate() {
     const found = await checkForUpdate();
     if (!found) return;
-
-    // Not mid-task: the app restarts itself, and doing that under someone's
-    // hands while they are driving Illustrator is worse than being a day old.
-    //
-    // lastActivityAt is stamped when a command ARRIVES, so on its own it would
-    // still allow a restart in the middle of a long export. Outstanding
-    // commands are tracked anyway, for attributing replies — so ask them.
-    if (inFlight.size) return;
-    if (Date.now() - lastActivityAt < QUIET_FOR) return;
-    if (venvBuilding) return;
+    if (staged && staged.version === found.version) return;   // already waiting
+    if (venvBuilding) return;                                 // first run comes first
     if (Date.now() - autoUpdateAt < 30 * 60 * 1000) return;   // one go per half hour
     autoUpdateAt = Date.now();
 
-    console.log(`Updating to ${found.version}\u2026`);
     try {
-        await applyUpdate();
+        await stageUpdate();
+        console.log(`\u2713 ${staged.version} is downloaded \u2014 waiting for a restart`);
     } catch (e) {
-        // The banner stays as the way out: a failing auto-update should not
-        // also take away the button.
-        console.log(`\u26a0 couldn't update automatically: ${e.message}`);
+        // The banner stays as the way out: a failed download should not also
+        // take away the button.
+        console.log(`\u26a0 couldn't download the update: ${e.message}`);
     }
 }
 
-async function applyUpdate() {
+
+// Download, unpack and check it. Nothing on disk is touched that the running
+// app depends on, so this is safe to do at any moment — it ends with a verified
+// copy parked in Application Support and `staged` pointing at it.
+async function stageUpdate() {
     if (!update) throw new Error("No update available.");
     const bundle = path.resolve(HERE, "..", "..");
     if (!bundle.endsWith(".app")) throw new Error("Updates only work on the installed app.");
 
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "adobe-mcp-"));
+    // Not os.tmpdir(): macOS prunes it, and this copy may sit for days waiting
+    // for someone to restart.
+    fs.rmSync(STAGED_DIR, { recursive: true, force: true });
+    fs.mkdirSync(STAGED_DIR, { recursive: true });
+    const tmp = STAGED_DIR;
     const zip = path.join(tmp, "update.zip");
     const r = await fetch(update.url, {
         redirect: "follow",
@@ -1085,6 +1084,7 @@ async function applyUpdate() {
     fs.writeFileSync(zip, Buffer.from(await r.arrayBuffer()));
 
     execFileSync("/usr/bin/ditto", ["-x", "-k", zip, tmp]);
+    fs.rmSync(zip, { force: true });            // 112MB we no longer need
     const fresh = fs.readdirSync(tmp).find((n) => n.endsWith(".app"));
     if (!fresh) throw new Error("That download didn't contain an app.");
 
@@ -1102,6 +1102,21 @@ async function applyUpdate() {
         /* lipo unavailable: fall through rather than block the update */
     }
 
+    staged = { version: update.version, path: path.join(tmp, fresh) };
+    // The menu bar app watches this file and does the asking, so the prompt
+    // reaches someone who never opens the control panel.
+    fs.writeFileSync(UPDATE_READY, staged.version);
+    return staged;
+}
+
+// Only ever from a deliberate press: the banner's button, or Restart in the
+// menu bar app's prompt.
+function applyUpdate() {
+    if (!staged) throw new Error("No update has been downloaded yet.");
+    const bundle = path.resolve(HERE, "..", "..");
+    if (!bundle.endsWith(".app")) throw new Error("Updates only work on the installed app.");
+    const tmp = STAGED_DIR;
+
     // Move the old app aside rather than deleting it, and put it back if the
     // copy fails. The previous version removed it first, so a failed copy left
     // the user with no app at all and no message.
@@ -1113,7 +1128,7 @@ async function applyUpdate() {
         `OLD=${q(bundle + ".old")}`,
         `rm -rf "$OLD"`,
         `mv ${q(bundle)} "$OLD" || exit 1`,
-        `if /usr/bin/ditto ${q(path.join(tmp, fresh))} ${q(bundle)}; then`,
+        `if /usr/bin/ditto ${q(staged.path)} ${q(bundle)}; then`,
         `  /usr/bin/xattr -cr ${q(bundle)}`,
         `  rm -rf "$OLD"`,
         `else`,
@@ -1121,7 +1136,7 @@ async function applyUpdate() {
         `  mv "$OLD" ${q(bundle)}`,   // put the working version back
         `fi`,
         `/usr/bin/open ${q(bundle)}`,
-        `rm -rf ${q(tmp)}`,
+        `rm -rf ${q(tmp)} ${q(UPDATE_READY)}`,
     ].join("\n"));
     fs.chmodSync(script, 0o755);
     execFile("/bin/bash", [script], { detached: true, stdio: "ignore" }).unref();
@@ -1453,7 +1468,9 @@ app.get("/api/status", (_req, res) => {
         codexNetwork: codexNetworkAllowed(),
         python: { ready: venvReady, building: venvBuilding, error: venvError },
         version: VERSION,
-        update,
+        // `ready` tells the page whether pressing the button restarts right away
+        // or still has 112MB to fetch first.
+        update: update && { ...update, ready: !!(staged && staged.version === update.version) },
         apps: Object.entries(APPS).map(([key, a]) => ({
             key,
             label: a.label,
@@ -1994,7 +2011,8 @@ app.post("/api/setup", async (_req, res) => {
 
 app.post("/api/update", async (_req, res) => {
     try {
-        await applyUpdate();
+        if (!staged) await stageUpdate();   // pressed before the background fetch got there
+        applyUpdate();
         res.json({ ok: true });
     } catch (e) {
         res.status(500).json({ error: e.message });

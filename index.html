@@ -467,11 +467,17 @@ function renderBanner() {
            " Your apps aren't connected, so nothing will fail silently later.";
     action = "Try again";
     actionKind = "rebuild-python";
+  } else if (state.update && state.update.ready) {
+    news = true;
+    title = `Version ${state.update.version} is ready`;
+    body = `Downloaded already. Restarting takes a few seconds and closes any ` +
+           `Adobe panel connection and any conversation in progress.`;
+    action = "Restart now";
   } else if (state.update) {
     news = true;
     title = `Version ${state.update.version} is available`;
-    body = `You're on ${state.version}. Updating takes a few seconds and reopens the app.`;
-    action = "Update now";
+    body = `You're on ${state.version}. This downloads it and restarts the app.`;
+    action = "Download and restart";
   }
 
   b.classList.toggle("hidden", !title);
