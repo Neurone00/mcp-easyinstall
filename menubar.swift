@@ -278,10 +278,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func offerUpdate(_ version: String) {
         let alert = NSAlert()
-        alert.messageText = "Moskito Easy MCP \(version) is ready"
+        // The version is what tells us not to ask twice, not something to put in
+        // front of someone: the number means nothing to them.
+        _ = version
+        alert.messageText = "An update to Moskito Easy MCP is ready"
         alert.informativeText = "It is already downloaded. Restarting takes a few "
-            + "seconds, and closes any Adobe panel connection and any conversation "
-            + "in progress \u{2014} so finish what you are doing first if you need to."
+            + "seconds and ends any open conversation."
         alert.addButton(withTitle: "Restart now")
         alert.addButton(withTitle: "Later")
         NSApp.activate(ignoringOtherApps: true)

@@ -82,10 +82,11 @@ h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 640;
   box-shadow: 0 2px 10px rgba(7, 95, 104, .25);
   align-items: center; gap: 16px;
 }
-/* One line. The dialog already explained the cost; a bar that may sit there for
-   days should not repeat it every time you glance at the window. */
-.banner.update p { display: none; }
-.banner.update b { margin: 0; font-size: 14px; }
+/* Two compact lines: what happened, and what the button costs. The text only
+   ever covers the left of the bar, where the gradient is darkest, so a tinted
+   body still clears 4.5:1 — measured 4.9 at the midpoint. */
+.banner.update p { color: #d6f5ee; font-size: 13px; }
+.banner.update b { margin: 0 0 1px; font-size: 14px; }
 .banner.update button {
   background: #ffffff; border-color: #ffffff; color: #07605f; font-weight: 620;
 }
@@ -499,15 +500,16 @@ function renderBanner() {
     action = "Try again";
     actionKind = "rebuild-python";
   } else if (state.update && state.update.ready) {
+    // No version number: it means nothing to the person reading it. What they
+    // need is that there is one, and what pressing the button will cost.
     waiting = true;
-    title = `Version ${state.update.version} is ready`;
-    body = `Already downloaded. Restarting takes a few seconds and closes any ` +
-           `Adobe panel connection and any conversation in progress.`;
+    title = "An update is ready";
+    body = "Restarting takes a few seconds and ends any open conversation.";
     action = "Update and restart";
   } else if (state.update) {
     waiting = true;
-    title = `Version ${state.update.version} is available`;
-    body = `You're on ${state.version}. This downloads it and restarts the app.`;
+    title = "An update is available";
+    body = "Downloading takes a moment, then the app restarts itself.";
     action = "Update and restart";
   }
 
