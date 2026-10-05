@@ -61,6 +61,28 @@ h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 640;
 }
 .banner.hidden { display: none; }
 .banner.news { border-left-color: var(--accent); }
+/* A waiting update outlives the dialog that offered it and cannot be
+   dismissed: it sticks to the top of the window until someone restarts.
+   Teal rather than the Calypso accent, so it is never mistaken for one of the
+   blue buttons, and never for the amber-edged problem banner either. */
+.banner.update {
+  /* Every stop is dark enough for white to clear 4.5:1 — the first try ran up
+     to #2fbf9e, where the body text sat at 3:1. Measured: 7.5 / 5.7 / 4.7. */
+  background: linear-gradient(104deg, #075f68 0%, #0a7370 55%, #0d8276 100%);
+  border: 0; border-left: 0; color: #ffffff;
+  /* Without z-index the rows scrolling beneath it showed through: a sticky
+     box does not outrank later siblings on its own. */
+  position: sticky; top: 12px; z-index: 10;
+  box-shadow: 0 6px 20px rgba(7, 95, 104, .3);
+  align-items: center;
+}
+/* White for the body too: tinting it any lighter than the heading drops below
+   4.5:1 on the light end of the gradient. Weight carries the hierarchy. */
+.banner.update p { color: #ffffff; }
+.banner.update button {
+  background: #ffffff; border-color: #ffffff; color: #07605f; font-weight: 620;
+}
+.banner.update button:hover:not(:disabled) { background: #eafaf5; border-color: #eafaf5; }
 .banner button { align-self: center; }
 button.hidden { display: none; }
 .banner b { display: block; margin-bottom: 2px; }
@@ -266,14 +288,15 @@ button:focus-visible {
     </div>
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.
       <a class="whatcan" href="/help.html">What can I do with this?</a></p>
-    <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
-      <div style="flex:1">
-        <b id="banner-title"></b>
-        <p id="banner-body"></p>
-      </div>
-      <button class="primary hidden" id="banner-action"></button>
-    </div>
   </header>
+
+  <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
+    <div style="flex:1">
+    <b id="banner-title"></b>
+    <p id="banner-body"></p>
+    </div>
+    <button class="primary hidden" id="banner-action"></button>
+  </div>
 
   <div class="hero">
     <button class="primary" id="setup-all">Set everything up</button>
@@ -448,7 +471,7 @@ function renderBanner() {
   const act = document.getElementById("banner-action");
   // actionKind tells the click handler which endpoint the banner button hits —
   // it used to be hardwired to the updater.
-  let title, body, action = null, news = false, actionKind = "update";
+  let title, body, action = null, news = false, waiting = false, actionKind = "update";
 
   if (!state.engine) {
     title = "Can't find the Adobe MCP engine";
@@ -468,20 +491,23 @@ function renderBanner() {
     action = "Try again";
     actionKind = "rebuild-python";
   } else if (state.update && state.update.ready) {
-    news = true;
-    title = `Version ${state.update.version} is ready`;
-    body = `Downloaded already. Restarting takes a few seconds and closes any ` +
+    waiting = true;
+    title = `Version ${state.update.version} is ready to install`;
+    body = `Already downloaded. Restarting takes a few seconds and closes any ` +
            `Adobe panel connection and any conversation in progress.`;
-    action = "Restart now";
+    action = "Update and restart";
   } else if (state.update) {
-    news = true;
+    waiting = true;
     title = `Version ${state.update.version} is available`;
     body = `You're on ${state.version}. This downloads it and restarts the app.`;
-    action = "Download and restart";
+    action = "Update and restart";
   }
 
   b.classList.toggle("hidden", !title);
   b.classList.toggle("news", news);
+  // Dismissing the dialog does not dismiss this. There is no close control:
+  // the only way out is to restart, which is the point.
+  b.classList.toggle("update", waiting);
   act.classList.toggle("hidden", !action);
   if (action) {
     act.textContent = action;
