@@ -79,7 +79,8 @@ async function query(env) {
       COUNT(DISTINCT index1) AS people
     FROM moskito_easy_mcp_usage
     WHERE timestamp > NOW() - INTERVAL \'30\' DAY
-      AND index1 NOT IN (\'test-uuid\', \'probe-install-id\', \'chain-check\', \'split-check\')
+      AND index1 NOT IN (\'test-uuid\', \'probe-install-id\', \'chain-check\',
+                         \'split-check\', \'heartbeat-check\')
     GROUP BY name, kind
     ORDER BY calls DESC
     LIMIT 100`;
