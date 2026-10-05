@@ -40,6 +40,15 @@ async function collect(request, env) {
   const day = String(body.day || "").slice(0, 10);
   const version = String(body.version || "").slice(0, 16);
 
+  // One row per report, whether or not anything was used. Without it an install
+  // only existed once somebody drove an app with it, so the install count was
+  // really an active-user count wearing the wrong label.
+  env.USAGE.writeDataPoint({
+    blobs: ["install", "", version, day],
+    doubles: [0, 0, 0],
+    indexes: [body.id],
+  });
+
   // One row per app, plus one per tool. Blobs are dimensions, doubles are the
   // numbers; indexes are what Analytics Engine samples on, so the install id
   // goes there and is never selected back out.

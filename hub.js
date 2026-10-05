@@ -1195,11 +1195,19 @@ function noteReply(senderId, packet) {
     if (packet && packet.status && packet.status !== "SUCCESS") bump(tally.errors, seen.app);
 }
 
+// An install that has never driven an app sent nothing at all, ever — so it was
+// not an install as far as the figures were concerned, and "installs" silently
+// meant "machines that ran a command in the last 30 days". Ping once a day even
+// with nothing to report, so a quiet install still counts as one.
+let pingedOn = "";
+
 async function sendAnalytics() {
     const st = analyticsState();
     const payload = tally;
+    const today = new Date().toISOString().slice(0, 10);
     const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length;
-    if (!anything) return;
+    if (!anything && pingedOn === today) return;
+    pingedOn = today;
     tally = { calls: {}, errors: {}, bytes: {}, tools: {} };   // swap first: a failed
                                                                // send drops a window
                                                                // rather than doubling it
@@ -1211,7 +1219,7 @@ async function sendAnalytics() {
                 id: st.id,
                 version: VERSION,
                 os: os.release(),
-                day: new Date().toISOString().slice(0, 10),
+                day: today,
                 ...payload,
             }),
             signal: AbortSignal.timeout(10000),
