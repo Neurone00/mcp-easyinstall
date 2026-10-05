@@ -57,28 +57,35 @@ h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 640;
 .banner {
   display: flex; gap: 12px; align-items: flex-start;
   background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--warn);
-  border-radius: 10px; padding: 14px 16px; margin: 20px 0 0; box-shadow: var(--shadow);
+  border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow);
+  /* It lives outside .wrap now, so it lines its own edges up with the cards. */
+  max-width: 648px; margin: 20px auto 0;
 }
 .banner.hidden { display: none; }
 .banner.news { border-left-color: var(--accent); }
-/* A waiting update outlives the dialog that offered it and cannot be
-   dismissed: it sticks to the top of the window until someone restarts.
-   Teal rather than the Calypso accent, so it is never mistaken for one of the
-   blue buttons, and never for the amber-edged problem banner either. */
+/* A waiting update outlives the dialog that offered it and cannot be dismissed:
+   a bar across the whole window, not a card in the page, until someone
+   restarts. Teal rather than the Calypso accent, so it is never mistaken for
+   one of the blue buttons, and never for the amber-edged problem banner.
+
+   The side padding centres its contents on the same 648px column the cards
+   use, with no inner wrapper. Without z-index the rows scrolling beneath it
+   showed through: a sticky box does not outrank later siblings on its own. */
 .banner.update {
-  /* Every stop is dark enough for white to clear 4.5:1 — the first try ran up
-     to #2fbf9e, where the body text sat at 3:1. Measured: 7.5 / 5.7 / 4.7. */
+  position: sticky; top: 0; z-index: 10;
+  max-width: none; margin: 0; border: 0; border-radius: 0;
+  padding: 11px max(16px, calc(50% - 324px));
+  /* Dark enough for white to clear 4.5:1 at every stop. The first try ran up to
+     #2fbf9e, where the text sat at 3:1. Measured: 7.4 / 5.7 / 4.7. */
   background: linear-gradient(104deg, #075f68 0%, #0a7370 55%, #0d8276 100%);
-  border: 0; border-left: 0; color: #ffffff;
-  /* Without z-index the rows scrolling beneath it showed through: a sticky
-     box does not outrank later siblings on its own. */
-  position: sticky; top: 12px; z-index: 10;
-  box-shadow: 0 6px 20px rgba(7, 95, 104, .3);
-  align-items: center;
+  color: #ffffff;
+  box-shadow: 0 2px 10px rgba(7, 95, 104, .25);
+  align-items: center; gap: 16px;
 }
-/* White for the body too: tinting it any lighter than the heading drops below
-   4.5:1 on the light end of the gradient. Weight carries the hierarchy. */
-.banner.update p { color: #ffffff; }
+/* One line. The dialog already explained the cost; a bar that may sit there for
+   days should not repeat it every time you glance at the window. */
+.banner.update p { display: none; }
+.banner.update b { margin: 0; font-size: 14px; }
 .banner.update button {
   background: #ffffff; border-color: #ffffff; color: #07605f; font-weight: 620;
 }
@@ -277,6 +284,15 @@ button:focus-visible {
 </style>
 </head>
 <body>
+
+<div class="banner hidden" id="banner" role="alert" aria-live="assertive">
+  <div style="flex:1">
+  <b id="banner-title"></b>
+  <p id="banner-body"></p>
+  </div>
+  <button class="primary hidden" id="banner-action"></button>
+</div>
+
 <main class="wrap">
 
   <header>
@@ -289,14 +305,6 @@ button:focus-visible {
     <p class="sub">Let Claude and ChatGPT drive your Adobe apps.
       <a class="whatcan" href="/help.html">What can I do with this?</a></p>
   </header>
-
-  <div class="banner hidden" id="banner" role="alert" aria-live="assertive">
-    <div style="flex:1">
-    <b id="banner-title"></b>
-    <p id="banner-body"></p>
-    </div>
-    <button class="primary hidden" id="banner-action"></button>
-  </div>
 
   <div class="hero">
     <button class="primary" id="setup-all">Set everything up</button>
@@ -492,7 +500,7 @@ function renderBanner() {
     actionKind = "rebuild-python";
   } else if (state.update && state.update.ready) {
     waiting = true;
-    title = `Version ${state.update.version} is ready to install`;
+    title = `Version ${state.update.version} is ready`;
     body = `Already downloaded. Restarting takes a few seconds and closes any ` +
            `Adobe panel connection and any conversation in progress.`;
     action = "Update and restart";
