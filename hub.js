@@ -2126,6 +2126,10 @@ server.listen(PORT, "127.0.0.1", () => {
     // Also settles the id on first run, and clears the stale "enabled" key,
     // rather than waiting for the first flush fifteen minutes later.
     analyticsState();
+    // Once shortly after starting, as well as every 15 minutes. On the interval
+    // alone, anyone who opened the app, did a job and quit inside 15 minutes
+    // never reported at all — so they were not an install either.
+    setTimeout(sendAnalytics, 60 * 1000).unref();
     setInterval(sendAnalytics, 15 * 60 * 1000).unref();
     // Give the app a moment to finish starting — panels, venv, config repair —
     // before it considers restarting itself.
