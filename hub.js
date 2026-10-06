@@ -1233,7 +1233,6 @@ async function sendAnalytics() {
             body: JSON.stringify({
                 id: st.id,
                 version: VERSION,
-                os: os.release(),
                 day: today,
                 ...payload,
             }),
