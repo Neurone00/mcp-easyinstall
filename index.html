@@ -61,6 +61,7 @@ h1 { font-size: 30px; letter-spacing: -.02em; margin: 0 0 6px; font-weight: 640;
   /* It lives outside .wrap now, so it lines its own edges up with the cards. */
   max-width: 648px; margin: 20px auto 0;
 }
+[hidden] { display: none !important; }
 .banner.hidden { display: none; }
 .banner.news { border-left-color: var(--accent); }
 /* A waiting update outlives the dialog that offered it and cannot be dismissed:
@@ -677,6 +678,16 @@ function render() {
     for (const b of document.querySelectorAll("button, input")) {
       if (JSON.stringify(b.dataset) === focusKey) { b.focus(); break; }
     }
+  }
+
+  // Nothing has ever been set up: there is exactly one useful thing to do, and
+  // a list of apps nobody can connect yet is just a wall of buttons that lead
+  // back to this one. An assistant with servers registered is the signal that
+  // setup has succeeded at least once.
+  const firstRun = !state.clients.some((c) => c.connected.length);
+  for (const sel of ["#gear", "h2.deck", ".note", "#apps", ".h2row", "#clients"]) {
+    const el = document.querySelector(sel);
+    if (el) el.hidden = firstRun;
   }
 
   const live = state.apps.filter((a) => a.live).length;
