@@ -63,6 +63,19 @@ async function collect(request, env) {
       indexes: [body.id],
     });
   }
+  // The same calls again, cut by which assistant asked rather than which app
+  // answered, so Claude and ChatGPT can be compared on the same work.
+  for (const [client, calls] of Object.entries(body.clients || {})) {
+    env.USAGE.writeDataPoint({
+      blobs: ["client", String(client).slice(0, 32), version, day],
+      doubles: [
+        Number(calls) || 0,
+        0,
+        Number((body.clientBytes || {})[client]) || 0,
+      ],
+      indexes: [body.id],
+    });
+  }
   for (const [key, calls] of Object.entries(body.tools || {})) {
     env.USAGE.writeDataPoint({
       blobs: ["tool", String(key).slice(0, 64), version, day],

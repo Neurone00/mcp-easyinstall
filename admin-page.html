@@ -125,6 +125,9 @@
 
   <div class="summary" id="summary"></div>
 
+  <h2>By assistant</h2>
+  <div class="rows" id="clients"><div class="empty">Loading…</div></div>
+
   <h2>By app</h2>
   <div class="rows" id="apps"><div class="empty">Loading…</div></div>
 
@@ -138,7 +141,9 @@
     collected, and nothing here identifies a person. Counted per install, so a reinstall
     looks like a new one.<br>
     Tokens are estimated from the size of what the tools sent back: the share of an
-    assistant's context this app is responsible for, not anyone's plan usage.
+    assistant's context this app is responsible for, not anyone's plan usage.<br>
+    By assistant and by app count the same calls twice over, cut two ways.
+    &ldquo;Unlabelled config&rdquo; is a server someone wired up by hand.
   </p>
 </main>
 
@@ -156,6 +161,10 @@
     photoshop: "Photoshop",
     aftereffects: "After Effects",
     premiere: "Premiere Pro",
+    "claude-desktop": "Claude Desktop",
+    "claude-code": "Claude Code",
+    codex: "ChatGPT",
+    unknown: "Unlabelled config",
   };
 
   function row(name, calls, max, right, mono) {
@@ -232,6 +241,7 @@
         tile(num(calls), "commands run"),
         tile(calls ? ((errors / calls) * 100).toFixed(0) + "%" : "0%", "failed"),
       );
+      fill($("clients"), d.clients || [], d.installs, true);
       fill($("apps"), d.apps, d.installs, true);
       fill($("tools"), d.tools, d.installs, false);
       $("when").textContent = "Updated " + new Date(d.updated).toLocaleString();

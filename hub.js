@@ -408,7 +408,7 @@ function pruneBackups(file) {
 /* --------------------------------------------------------- mcp server defs -- */
 
 // The command an AI client runs to start one app's MCP server.
-function serverDef(key) {
+function serverDef(key, clientId) {
     const engine = findEngine();
     if (!engine) return null;
     // Deliberately NOT `uv run`. Codex and the ChatGPT desktop app sandbox MCP
@@ -421,7 +421,12 @@ function serverDef(key) {
         // Python writes __pycache__ next to the script, i.e. inside the .app.
         // A sandboxed client can't do that, and the server dies before it can
         // answer. Nothing here needs the bytecode cache.
-        env: { PYTHONDONTWRITEBYTECODE: "1" },
+        // Which assistant this server belongs to, so its calls can be counted
+        // separately. We generate these config files, so this is known rather
+        // than inferred from a process tree.
+        env: clientId
+            ? { PYTHONDONTWRITEBYTECODE: "1", MOSKITO_CLIENT: clientId }
+            : { PYTHONDONTWRITEBYTECODE: "1" },
     };
 }
 
@@ -512,7 +517,7 @@ function connectClient(clientId, keys) {
         for (const k of Object.keys(APPS)) {
             if (!keys.includes(k)) delete cfg[c.key][k];
         }
-        for (const k of keys) cfg[c.key][k] = serverDef(k);
+        for (const k of keys) cfg[c.key][k] = serverDef(k, clientId);
         writeJSON(c.file, cfg);
         return;
     }
@@ -542,7 +547,7 @@ function connectClient(clientId, keys) {
     }
 
     const body = keys.map((k) => {
-        const d = serverDef(k);
+        const d = serverDef(k, clientId);
         const env = Object.entries(d.env || {})
             .map(([ek, ev]) => `${ek} = ${JSON.stringify(ev)}`).join(", ");
         return `[${c.key}.${k}]\n` +
@@ -900,6 +905,10 @@ function repairClientPaths() {
                     if (!def) return false;
                     if (def.command !== want.command) return true;
                     if (!(def.env || {}).PYTHONDONTWRITEBYTECODE) return true;
+                    // A config written before the client tag existed. Counting
+                    // it as drift is how every install gets labelled without
+                    // anyone pressing Connect again.
+                    if (!(def.env || {}).MOSKITO_CLIENT) return true;
                     const last = (def.args || [])[(def.args || []).length - 1] || "";
                     return path.dirname(last) !== path.dirname(engineArg);
                 });
@@ -907,6 +916,7 @@ function repairClientPaths() {
                 const toml = fs.readFileSync(CLIENTS[id].file, "utf8");
                 stale = !toml.includes(want.command)
                     || !toml.includes("PYTHONDONTWRITEBYTECODE")
+                    || !toml.includes("MOSKITO_CLIENT")
                     || !toml.includes(path.dirname(engineArg));
             }
         } catch (e) {
@@ -1185,16 +1195,21 @@ function analyticsState() {
 
 // Reset after each send. Held in memory so a busy session is not writing to
 // disk on every tool call.
-let tally = { calls: {}, errors: {}, bytes: {}, tools: {} };
+// clients/clientBytes are the same two numbers again, cut by which assistant
+// asked rather than which app answered — the only way to compare what Claude
+// and ChatGPT each cost for the same work.
+let tally = { calls: {}, errors: {}, bytes: {}, tools: {}, clients: {}, clientBytes: {} };
 const inFlight = new Map();   // senderId -> { app, tool } so the reply can be attributed
 
 function bump(obj, key, by = 1) { obj[key] = (obj[key] || 0) + by; }
 
-function noteCall(app, tool, senderId) {
+function noteCall(app, tool, senderId, client) {
     bump(tally.calls, app);
     if (tool) bump(tally.tools, `${app}.${tool}`);
+    // Absent when someone wrote the config by hand; say so rather than guess.
+    bump(tally.clients, client || "unknown");
     if (senderId) {
-        inFlight.set(senderId, { app, tool });
+        inFlight.set(senderId, { app, tool, client: client || "unknown" });
         // A reply that never comes must not pin an entry forever.
         setTimeout(() => inFlight.delete(senderId), 120000);
     }
@@ -1205,7 +1220,9 @@ function noteReply(senderId, packet) {
     if (!seen) return;
     inFlight.delete(senderId);
     try {
-        bump(tally.bytes, seen.app, JSON.stringify(packet || "").length);
+        const size = JSON.stringify(packet || "").length;
+        bump(tally.bytes, seen.app, size);
+        bump(tally.clientBytes, seen.client, size);
     } catch { /* unserialisable: skip the size, keep the count */ }
     if (packet && packet.status && packet.status !== "SUCCESS") bump(tally.errors, seen.app);
 }
@@ -1220,10 +1237,11 @@ async function sendAnalytics() {
     const st = analyticsState();
     const payload = tally;
     const today = new Date().toISOString().slice(0, 10);
-    const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length;
+    const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length
+        || Object.keys(payload.clients).length;
     if (!anything && pingedOn === today) return;
     pingedOn = today;
-    tally = { calls: {}, errors: {}, bytes: {}, tools: {} };   // swap first: a failed
+    tally = { calls: {}, errors: {}, bytes: {}, tools: {}, clients: {}, clientBytes: {} };   // swap first: a failed
                                                                // send drops a window
                                                                // rather than doubling it
     try {
@@ -1410,7 +1428,7 @@ io.on("connection", (socket) => {
         const packet = { senderId: socket.id, application, command };
         // command.tool is set by the Python side: every Illustrator tool arrives
         // as action "executeExtendScript", so the action alone counts nothing.
-        noteCall(application, command && command.tool, socket.id);
+        noteCall(application, command && command.tool, socket.id, command && command.client);
         const clients = applicationClients[application];
         const label = APPS[application] ? APPS[application].label : application;
 

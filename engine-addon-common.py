@@ -171,12 +171,23 @@ except Exception:
 # `from core import createCommand`, so the name they call is this module's, and
 # this file is appended to that same module.
 
+import os
+
 _amcp_create = createCommand
 _AMCP_SKIP = {"createCommand", "_amcp_tagged", "_run", "sendCommand", "wrapper"}
 
 
+# Which assistant started this server. The hub writes it into the config file
+# it generates for each client, so it is known for certain rather than guessed
+# from a process tree. Absent for a hand-written config, which is honest: the
+# figures then say "unknown" instead of inventing an answer.
+_AMCP_CLIENT = os.environ.get("MOSKITO_CLIENT", "")
+
+
 def _amcp_tagged(action: str, options: dict):
     command = _amcp_create(action, options)
+    if _AMCP_CLIENT:
+        command["client"] = _AMCP_CLIENT
     try:
         import inspect
         for frame in inspect.stack()[1:8]:

@@ -57,6 +57,7 @@ export default {
         installs,
         updated: new Date().toISOString(),
         apps: data.filter((d) => d.kind === "app").map(shape),
+        clients: data.filter((d) => d.kind === "client").map(shape),
         tools: data.filter((d) => d.kind === "tool").map(shape),
       });
     } catch (e) {
