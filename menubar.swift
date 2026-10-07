@@ -130,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launched = true
         watchForShowRequests()
         watchForUpdates()
+        watchForPermissionRequests()
         watchForArrangeRequests()
         watchForFocusRequests()
 
@@ -364,6 +365,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let out = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/AdobeMCP/arrange-result")
         try? text.write(to: out, atomically: true, encoding: .utf8)
+    }
+
+    /// Setup asks for this up front rather than letting Arrange windows be the
+    /// thing that springs a system dialog on someone days later. Harmless when
+    /// the permission is already granted: no prompt, no window.
+    func watchForPermissionRequests() {
+        let flag = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/AdobeMCP/permissions-request")
+        var lastSeen = (try? String(contentsOf: flag, encoding: .utf8)) ?? ""
+        Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            guard let stamp = try? String(contentsOf: flag, encoding: .utf8) else { return }
+            guard stamp != lastSeen else { return }
+            lastSeen = stamp
+            DispatchQueue.main.async {
+                let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+                _ = AXIsProcessTrustedWithOptions(opts as CFDictionary)
+            }
+        }
     }
 
     func arrange(adobe: String, assistants: [String], split: Double) {

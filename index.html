@@ -884,7 +884,10 @@ document.addEventListener("click", async (e) => {
     } else if (b.id === "setup-all") {
       b.textContent = "Setting up…";
       const r = await api("POST", "/api/setup");
-      toast(r.message);
+      // Setup rewrites the config files, so the assistants have to restart
+      // before any of it reaches them. Offer it here rather than leaving them
+      // to find the button.
+      toast(r.title ? { title: r.title, body: r.body } : r.message, r.restart);
     } else return;
   } catch (err) {
     toast(err.message);

@@ -1817,6 +1817,18 @@ function udtRunning() {
 
 // setupUxp has just restarted the Developer Tool, and its service takes a
 // moment to come up. Worth a few tries before deciding it cannot be done.
+// Launching an Adobe app takes 10-30 seconds on a cold machine, and the
+// Developer Tool's service a few more after that. Setup used to fire `open`
+// and ask immediately, so a fresh install was always told to finish the job
+// itself. Wait for them.
+async function waitFor(check, seconds) {
+    for (let i = 0; i < seconds * 2; i++) {
+        if (check()) return true;
+        await new Promise((r) => setTimeout(r, 500));
+    }
+    return check();
+}
+
 async function loadWhenReady(key, tries = 4) {
     let last;
     for (let i = 0; i < tries; i++) {
@@ -1975,25 +1987,43 @@ app.post("/api/setup", async (_req, res) => {
                        " Nothing was connected, so you won't get silent failures later.",
             });
         }
+        // Ask for Accessibility now. Arrange windows is otherwise the thing
+        // that springs a system dialog on someone days after they set up.
+        try {
+            fs.mkdirSync(SUPPORT, { recursive: true });
+            fs.writeFileSync(path.join(SUPPORT, "permissions-request"), String(Date.now()));
+        } catch { /* the prompt is a nicety, not the setup */ }
+
+        // Only what the user has switched on. Setting up an unticked app and
+        // then reporting it as unfinished business was asking them to go and
+        // fix something they had deliberately turned off.
+        const wanted = registerableApps();
         for (const [key, a] of Object.entries(APPS)) {
-            if (!appInstalled(a.appGlob)) continue;
+            if (!wanted.includes(key)) continue;
             try {
                 if (a.kind === "cep") {
                     installPanel(key);
                     done.push(a.label);
                 } else {
-                    await setupUxp(key);
-                    // Registering is not the finish line any more: we can press
-                    // Load ourselves, so do it rather than sending them to
-                    // Adobe's tool for a click we are able to make.
+                    const r = await setupUxp(key);
+                    if (r.udtMissing) {
+                        todo.push(`${a.label} \u2014 install Adobe's free UXP Developer `
+                                + `Tool from Creative Cloud, then press Set up again`);
+                        break;
+                    }
+                    // setupUxp has just launched both of these. Give them time
+                    // to actually be there rather than handing the job back.
+                    await waitFor(() => appRunning(key), 60);
+                    await waitFor(() => udtRunning(), 20);
                     if (!appRunning(key)) {
-                        todo.push(`${a.label} \u2014 open it and its panel loads itself`);
+                        todo.push(`${a.label} \u2014 it didn't finish opening, so its `
+                                + `panel couldn't be loaded. Open it and press Set up again`);
                     } else {
                         try {
-                            await loadWhenReady(key);
+                            await loadWhenReady(key, 8);
                             done.push(a.label);
                         } catch (e) {
-                            todo.push(`${a.label} \u2014 ${e.message}`);
+                            todo.push(`${a.label} \u2014 ${String(e.message).replace(/\.$/, "")}`);
                         }
                     }
                 }
@@ -2016,11 +2046,19 @@ app.post("/api/setup", async (_req, res) => {
                 failed.push(`${CLIENTS[id].label} (${e.message})`);
             }
         }
-        let message = `Ready: ${done.join(", ") || "no auto-installable apps"}.`;
-        if (wired.length) message += ` Connected to ${wired.join(", ")}.`;
-        if (todo.length) message += ` Still needs you: ${todo.join("; ")}.`;
-        if (failed.length) message += ` Couldn't do: ${failed.join("; ")}.`;
-        res.json({ ok: true, message, done, todo, wired, failed });
+        // Two parts, because the toast shows a heading and a line: what
+        // happened, then anything still outstanding. The old single string put
+        // four clauses in one paragraph and ended "panel..", because the
+        // messages being joined already had their own full stops.
+        const title = done.length
+            ? `${done.join(" and ")} ready`
+            : (todo.length || failed.length ? "Setup didn't finish" : "Nothing to set up");
+        const rest = [...todo, ...failed].map((t) => String(t).replace(/\.$/, ""));
+        const body = rest.length
+            ? rest.join(". ") + "."
+            : "Restart Claude and ChatGPT and they can drive your apps.";
+        res.json({ ok: true, title, body, restart: wired.length > 0,
+                   message: `${title}. ${body}`, done, todo, wired, failed });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
