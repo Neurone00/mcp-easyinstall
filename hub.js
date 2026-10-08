@@ -1971,18 +1971,16 @@ app.post("/api/focus-uxp", (_req, res) => {
     res.json({ ok: true });
 });
 
-// Creative Cloud is where the tool installs from; Adobe's page says how.
+// Adobe's own download page for the tool: it starts the installer, which
+// brings Creative Cloud with it if it isn't there. One window that does the
+// job, where this used to open Creative Cloud AND a guide to read — and the
+// guide's URL was a 404.
+//
+// adobe.com answers 200 with the same 67KB shell for any name under
+// /download/, so this was checked in a browser, not with curl: it renders as
+// "Install UXP Developer Tools | Adobe".
 function openUdtHelp() {
-    // By bundle id, not path: Creative Cloud.app lives in
-    // /Applications/Utilities/Adobe Creative Cloud/ACC/, which is not where
-    // anyone would guess, and Adobe has moved it before.
-    execFile("/usr/bin/open", ["-b", "com.adobe.acc.AdobeCreativeCloud"], (err) => {
-        if (err) console.log("\u26a0 couldn't open Creative Cloud: " + err.message);
-    });
-    // No trailing slash: Adobe's site 404s on ".../installation/" and serves
-    // ".../installation". The link shipped dead with the slash.
-    execFile("/usr/bin/open",
-        ["https://developer.adobe.com/photoshop/uxp/2022/guides/devtool/installation"]);
+    execFile("/usr/bin/open", ["https://www.adobe.com/download/uxp-developer-tools"]);
 }
 
 app.post("/api/uxp-help", (_req, res) => {
@@ -2041,7 +2039,7 @@ app.post("/api/setup", async (_req, res) => {
                         // they pressed one button to have things done for them.
                         openUdtHelp();
                         todo.push(`${a.label} needs Adobe's free UXP Developer Tool. `
-                                + `Creative Cloud and Adobe's instructions are open \u2014 `
+                                + `Adobe's download page is open \u2014 `
                                 + `install it, then press Set up again`);
                         break;
                     }
