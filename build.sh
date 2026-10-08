@@ -255,13 +255,16 @@ done
 ' "$HERE/engine/mcp/core.py"
 
 # 20s covers connect AND execution, which is not enough for exports or renders.
-/usr/bin/sed -i '' 's|^PROXY_TIMEOUT = 20$|PROXY_TIMEOUT = int(os.environ.get("ADOBE_MCP_TIMEOUT", "120"))|' \
+#
+# The import goes in with the line that needs it, in the same substitution.
+# It used to be added separately, at the top, only if grep found no
+# "import os" anywhere in the file — and once an add-on appended at the bottom
+# imported os too, grep found that one, the top insert was skipped, and the
+# Illustrator and After Effects servers died on load with a NameError. 2.41.0
+# to 2.43.0 shipped like that.
+/usr/bin/sed -i '' 's|^PROXY_TIMEOUT = 20$|import os\
+PROXY_TIMEOUT = int(os.environ.get("ADOBE_MCP_TIMEOUT", "120"))|' \
   "$HERE"/engine/mcp/*-mcp.py
-for f in "$HERE"/engine/mcp/*-mcp.py; do
-  grep -q "^import os$" "$f" || /usr/bin/sed -i '' '1i\
-import os
-' "$f"
-done
 
 [ -d "$HERE/node_modules" ] || { say "Installing hub dependencies"; npm install --silent; }
 
@@ -314,6 +317,32 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 [ -f "$HERE/app.icns" ] && cp "$HERE/app.icns" "$RES/app.icns"
+
+# --------------------------------------------------------- servers start ---
+# Every check above was on text; none of them ever started a server. 2.41.0
+# to 2.43.0 shipped with Illustrator and After Effects crashing on load, and
+# the build said nothing. So: start each one exactly as a client would, send
+# initialize, and refuse to build if any of them doesn't answer.
+MCP_BIN="$HOME/Library/Application Support/AdobeMCP/venv/bin/mcp"
+if [ -x "$MCP_BIN" ]; then
+  say "Starting every server once"
+  for f in "$RES"/engine/mcp/*-mcp.py; do
+    out="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"build","version":"1"}}}' \
+      | PYTHONDONTWRITEBYTECODE=1 "$MCP_BIN" run "$f" 2>&1)"
+    if ! printf '%s' "$out" | grep -q '"serverInfo"'; then
+      echo "✗ $(basename "$f") did not start:" >&2
+      printf '%s\n' "$out" | tail -8 >&2
+      exit 1
+    fi
+  done
+  say "All servers answered"
+elif [ "${1:-}" = "--release" ]; then
+  echo "✗ No Python environment at $MCP_BIN, so the servers can't be test-started." >&2
+  echo "  Open the app once to build it, then release again." >&2
+  exit 1
+else
+  say "No Python environment yet — skipping the server start check"
+fi
 
 # Sign with the self-signed identity if this machine has one (see
 # scripts/setup-signing.sh). It is not Apple notarisation — Gatekeeper still

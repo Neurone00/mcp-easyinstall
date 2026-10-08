@@ -171,23 +171,31 @@ except Exception:
 # `from core import createCommand`, so the name they call is this module's, and
 # this file is appended to that same module.
 
-import os
-
 _amcp_create = createCommand
 _AMCP_SKIP = {"createCommand", "_amcp_tagged", "_run", "sendCommand", "wrapper"}
 
 
-# Which assistant started this server. The hub writes it into the config file
-# it generates for each client, so it is known for certain rather than guessed
-# from a process tree. Absent for a hand-written config, which is honest: the
-# figures then say "unknown" instead of inventing an answer.
-_AMCP_CLIENT = os.environ.get("MOSKITO_CLIENT", "")
+# Which assistant started this server, for the usage figures. The hub writes it
+# into the config file it generates for each client. Absent for a hand-written
+# config, and the figures then say "unknown" rather than guess.
+#
+# Usage counting must never be able to stop a server starting. A top-level
+# `import os` here once did exactly that, by fooling the build into skipping
+# the import the server itself needed. So no module-level import, and anything
+# that goes wrong reading this leaves the label empty and nothing else.
+try:
+    _AMCP_CLIENT = __import__("os").environ.get("MOSKITO_CLIENT", "")
+except Exception:
+    _AMCP_CLIENT = ""
 
 
 def _amcp_tagged(action: str, options: dict):
     command = _amcp_create(action, options)
-    if _AMCP_CLIENT:
-        command["client"] = _AMCP_CLIENT
+    try:
+        if _AMCP_CLIENT:
+            command["client"] = _AMCP_CLIENT
+    except Exception:
+        pass
     try:
         import inspect
         for frame in inspect.stack()[1:8]:
