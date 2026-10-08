@@ -1005,7 +1005,12 @@ let update = null;        // {version, url, notes} once a newer release is seen
 let updateChecked = 0;
 
 async function checkForUpdate() {
-    if (Date.now() - updateChecked < 6 * 3600 * 1000) return update;
+    // An hour, not six. Six meant an urgent fix — 2.44.0, which brought
+    // Illustrator and After Effects back — could sit unseen for most of a
+    // working day on a machine that had checked that morning. GitHub allows
+    // 60 unauthenticated calls an hour per IP, so an office behind one
+    // address stays well clear of the limit with dozens of installs.
+    if (Date.now() - updateChecked < 3600 * 1000) return update;
     updateChecked = Date.now();
     try {
         const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
