@@ -1,5 +1,6 @@
 {
-  // Landing page, anonymous usage collection, and the admin view.
+  // Landing page, anonymous usage collection, and the update push signal.
+  // The admin view is its own Worker: wrangler.admin.jsonc.
   // Deploy with: npx wrangler deploy
   "name": "adobe-mcp",
   "main": "worker.js",
@@ -10,10 +11,12 @@
   // place a document name ends up by accident.
   "analytics_engine_datasets": [
     { "binding": "USAGE", "dataset": "moskito_easy_mcp_usage" }
-  ]
+  ],
 
-  // /admin needs Cloudflare Access in front of it, restricted to the
-  // moskitodesign.it domain, plus two secrets for the SQL API:
-  //   npx wrangler secret put CF_ACCOUNT_ID
-  //   npx wrangler secret put CF_API_TOKEN
+  // One key, "push": when it changes, every running app skips its six-hour
+  // update cache and checks GitHub at once. The admin page writes it; the
+  // public Worker serves it at /signal.
+  "kv_namespaces": [
+    { "binding": "SIGNAL", "id": "24f1e1684eff4ec4a2e871d800fd1951" }
+  ]
 }

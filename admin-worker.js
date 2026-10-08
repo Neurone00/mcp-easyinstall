@@ -23,7 +23,8 @@ export default {
     const url = new URL(request.url);
 
     const page = url.pathname === "/" || url.pathname === "/usage";
-    if (!page && url.pathname !== "/usage.json") {
+    const push = url.pathname === "/push" && request.method === "POST";
+    if (!page && !push && url.pathname !== "/usage.json") {
       return new Response("Not found.", { status: 404 });
     }
     // Wrong key: the same answer for the page and the data, so the URL tells
@@ -32,6 +33,13 @@ export default {
       return page
         ? new Response("Not found.", { status: 404 })
         : json({ error: "not authorised" }, 403);
+    }
+    // Every running app picks this up within five minutes and checks for an
+    // update straight away instead of waiting out its six-hour cache.
+    if (push) {
+      const at = Date.now();
+      await env.SIGNAL.put("push", String(at));
+      return json({ ok: true, at });
     }
     if (page) {
       return new Response(PAGE, {

@@ -13,5 +13,12 @@
   // Reads the same dataset the public Worker writes to.
   "analytics_engine_datasets": [
     { "binding": "USAGE", "dataset": "moskito_easy_mcp_usage" }
+  ],
+
+  // One key, "push": when it changes, every running app skips its six-hour
+  // update cache and checks GitHub at once. The admin page writes it; the
+  // public Worker serves it at /signal.
+  "kv_namespaces": [
+    { "binding": "SIGNAL", "id": "24f1e1684eff4ec4a2e871d800fd1951" }
   ]
 }

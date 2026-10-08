@@ -21,6 +21,14 @@ export default {
     if (url.pathname === "/collect" && request.method === "POST") {
       return collect(request, env);
     }
+    // Polled by every running app every five minutes. A change in "push"
+    // means: stop trusting your cached update check and look now.
+    if (url.pathname === "/signal") {
+      const push = env.SIGNAL ? Number(await env.SIGNAL.get("push")) || 0 : 0;
+      return new Response(JSON.stringify({ push }), {
+        headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
     return env.ASSETS.fetch(request);
   },
 };

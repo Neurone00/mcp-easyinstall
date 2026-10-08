@@ -1005,12 +1005,9 @@ let update = null;        // {version, url, notes} once a newer release is seen
 let updateChecked = 0;
 
 async function checkForUpdate() {
-    // An hour, not six. Six meant an urgent fix — 2.44.0, which brought
-    // Illustrator and After Effects back — could sit unseen for most of a
-    // working day on a machine that had checked that morning. GitHub allows
-    // 60 unauthenticated calls an hour per IP, so an office behind one
-    // address stays well clear of the limit with dozens of installs.
-    if (Date.now() - updateChecked < 3600 * 1000) return update;
+    // Six hours. An urgent fix does not wait that long: the push signal below
+    // resets this, so a release can reach everyone in minutes when it has to.
+    if (Date.now() - updateChecked < 6 * 3600 * 1000) return update;
     updateChecked = Date.now();
     try {
         const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
@@ -1058,7 +1055,28 @@ let staged = null;                                          // { version, path }
 const STAGED_DIR = path.join(SUPPORT, "staged-update");
 const UPDATE_READY = path.join(SUPPORT, "update-ready");    // the menu bar app watches this
 
+// The override. The admin page writes a timestamp to the Worker; when it is
+// newer than the last one this process saw, the six-hour cache is dropped and
+// GitHub is asked at once. The first reading after launch is only a baseline —
+// a freshly started app checks GitHub 45 seconds in regardless.
+let pushSeen = null;
+
+async function honourPush() {
+    try {
+        const r = await fetch("https://adobe-mcp.l-salvioni.workers.dev/signal",
+                              { signal: AbortSignal.timeout(5000) });
+        const { push = 0 } = await r.json();
+        if (pushSeen !== null && push > pushSeen) {
+            console.log("\u2192 update pushed: checking now");
+            updateChecked = 0;
+            autoUpdateAt = 0;
+        }
+        pushSeen = push;
+    } catch { /* offline: the normal schedule carries on */ }
+}
+
 async function autoUpdate() {
+    await honourPush();
     const found = await checkForUpdate();
     if (!found) return;
     if (staged && staged.version === found.version) return;   // already waiting
