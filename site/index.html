@@ -97,7 +97,12 @@ footer a{color:var(--soft)}
       Download for Mac
     </a>
     <p class="fine">
-      Apple Silicon &amp; Intel &middot; macOS 12+ &middot; free &middot;
+      <!-- Filled in from the same GitHub call that points the button, so the
+           number shown is always the file you get. Without JS it still says
+           where to look. -->
+      <span id="ver">Latest version</span> &middot;
+      <a href="https://github.com/Neurone00/mcp-easyinstall/releases">all versions</a>
+      <br>Apple Silicon &amp; Intel &middot; macOS 12+ &middot; free &middot;
       <a href="https://github.com/Neurone00/mcp-easyinstall">source on GitHub</a>
       <br>Records anonymous usage &mdash; which apps and commands are used, never your
       documents, prompts or artwork.
@@ -210,6 +215,13 @@ fetch("https://api.github.com/repos/Neurone00/mcp-easyinstall/releases/latest")
     // Older releases have no .dmg, so fall back rather than offering nothing.
     const asset = pick(".dmg") || pick(".zip");
     if (asset) document.getElementById("dl").href = asset.browser_download_url;
+    const v = String(d.tag_name || "").replace(/^v/, "");
+    if (v) {
+      const date = d.published_at
+        ? new Date(d.published_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+        : "";
+      document.getElementById("ver").textContent = `Version ${v}` + (date ? `, ${date}` : "");
+    }
   })
   .catch(() => {});
 </script>
