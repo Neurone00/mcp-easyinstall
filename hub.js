@@ -1971,15 +1971,22 @@ app.post("/api/focus-uxp", (_req, res) => {
     res.json({ ok: true });
 });
 
-app.post("/api/uxp-help", (_req, res) => {
+// Creative Cloud is where the tool installs from; Adobe's page says how.
+function openUdtHelp() {
     // By bundle id, not path: Creative Cloud.app lives in
     // /Applications/Utilities/Adobe Creative Cloud/ACC/, which is not where
     // anyone would guess, and Adobe has moved it before.
     execFile("/usr/bin/open", ["-b", "com.adobe.acc.AdobeCreativeCloud"], (err) => {
         if (err) console.log("\u26a0 couldn't open Creative Cloud: " + err.message);
     });
+    // No trailing slash: Adobe's site 404s on ".../installation/" and serves
+    // ".../installation". The link shipped dead with the slash.
     execFile("/usr/bin/open",
-        ["https://developer.adobe.com/photoshop/uxp/2022/guides/devtool/installation/"]);
+        ["https://developer.adobe.com/photoshop/uxp/2022/guides/devtool/installation"]);
+}
+
+app.post("/api/uxp-help", (_req, res) => {
+    openUdtHelp();
     res.json({ ok: true });
 });
 
@@ -2030,8 +2037,12 @@ app.post("/api/setup", async (_req, res) => {
                 } else {
                     const r = await setupUxp(key);
                     if (r.udtMissing) {
-                        todo.push(`${a.label} \u2014 install Adobe's free UXP Developer `
-                                + `Tool from Creative Cloud, then press Set up again`);
+                        // Open the place to get it rather than only naming it:
+                        // they pressed one button to have things done for them.
+                        openUdtHelp();
+                        todo.push(`${a.label} needs Adobe's free UXP Developer Tool. `
+                                + `Creative Cloud and Adobe's instructions are open \u2014 `
+                                + `install it, then press Set up again`);
                         break;
                     }
                     // setupUxp has just launched both of these. Give them time
