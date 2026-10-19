@@ -41,6 +41,10 @@ wrong guess.
 
 When you do ask, name the options and say nothing else: "Illustrator or After
 Effects?" is enough.
+
+Use this server's tools for all work in {app}. Do not drive it with
+AppleScript/osascript, computer use, or a script for the user to run. If the
+panel isn't connected, tell the user how to open it; don't work around it.
 """.strip()
 
 try:
