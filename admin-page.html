@@ -135,6 +135,9 @@
   <h2>By app</h2>
   <div class="rows" id="apps"><div class="empty">Loading…</div></div>
 
+  <h2>Why they fail</h2>
+  <div class="rows" id="errtypes"><div class="empty">Loading…</div></div>
+
   <h2>Most used commands</h2>
   <div class="rows" id="tools"><div class="empty">Loading…</div></div>
 
@@ -146,7 +149,11 @@
     looks like a new one.<br>
     Tokens are estimated from the size of what the tools sent back: the share of an
     assistant's context this app is responsible for, not anyone's plan usage.<br>
-    By assistant and by app count the same calls twice over, cut two ways.
+    By assistant and by app count the same calls twice over, cut two ways.<br>
+    Failures include scripts that threw inside the Adobe app — before 19 October
+    those were counted as successes, so older figures understate them. Why they
+    fail lists error types only, never the message, which can name a layer or a
+    file.
     &ldquo;Unlabelled config&rdquo; is a server someone wired up by hand.
   </p>
 </main>
@@ -208,7 +215,7 @@
     }
     const max = Math.max(...items.map((i) => i.calls));
     for (const it of items.slice(0, 20)) {
-      const failed = it.calls ? (it.errors / it.calls) * 100 : 0;
+      const failed = it.calls ? ((it.errors + (it.scriptErrors || 0)) / it.calls) * 100 : 0;
       const cells = [
         `<b>${num(it.calls)}</b> ${it.calls === 1 ? "call" : "calls"}`,
         failed > 0 ? `<span class="fail">${failed.toFixed(0)}% failed</span>` : "",
@@ -239,12 +246,14 @@
       if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
 
       const calls = d.apps.reduce((n, a) => n + a.calls, 0);
-      const errors = d.apps.reduce((n, a) => n + a.errors, 0);
+      const errors = d.apps.reduce((n, a) => n + a.errors + (a.scriptErrors || 0), 0);
       $("summary").replaceChildren(
         tile(num(d.installs), d.installs === 1 ? "install" : "installs"),
         tile(num(calls), "commands run"),
         tile(calls ? ((errors / calls) * 100).toFixed(0) + "%" : "0%", "failed"),
       );
+      fill($("errtypes"), (d.errorTypes || []).map((t) => ({ ...t, errors: 0 })),
+           d.installs, false);
       fill($("clients"), d.clients || [], d.installs, true);
       fill($("apps"), d.apps, d.installs, true);
       fill($("tools"), d.tools, d.installs, false);

@@ -1221,7 +1221,53 @@ function analyticsState() {
 // clients/clientBytes are the same two numbers again, cut by which assistant
 // asked rather than which app answered — the only way to compare what Claude
 // and ChatGPT each cost for the same work.
-let tally = { calls: {}, errors: {}, bytes: {}, tools: {}, clients: {}, clientBytes: {} };
+// scriptErrors/errorTypes: scripts that threw INSIDE the Adobe app. The panels
+// catch those and reply SUCCESS with {error} in the result, so `errors` (which
+// only sees status) had been reporting 0 failures for everything.
+const freshTally = () => ({ calls: {}, errors: {}, bytes: {}, tools: {}, clients: {},
+                            clientBytes: {}, scriptErrors: {}, errorTypes: {} });
+let tally = freshTally();
+
+// Unsent counts used to live only in memory, sent every 15 minutes — so every
+// quit, shutdown and update-restart threw away up to 15 minutes of use. A
+// colleague who did ten minutes of work and shut their Mac reported nothing.
+// Now they are written to disk on the way out and picked up on the next start.
+const PENDING = path.join(SUPPORT, "tally-pending.json");
+
+function mergeTally(into, from) {
+    for (const [k, counts] of Object.entries(from || {})) {
+        if (!into[k] || typeof counts !== "object") continue;
+        for (const [name, n] of Object.entries(counts)) {
+            into[k][name] = (into[k][name] || 0) + (Number(n) || 0);
+        }
+    }
+}
+
+try {
+    if (fs.existsSync(PENDING)) {
+        mergeTally(tally, readJSON(PENDING, {}));
+        fs.rmSync(PENDING, { force: true });
+    }
+} catch { /* a damaged file costs one window of counts, nothing more */ }
+
+// Synchronous on purpose: it runs inside process.exit, where nothing async
+// gets to finish. Never throws — analytics must not be able to stop an exit.
+function flushTally() {
+    try {
+        if (!Object.values(tally).some((o) => Object.keys(o).length)) return;
+        if (fs.existsSync(PENDING)) mergeTally(tally, readJSON(PENDING, {}));
+        fs.mkdirSync(SUPPORT, { recursive: true });
+        fs.writeFileSync(PENDING, JSON.stringify(tally));
+    } catch { /* nothing to be done on the way out */ }
+}
+
+// "exit" fires on every process.exit() — the update swap, quit, the orphan
+// guard — so one listener covers them all. SIGTERM (how the menu bar app and
+// a macOS shutdown stop us) skips "exit" by default; routing it through
+// process.exit keeps the same behaviour and lets the flush run.
+process.on("exit", flushTally);
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => process.exit(0));
 const inFlight = new Map();   // senderId -> { app, tool } so the reply can be attributed
 
 function bump(obj, key, by = 1) { obj[key] = (obj[key] || 0) + by; }
@@ -1248,6 +1294,30 @@ function noteReply(senderId, packet) {
         bump(tally.clientBytes, seen.client, size);
     } catch { /* unserialisable: skip the size, keep the count */ }
     if (packet && packet.status && packet.status !== "SUCCESS") bump(tally.errors, seen.app);
+    noteScriptError(seen.app, packet);
+}
+
+// Only the error's TYPE is kept, and only from a fixed list. The message can
+// name a layer, a comp or a file, and the Settings panel promises we never
+// collect anything from inside a document; a free-text field would quietly
+// break that. Anything not on the list is "other".
+const ERROR_TYPES = new Set(["Error", "TypeError", "ReferenceError", "SyntaxError",
+                             "RangeError", "EvalError", "URIError", "IOError", "InternalError"]);
+
+// Both panels wrap results as {content:[{text:"<JSON>"}]}, and a script that
+// threw comes back as {"error":"TypeError: …","line":3} inside a SUCCESS reply.
+function noteScriptError(app, packet) {
+    try {
+        if (!packet || packet.status !== "SUCCESS") return;
+        const text = packet.response && packet.response.content
+                  && packet.response.content[0] && packet.response.content[0].text;
+        if (typeof text !== "string" || !text.includes('"error"')) return;
+        const result = JSON.parse(text);
+        if (!result || typeof result.error !== "string") return;
+        bump(tally.scriptErrors, app);
+        const type = result.error.split(":")[0].trim();
+        bump(tally.errorTypes, ERROR_TYPES.has(type) ? type : "other");
+    } catch { /* not JSON, or not an error: nothing to count */ }
 }
 
 // An install that has never driven an app sent nothing at all, ever — so it was
@@ -1261,10 +1331,10 @@ async function sendAnalytics() {
     const payload = tally;
     const today = new Date().toISOString().slice(0, 10);
     const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length
-        || Object.keys(payload.clients).length;
+        || Object.keys(payload.clients).length || Object.keys(payload.scriptErrors).length;
     if (!anything && pingedOn === today) return;
     pingedOn = today;
-    tally = { calls: {}, errors: {}, bytes: {}, tools: {}, clients: {}, clientBytes: {} };   // swap first: a failed
+    tally = freshTally();   // swap first: a failed
                                                                // send drops a window
                                                                // rather than doubling it
     try {
@@ -1441,8 +1511,11 @@ io.on("connection", (socket) => {
 
     socket.on("command_packet_response", ({ packet }) => {
         if (packet.senderId) {
-            noteReply(packet.senderId, packet);
+            // The reply goes out first. Counting used to run before this, so
+            // an exception in the analytics could have stopped a reply from
+            // reaching the assistant at all.
             io.to(packet.senderId).emit("packet_response", packet);
+            try { noteReply(packet.senderId, packet); } catch { /* analytics only */ }
         }
     });
 

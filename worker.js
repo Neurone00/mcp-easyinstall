@@ -67,6 +67,8 @@ async function collect(request, env) {
         Number(calls) || 0,
         Number((body.errors || {})[app]) || 0,
         Number((body.bytes || {})[app]) || 0,
+        // Scripts that threw inside the app: replied SUCCESS, carried {error}.
+        Number((body.scriptErrors || {})[app]) || 0,
       ],
       indexes: [body.id],
     });
@@ -81,6 +83,14 @@ async function collect(request, env) {
         0,
         Number((body.clientBytes || {})[client]) || 0,
       ],
+      indexes: [body.id],
+    });
+  }
+  // What kind of error, from a fixed list of type names — never the message.
+  for (const [type, n] of Object.entries(body.errorTypes || {})) {
+    env.USAGE.writeDataPoint({
+      blobs: ["errtype", String(type).slice(0, 24), version, day],
+      doubles: [Number(n) || 0, 0, 0, 0],
       indexes: [body.id],
     });
   }

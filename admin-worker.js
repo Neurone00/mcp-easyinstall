@@ -60,12 +60,14 @@ export default {
         calls: Number(d.calls) || 0,
         errors: Number(d.errors) || 0,
         tokens: Math.round((Number(d.bytes) || 0) / 4),
+        scriptErrors: Number(d.scriptErrors) || 0,
       });
       return json({
         installs,
         updated: new Date().toISOString(),
         apps: data.filter((d) => d.kind === "app").map(shape),
         clients: data.filter((d) => d.kind === "client").map(shape),
+        errorTypes: data.filter((d) => d.kind === "errtype").map(shape),
         tools: data.filter((d) => d.kind === "tool").map(shape),
       });
     } catch (e) {
@@ -85,6 +87,7 @@ async function query(env) {
       SUM(double1) AS calls,
       SUM(double2) AS errors,
       SUM(double3) AS bytes,
+      SUM(double4) AS scriptErrors,
       COUNT(DISTINCT index1) AS people
     FROM moskito_easy_mcp_usage
     WHERE timestamp > NOW() - INTERVAL \'30\' DAY
