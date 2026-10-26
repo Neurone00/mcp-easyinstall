@@ -74,12 +74,23 @@ ul.where b{color:var(--ink);font-weight:560}
   border-radius:10px;padding:14px 18px;margin:26px 0 0;font-size:14.5px;color:var(--soft)}
 .warn b{color:var(--ink)}
 
-table{width:100%;border-collapse:collapse;font-size:15px}
-td{padding:13px 0;border-top:1px solid var(--line);vertical-align:top}
-td:first-child{font-weight:560;width:42%;padding-right:20px}
-td:last-child{color:var(--soft)}
-tr:first-child td{border-top:0}
-.ok{color:var(--ok);font-weight:600}
+/* Two buttons; the chosen guide opens below them, one at a time. */
+.guide{padding:44px 0 56px}
+.toggles{display:flex;gap:10px;justify-content:center}
+.toggle{flex:1 1 0;max-width:230px;font:inherit;font-size:15.5px;font-weight:600;cursor:pointer;
+  background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:12px;
+  padding:13px 16px;box-shadow:var(--shadow);display:inline-flex;align-items:center;
+  justify-content:center;gap:8px;transition:.15s}
+.toggle:hover{border-color:var(--accent)}
+.toggle[aria-expanded="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.toggle svg{width:15px;height:15px;transition:transform .2s}
+.toggle[aria-expanded="true"] svg{transform:rotate(180deg)}
+.toggle:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.panel{margin-top:30px}
+.panel[hidden]{display:none}
+.lede{margin:0 0 18px;color:var(--soft);font-size:14.5px}
+.note{margin:18px 0 0;color:var(--soft);font-size:14px}
+.note b{color:var(--ink);font-weight:560}
 
 footer{padding:44px 0 64px;color:var(--soft);font-size:13.5px;text-align:center;
   border-top:1px solid var(--line)}
@@ -116,79 +127,82 @@ footer a{color:var(--soft)}
     </div>
   </div>
 
-  <section>
-    <h2>Install</h2>
-    <p style="margin:-4px 0 18px;color:var(--soft);font-size:14.5px">
-      A web page can't install panels into Illustrator or reach the apps on your Mac &mdash;
-      browsers block that on purpose. So there's one download. After that, one button does
-      the rest.
-    </p>
-    <ol class="steps">
-      <li><b>Open the download and drag the app onto Applications.</b>
-          <span>Both are in the window that opens. Run it from Applications, not from
-          the disk image &mdash; it can't set itself up or update from there.
-          <br>No Node, no Python, no terminal. First run downloads a small Python
-          runtime, so it needs the internet once.</span></li>
-      <li><b>Double-click it. macOS will refuse the first time &mdash; that's expected.</b>
-          <span>Then go to <b>System Settings &rarr; Privacy &amp; Security</b>, scroll down, and click
-          <b>Open Anyway</b> next to Moskito Easy MCP. Only needed once.
-          <br><small>(Right-click &rarr; Open no longer works: Apple removed that shortcut in
-          macOS&nbsp;15. The app isn't signed by Apple, which costs &euro;99/year.)</small></span></li>
-      <li><b>Press &ldquo;Set everything up&rdquo;.</b>
-          <span>It installs the panels and connects Claude and ChatGPT for you.</span></li>
-    </ol>
-  </section>
-
-  <section>
-    <h2>How to use it</h2>
-    <ol class="steps">
-      <li><b>Open the MCP panel in your Adobe app and leave it open.</b>
-          <span>That panel is the connection &mdash; close it and nothing works.</span>
-          <ul class="where">
-            <li>Illustrator, After Effects &mdash; <b>Window &rarr; Extensions &rarr; Moskito Easy MCP</b></li>
-            <li>Photoshop &mdash; <b>Plugins &rarr; Moskito Easy MCP</b></li>
-            <li>Premiere Pro &mdash; <b>Window &rarr; Moskito Easy MCP</b></li>
-          </ul></li>
-      <li><b>Open Claude or ChatGPT.</b>
-          <span>The desktop apps, not a browser tab. There are buttons for both right
-          inside the panel.</span></li>
-      <li><b>Say what you want, in plain words.</b>
-          <span>It works on the document you already have open. Watch the panel's message
-          log to see each step arrive.</span></li>
-    </ol>
-
-    <p style="margin:26px 0 10px;color:var(--soft);font-size:14.5px">Things people ask for:</p>
-    <p class="ask">Make me a 1080&times;1920 story with a bold headline in our brand colours.</p>
-    <p class="ask">Rename every layer in this file to a consistent format.</p>
-    <p class="ask">Build a rough cut from these clips with cross dissolves between them.</p>
-    <p class="ask">Create a 5 second comp and fade the title in.</p>
-
-    <div class="warn">
-      <b>Save before you start.</b> It edits the document you have open, and not every
-      step can be undone. Try it on a copy first.
+  <section class="guide">
+    <div class="toggles">
+      <button class="toggle" id="t-install" aria-expanded="false" aria-controls="install">How to install
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+      <button class="toggle" id="t-use" aria-expanded="false" aria-controls="use">How to use
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
     </div>
-  </section>
 
-  <section>
-    <h2>What's automatic</h2>
-    <table>
-      <tr><td>Illustrator, After Effects</td>
-          <td><span class="ok">Fully automatic.</span> Panel installed and connected for you.</td></tr>
-      <tr><td>Photoshop, Premiere</td>
-          <td>One extra click. Adobe only auto-installs plugins it has signed, so these load
-              through Adobe's free UXP Developer Tool &mdash; you press <b>Load</b> once.</td></tr>
-      <tr><td>Staying up to date</td>
-          <td><span class="ok">Automatic.</span> The app offers a one-click update when
-              there's a new version, and the Adobe panels refresh themselves every launch.</td></tr>
-      <tr><td>Claude Desktop, Claude Code</td>
-          <td><span class="ok">Connected automatically.</span></td></tr>
-      <tr><td>ChatGPT desktop, Codex CLI</td>
-          <td><span class="ok">Connected automatically.</span> They share one config file.
-              ChatGPT in a <i>browser tab</i> can't reach an app on your Mac &mdash; its
-              connectors only see the public internet. These tools live in ChatGPT's
-              <b>Codex</b> surface, and need one <b>Allow</b> click in Moskito Easy MCP &mdash;
-              Codex sandboxes MCP servers with networking off.</td></tr>
-    </table>
+    <div class="panel" id="install" role="region" aria-labelledby="t-install">
+      <p class="lede">A web page can't install panels into your Adobe apps or reach anything on
+        your Mac &mdash; browsers block that on purpose. So there's one download, and after that
+        one button does the rest.</p>
+      <ol class="steps">
+        <li><b>Open the download and drag the app onto Applications.</b>
+            <span>Both are in the window that opens. Run it from Applications, not from the disk
+            image &mdash; it can't set itself up or update from there. No Node, no Python, no
+            terminal; the first run downloads a small Python runtime, so it needs the internet
+            once.</span></li>
+        <li><b>Double-click it. macOS will refuse the first time &mdash; that's expected.</b>
+            <span>Go to <b>System Settings &rarr; Privacy &amp; Security</b>, scroll down and click
+            <b>Open Anyway</b> next to Moskito Easy MCP. Only needed once.
+            <br><small>(Right-click &rarr; Open stopped working in macOS&nbsp;15. The app isn't
+            signed by Apple, which costs &euro;99/year.)</small></span></li>
+        <li><b>Press &ldquo;Set everything up&rdquo;.</b>
+            <span>It installs the panels and connects Claude and ChatGPT. macOS asks to allow
+            <b>Accessibility</b> &mdash; that's for arranging your windows side by side.</span>
+            <ul class="where">
+              <li><b>Photoshop and Premiere</b> also need Adobe's free UXP Developer Tool. If it's
+                missing, setup opens Adobe's download page &mdash; install it and press Set up
+                again. Open Photoshop or Premiere <i>after</i> the Developer Tool is running:
+                they only connect to it when they start.</li>
+              <li><b>Photoshop only:</b> turn on <b>Photoshop &rarr; Settings &rarr; Plugins &rarr;
+                Enable Developer Mode</b> once.</li>
+            </ul></li>
+        <li><b>Restart Claude and ChatGPT.</b>
+            <span>They only pick up new tools when they start. The app shows a
+            <b>Restart assistants</b> button for this.</span></li>
+      </ol>
+      <p class="note">Switch off any Adobe app you don't use, with the tick next to it in the app.
+        Each one takes up space in every message your assistant sends.</p>
+      <p class="note">ChatGPT works in its desktop app and Codex, not in a browser tab &mdash; a
+        browser can't reach an app on your Mac. Codex may need one <b>Allow</b> click in Moskito
+        Easy MCP, because it switches networking off for tools by default.</p>
+    </div>
+
+    <div class="panel" id="use" role="region" aria-labelledby="t-use">
+      <ol class="steps">
+        <li><b>Open the Moskito Easy MCP panel in your Adobe app and leave it open.</b>
+            <span>The panel is the connection &mdash; close it and nothing reaches the app.</span>
+            <ul class="where">
+              <li>Illustrator, After Effects &mdash; <b>Window &rarr; Extensions &rarr; Moskito Easy MCP</b></li>
+              <li>Photoshop &mdash; <b>Plugins &rarr; Moskito Easy MCP</b></li>
+              <li>Premiere Pro &mdash; <b>Window &rarr; UXP Plugins &rarr; Moskito Easy MCP</b></li>
+            </ul></li>
+        <li><b>Open Claude or ChatGPT.</b>
+            <span>The desktop apps &mdash; Claude's Code tab works too &mdash; not a browser tab.
+            The panel has buttons for both.</span></li>
+        <li><b>Say what you want, in plain words.</b>
+            <span>It works inside the document you have open, and your Mac stays yours to use while
+            it does. The panel's log shows each step as it arrives.</span></li>
+      </ol>
+
+      <p class="lede" style="margin:26px 0 10px">Things people ask for:</p>
+      <p class="ask">Make me a 1080&times;1920 story with a bold headline in our brand colours.</p>
+      <p class="ask">Rename every layer in this file to a consistent format.</p>
+      <p class="ask">Raise the exposure on the second clip and fade it in over a second.</p>
+      <p class="ask">Create a 5 second comp and fade the title in.</p>
+
+      <div class="warn">
+        <b>Save before you start.</b> It edits the document you have open, and not every step can
+        be undone. Try it on a copy first.
+      </div>
+
+      <p class="note">It keeps itself up to date: new versions download quietly, and it asks before
+        restarting. After an update, reopen Photoshop or Premiere so their panel picks it up.</p>
+    </div>
   </section>
 
   <footer>
@@ -198,6 +212,25 @@ footer a{color:var(--soft)}
 </div>
 
 <script>
+// The guides start open in the markup, so the page still works without
+// JavaScript; this closes them and turns the two buttons into the way in.
+// #install and #use open one directly, so a link can point at a guide.
+const toggles = document.querySelectorAll(".toggle");
+function openGuide(id) {
+  toggles.forEach((b) => {
+    const mine = b.getAttribute("aria-controls") === id;
+    b.setAttribute("aria-expanded", String(mine));
+    document.getElementById(b.getAttribute("aria-controls")).hidden = !mine;
+  });
+  history.replaceState(null, "", id ? "#" + id : location.pathname);
+}
+toggles.forEach((b) => b.addEventListener("click", () =>
+  openGuide(b.getAttribute("aria-expanded") === "true" ? null : b.getAttribute("aria-controls"))));
+const fromHash = () => ["install", "use"].includes(location.hash.slice(1)) ? location.hash.slice(1) : null;
+openGuide(fromHash());
+// A link to #use on an already-open page changes only the hash, with no reload.
+window.addEventListener("hashchange", () => { if (fromHash()) openGuide(fromHash()); });
+
 // Point the button straight at the latest .dmg when the API is reachable.
 // The .zip in the same release is what installed copies update themselves
 // from; a person should be given the disk image.

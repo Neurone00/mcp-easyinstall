@@ -91,7 +91,7 @@ const APPS = {
         label: "Premiere Pro",
         kind: "uxp", uxp: "pr", mcp: "pr-mcp.py",
         appGlob: "Adobe Premiere Pro",
-        panelMenu: "Window → Moskito Easy MCP",
+        panelMenu: "Window → UXP Plugins → Moskito Easy MCP",
     },
     // InDesign is deliberately absent. Its server exposes exactly one tool,
     // create_document, and no scripting escape hatch — it can make an empty

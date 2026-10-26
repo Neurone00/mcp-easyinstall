@@ -70,7 +70,7 @@ Open the MCP panel inside the Adobe app and leave it open:
 
 - Illustrator / After Effects → **Window → Extensions → Moskito Easy MCP**
 - Photoshop → **Plugins → Moskito Easy MCP**
-- Premiere Pro → **Window → Moskito Easy MCP**
+- Premiere Pro → **Window → UXP Plugins → Moskito Easy MCP**
 
 Then just ask:
 
