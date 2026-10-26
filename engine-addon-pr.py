@@ -14,9 +14,11 @@ def execute_script(script: str):
     """Runs JavaScript inside Premiere Pro against its UXP API and returns the result.
 
     The script is the body of an async function with `ppro` (Premiere's API,
-    require("premierepro")) in scope. Await every call and `return` plain JSON.
+    require("premierepro")) in scope; `return` plain JSON. For edits follow the
+    server instructions' pattern: await getters first, then no await inside
+    project.lockedAccess.
     Use it for anything the other tools can't do: trimming or moving clips,
-    any effect or Lumetri colour, keyframes, transitions, audio.
+    any effect or Lumetri colour, keyframes, transitions, audio, titles.
 
     Args:
         script: The JavaScript function body. Must use `return` to send data back.

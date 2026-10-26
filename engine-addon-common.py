@@ -141,16 +141,33 @@ TIME COMES IN TWO UNITS
 
 ANYTHING ELSE: execute_script
   Trims, moving clips, any effect or Lumetri colour, keyframes, transitions,
-  audio. Async function body with `ppro` in scope; await every call; return
-  plain JSON. Object.keys(ppro) lists the API. Edits go in a transaction:
-    project.lockedAccess(() => project.executeTransaction(ca => ca.addAction(a)))
-  where a comes from a create...Action call, e.g.
-    chain.createAppendComponentAction(await ppro.VideoFilterFactory.createComponent(matchName), 0)
-    param.createSetValueAction(await param.createKeyframe(value))
-  Times: ppro.TickTime.createWithSeconds(s). Keyframe positions are in the
-  clip's SOURCE time: its first visible frame is clip.getInPoint(), not 0.
-  Titles and graphics: Motion Graphics Templates, via
-  SequenceEditor.getEditor(seq).insertMogrtFromPath / insertMogrtFromLibrary.
+  audio, titles. Async function body with `ppro` in scope; return plain JSON.
+  Object.keys(ppro) lists the API. Proven pattern for edits:
+    const proj = await ppro.Project.getActiveProject();
+    const seq = await proj.getActiveSequence();
+    const clip = (await (await seq.getVideoTrack(0)).getTrackItems(1, false))[1];
+    const op = (await clip.getComponentChain()).getComponentAtIndex(0).getParam(0);
+    proj.lockedAccess(() => {                      // NO await in here
+      const k0 = op.createKeyframe(0);  k0.position = ppro.TickTime.createWithSeconds(5);
+      const k1 = op.createKeyframe(100); k1.position = ppro.TickTime.createWithSeconds(6);
+      proj.executeTransaction(ca => {
+        ca.addAction(op.createSetTimeVaryingAction(true));   // same transaction, first
+        ca.addAction(op.createAddKeyframeAction(k0));
+        ca.addAction(op.createAddKeyframeAction(k1));
+      }, "Fade in");
+    });
+  Await every getter BEFORE the lock. Create keyframes and actions INSIDE it,
+  with no await: otherwise "The script object is no longer valid". Without
+  createSetTimeVaryingAction(true) first, keyframes silently don't land.
+  Keyframe positions are the clip's SOURCE time: its first visible frame is
+  clip.getInPoint(), not 0. Values: param.createSetValueAction(param.createKeyframe(v)).
+  Effects: chain.createAppendComponentAction(await ppro.VideoFilterFactory.createComponent(matchName), 0).
+  Titles: (await ppro.SequenceEditor.getEditor(seq)).insertMogrtFromPath(path,
+  ppro.TickTime.createWithSeconds(s), videoTrackIndex, audioTrackIndex), using
+  Premiere's own "Basic Title.mogrt" or "Basic Lower Third.mogrt" from
+  /Applications/Adobe Premiere Pro 2026/Adobe Premiere Pro 2026.app/Contents/Essential Graphics/
+  (the Beta has the same folder). Its words CAN'T be set through this API:
+  insert it, then tell the user to type the text.
   There is no razor or split.
 """,
     "photoshop": """

@@ -178,6 +178,32 @@ for d in "$HERE"/engine/uxp/*/; do
   cat "$HERE/panel-addon-uxp.js" >> "$mj"
 done
 
+# Two upstream bugs that made ONE title break every Premiere call. A clip made
+# from a Motion Graphics Template has no project item, so getTracks' 
+# (await c.getProjectItem()).name threw — and getSequences runs on every reply,
+# AFTER the command succeeded, turning that success into "Error calling …".
+# Fall back to the clip's own name, and never let the context attached to a
+# reply fail the command it reports on. Pristine copies, every build.
+pu="$HERE/engine/uxp/pr/commands/utils.js"
+[ -f "$pu.orig" ] || cp "$pu" "$pu.orig"
+cp "$pu.orig" "$pu"
+node -e '
+  const fs = require("fs"), f = process.argv[1];
+  let s = fs.readFileSync(f, "utf8");
+  const a = "let name = (await c.getProjectItem()).name;";
+  if (!s.includes(a)) { console.error("✗ utils.js name patch target missing"); process.exit(1); }
+  s = s.replace(a, "const __pi = await c.getProjectItem(); let name = (__pi && __pi.name) || (await c.getName());");
+  fs.writeFileSync(f, s);
+' "$pu" || exit 1
+node -e '
+  const fs = require("fs"), f = process.argv[1];
+  let s = fs.readFileSync(f, "utf8");
+  const a = "out.sequences = await getSequences();\n        out.project = await getProjectInfo();";
+  if (!s.includes(a)) { console.error("✗ main.js reply patch target missing"); process.exit(1); }
+  s = s.replace(a, "try { out.sequences = await getSequences(); } catch (e) { out.sequencesError = String(e); }\n        try { out.project = await getProjectInfo(); } catch (e) { out.projectError = String(e); }");
+  fs.writeFileSync(f, s);
+' "$HERE/engine/uxp/pr/main.js" || exit 1
+
 # Premiere's general-purpose handler, so the model has an in-app route for the
 # jobs the fixed tools can't do instead of falling back to computer use. Same
 # pristine-copy rule as everything else here.
