@@ -1304,18 +1304,27 @@ function noteReply(senderId, packet) {
 const ERROR_TYPES = new Set(["Error", "TypeError", "ReferenceError", "SyntaxError",
                              "RangeError", "EvalError", "URIError", "IOError", "InternalError"]);
 
-// Both panels wrap results as {content:[{text:"<JSON>"}]}, and a script that
-// threw comes back as {"error":"TypeError: …","line":3} inside a SUCCESS reply.
+// A script that threw comes back inside a SUCCESS reply, in one of two shapes.
+// The CEP panels (Illustrator, After Effects) wrap results as
+// {content:[{text:"<JSON>"}]} with {"error":"TypeError: …"} inside the JSON;
+// the Premiere panel returns its handler's object as-is, so it is
+// response.error directly.
+function scriptErrorText(packet) {
+    const resp = packet.response;
+    if (resp && typeof resp.error === "string") return resp.error;
+    const text = resp && resp.content && resp.content[0] && resp.content[0].text;
+    if (typeof text !== "string" || !text.includes('"error"')) return null;
+    const result = JSON.parse(text);
+    return result && typeof result.error === "string" ? result.error : null;
+}
+
 function noteScriptError(app, packet) {
     try {
         if (!packet || packet.status !== "SUCCESS") return;
-        const text = packet.response && packet.response.content
-                  && packet.response.content[0] && packet.response.content[0].text;
-        if (typeof text !== "string" || !text.includes('"error"')) return;
-        const result = JSON.parse(text);
-        if (!result || typeof result.error !== "string") return;
+        const error = scriptErrorText(packet);
+        if (!error) return;
         bump(tally.scriptErrors, app);
-        const type = result.error.split(":")[0].trim();
+        const type = error.split(":")[0].trim();
         bump(tally.errorTypes, ERROR_TYPES.has(type) ? type : "other");
     } catch { /* not JSON, or not an error: nothing to count */ }
 }

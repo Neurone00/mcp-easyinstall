@@ -42,9 +42,11 @@ wrong guess.
 When you do ask, name the options and say nothing else: "Illustrator or After
 Effects?" is enough.
 
-Use this server's tools for all work in {app}. Do not drive it with
-AppleScript/osascript, computer use, or a script for the user to run. If the
-panel isn't connected, tell the user how to open it; don't work around it.
+Use this server's tools for all work in {app}. Never operate Premiere Pro,
+Photoshop, Illustrator or After Effects with computer use, AppleScript or a
+script for the user to run, even one with no server here. If no tool can do
+what was asked, say which part and stop. If the panel isn't connected, say how
+to open it.
 """.strip()
 
 try:
@@ -134,8 +136,22 @@ _APP_NOTES = {
 TIME COMES IN TWO UNITS
   add_marker_to_sequence, add_media_to_sequence and set_clip_start_end_times
   take TICKS. export_frame and get_sequence_frame_image take SECONDS.
-  1 second = 2,940,000 ticks. So 5 seconds is 14,700,000 ticks.
+  1 second = 254,016,000,000 ticks. So 5 seconds is 1,270,080,000,000 ticks.
   Check which one the tool you are about to call asks for.
+
+ANYTHING ELSE: execute_script
+  Trims, moving clips, any effect or Lumetri colour, keyframes, transitions,
+  audio. Async function body with `ppro` in scope; await every call; return
+  plain JSON. Object.keys(ppro) lists the API. Edits go in a transaction:
+    project.lockedAccess(() => project.executeTransaction(ca => ca.addAction(a)))
+  where a comes from a create...Action call, e.g.
+    chain.createAppendComponentAction(await ppro.VideoFilterFactory.createComponent(matchName), 0)
+    param.createSetValueAction(await param.createKeyframe(value))
+  Times: ppro.TickTime.createWithSeconds(s). Keyframe positions are in the
+  clip's SOURCE time: its first visible frame is clip.getInPoint(), not 0.
+  Titles and graphics: Motion Graphics Templates, via
+  SequenceEditor.getEditor(seq).insertMogrtFromPath / insertMogrtFromLibrary.
+  There is no razor or split.
 """,
     "photoshop": """
 READING A POSITION AND SETTING ONE ARE NOT THE SAME

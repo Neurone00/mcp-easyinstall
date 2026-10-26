@@ -178,6 +178,15 @@ for d in "$HERE"/engine/uxp/*/; do
   cat "$HERE/panel-addon-uxp.js" >> "$mj"
 done
 
+# Premiere's general-purpose handler, so the model has an in-app route for the
+# jobs the fixed tools can't do instead of falling back to computer use. Same
+# pristine-copy rule as everything else here.
+pc="$HERE/engine/uxp/pr/commands/core.js"
+[ -f "$pc.orig" ] || cp "$pc" "$pc.orig"
+cp "$pc.orig" "$pc"
+printf '\n' >> "$pc"
+cat "$HERE/panel-addon-pr.js" >> "$pc"
+
 for m in "$HERE"/engine/uxp/*/manifest.json; do
   [ -f "$m" ] || continue
   "$HERE/runtime/node" -e '
@@ -214,6 +223,12 @@ done
 for s in ai ae ps pr; do reset_engine "$s-mcp.py"; done
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
+add_engine pr-mcp.py engine-addon-pr.py
+# Upstream's docstring says a tick is 1/254016000000 of a DAY. It is of a
+# second (checked: an 86.68 s clip is 22,018,106,880,000 ticks). The model reads
+# this text, so the wrong unit put every tick-based edit 86,400x off.
+/usr/bin/sed -i '' 's|1/254016000000 of a day|1/254016000000 of a second|' "$HERE/engine/mcp/pr-mcp.py"
+grep -q "of a second" "$HERE/engine/mcp/pr-mcp.py" || { echo "✗ tick docstring patch did not apply"; exit 1; }
 # Every server, not just the two we extended: which app the model should be
 # driving is a question for Photoshop and Premiere too.
 for s in ai ae ps pr; do
