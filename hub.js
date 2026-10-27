@@ -777,13 +777,40 @@ function ensureVenv(done = () => {}) {
     // environment already exists" and venvReady stayed false forever. That is
     // the state every user upgrading to a build with a new dependency would
     // have landed in.
-    execFile(uv, ["venv", "--allow-existing", VENV], { timeout: 300000 }, (e1) => {
-        if (e1) return finish(new Error("Couldn't create the Python environment — " + why(e1)));
+    // Our own Python, never the Mac's. With no version given, uv took the first
+    // interpreter on the app's PATH — and an app opened from the Dock only has
+    // /usr/bin, where the Xcode tools put Python 3.9.6. The MCP library needs
+    // 3.10+, so on a colleague's Mac setup failed with "requirements are
+    // unsatisfiable" even though Terminal showed a Python 3.15 they had
+    // installed: the app could never see it. Every Mac that rebuilt its
+    // environment would have hit the same thing. uv downloads a pinned 3.12
+    // (24 MB, once) into our own folder instead, so the same Python runs
+    // everywhere and nothing here touches, or depends on, the user's.
+    const uvEnv = { ...process.env, UV_PYTHON_PREFERENCE: "only-managed",
+                    UV_PYTHON_INSTALL_DIR: path.join(SUPPORT, "python") };
+
+    // An environment left behind on another Python — the 3.9 one above — would
+    // be patched in place by --allow-existing, mixing two interpreters' files.
+    try {
+        const cfg = fs.readFileSync(path.join(VENV, "pyvenv.cfg"), "utf8");
+        if (!/^version(_info)?\s*=\s*3\.12\b/m.test(cfg)) fs.rmSync(VENV, { recursive: true, force: true });
+    } catch { /* no environment yet */ }
+
+    // Network wording only when it's the network: a resolver failure used to end
+    // "unsatisfiable.. Check your internet connection", sending people to check
+    // a connection that was fine.
+    const hint = (e) => /network|connect|resolve|dns|timed out|offline|tls|ssl/i.test(String(e.message))
+        ? " Check your internet connection." : "";
+    const sentence = (t) => String(t).replace(/[.\s]+$/, "") + ".";
+
+    execFile(uv, ["venv", "--python", "3.12", "--allow-existing", VENV],
+        { timeout: 300000, env: uvEnv }, (e1) => {
+        if (e1) return finish(new Error("Couldn't create the Python environment \u2014 "
+                                        + sentence(why(e1)) + hint(e1)));
         execFile(uv, ["pip", "install", "--python", path.join(VENV, "bin", "python"), ...PY_DEPS],
-            { timeout: 600000 }, (e2) => {
+            { timeout: 600000, env: uvEnv }, (e2) => {
                 finish(e2
-                    ? new Error("Couldn't download the Python packages — " + why(e2) +
-                                ". Check your internet connection.")
+                    ? new Error("Couldn't download the Python packages \u2014 " + sentence(why(e2)) + hint(e2))
                     : null);
             });
     });
