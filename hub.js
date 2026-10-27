@@ -1528,7 +1528,7 @@ io.on("connection", (socket) => {
         }
     });
 
-    socket.on("command_packet", ({ application, command }) => {
+    socket.on("command_packet", async ({ application, command }) => {
         lastActivityAt = Date.now();   // the updater waits for a quiet moment
         const packet = { senderId: socket.id, application, command };
         // command.tool is set by the Python side: every Illustrator tool arrives
@@ -1540,8 +1540,27 @@ io.on("connection", (socket) => {
         // The hub knows instantly that nothing is listening, but used to say
         // nothing and let the Python side sit out its timeout before reporting
         // a generic "Connection Timed Out". Answer now, and say what to do.
-        if (!clients || clients.size === 0) {
+        if ((!clients || clients.size === 0) && APPS[application] && APPS[application].kind === "uxp") {
+            try {
+                await ensureUxpPanel(application);
+                console.log(`\u2713 loaded the ${label} panel for a request`);
+            } catch (e) {
+                console.log(`\u26a0 couldn't load the ${label} panel for a request: ${e.message}`);
+                // Answered here, so noteReply never sees it: count it now, or
+                // "the panel wasn't running" never shows up in the figures.
+                bump(tally.errors, application);
+                inFlight.delete(socket.id);
+                return socket.emit("packet_response", {
+                    senderId: socket.id, application, status: "FAILURE",
+                    message: `The ${label} panel isn't running. ${e.message}`,
+                });
+            }
+        }
+        const live = applicationClients[application];
+        if (!live || live.size === 0) {
             console.log(`⚠ no panel open for ${application}`);
+            bump(tally.errors, application);
+            inFlight.delete(socket.id);
             return socket.emit("packet_response", {
                 senderId: socket.id,
                 application,
@@ -1557,7 +1576,7 @@ io.on("connection", (socket) => {
         // stale socket — ran every command TWICE against the document, and the
         // duplicate was invisible because Python takes the first reply. Send to
         // the most recently registered panel only.
-        const ids = [...clients];
+        const ids = [...live];
         if (ids.length > 1) {
             console.log(`⚠ ${ids.length} ${label} panels connected; using the newest`);
         }
@@ -1868,7 +1887,38 @@ function loadUxpPluginOnce(key) {
 // service is undocumented and a failure that repeats is noise, not information.
 const autoLoad = {};   // key -> { next, wait }
 
+// Set up for this app: the workspace entry is what the Developer Tool loads.
+function uxpRegistered(key) {
+    try {
+        return (readJSON(UDT_WORKSPACE, { plugins: [] }).plugins || [])
+            .some((p) => p.hostParam === UDT_HOST[key]);
+    } catch { return false; }
+}
+
+// -g: don't take focus. -j: start hidden. It is a background service as far
+// as anyone using this is concerned, not a window they asked for.
+function startUdtHidden() {
+    const udt = appBundle(UDT_GLOB);
+    if (!udt) return false;
+    execFile("/usr/bin/open", ["-g", "-j", "-a", udt]);
+    return true;
+}
+
+let udtStartedAt = 0;
+
 async function autoLoadUxp() {
+    // Photoshop and Premiere join the Developer Tool ONLY if it was already
+    // running when they started. This used to start it once the Adobe app was
+    // open — the one order that never works — so opening Premiere and then
+    // asking Claude for something left the panel dead until Premiere was
+    // restarted. Keep it up beforehand instead, whenever a UXP app is switched
+    // on and set up, so whichever order someone opens things in, it's there.
+    const wantUdt = Object.keys(APPS).some((k) => APPS[k].kind === "uxp"
+        && registerableApps().includes(k) && uxpRegistered(k));
+    if (wantUdt && !udtRunning() && Date.now() - udtStartedAt > 10 * 60 * 1000) {
+        if (startUdtHidden()) udtStartedAt = Date.now();
+    }
+
     for (const [key, a] of Object.entries(APPS)) {
         if (a.kind !== "uxp") continue;
 
@@ -1877,21 +1927,11 @@ async function autoLoadUxp() {
         if (panelLive(key)) { state.wait = 15000; continue; }
         if (Date.now() < state.next) continue;
 
-        // Only if they have been through setup: the workspace entry is what
-        // the Developer Tool loads from.
-        let registered = false;
-        try {
-            registered = (readJSON(UDT_WORKSPACE, { plugins: [] }).plugins || [])
-                .some((p) => p.hostParam === UDT_HOST[key]);
-        } catch { registered = false; }
-        if (!registered) { state.next = Date.now() + 60000; continue; }
+        if (!uxpRegistered(key)) { state.next = Date.now() + 60000; continue; }
 
         // The service belongs to the Developer Tool, so it has to be running.
-        // -g so it does not steal focus from whatever they are doing.
         if (!udtRunning()) {
-            const udt = appBundle(UDT_GLOB);
-            if (!udt) { state.next = Date.now() + 60000; continue; }
-            execFile("/usr/bin/open", ["-g", "-a", udt]);
+            if (!startUdtHidden()) { state.next = Date.now() + 60000; continue; }
             state.next = Date.now() + 8000;   // let it come up, then try
             continue;
         }
@@ -1918,6 +1958,41 @@ async function autoLoadUxp() {
 
 function udtRunning() {
     return bundleRunning(appBundle(UDT_GLOB));
+}
+
+// A request for Photoshop or Premiere that finds no panel used to fail at
+// once with "open Window → UXP Plugins → …" — a menu item that only exists
+// once the plugin is loaded, so the instruction could not be followed. The
+// hub can load it, so do that first, and only fail with the real reason.
+// One attempt per app at a time; concurrent requests wait on the same one.
+const ensuring = {};
+
+function ensureUxpPanel(key) {
+    if (panelLive(key)) return Promise.resolve();
+    return ensuring[key] || (ensuring[key] = (async () => {
+        const label = APPS[key].label;
+        if (!appRunning(key)) throw new Error(`${label} isn't open. Open it, then ask again.`);
+        if (!uxpRegistered(key)) {
+            throw new Error(`${label} isn't set up yet. In Moskito Easy MCP, press Set up next to ${label}.`);
+        }
+        if (!appBundle(UDT_GLOB)) {
+            throw new Error(`${label} needs Adobe's free UXP Developer Tool: `
+                + "https://www.adobe.com/download/uxp-developer-tools");
+        }
+        if (!udtRunning()) {
+            startUdtHidden();
+            await waitFor(() => udtRunning(), 15);
+        }
+        // Clear the background loader's backoff too: it may be sitting out
+        // five minutes after an earlier failure.
+        if (autoLoad[key]) { autoLoad[key].next = 0; autoLoad[key].wait = 15000; }
+        // Three, not more: each try can take 25 s if the tool never answers,
+        // and the assistant's side gives up at 120.
+        await loadWhenReady(key, 3);
+        if (!(await waitFor(() => panelLive(key), 10))) {
+            throw new Error(`The ${label} panel loaded but didn't connect. Quit and reopen ${label}.`);
+        }
+    })().finally(() => { delete ensuring[key]; }));
 }
 
 // setupUxp has just restarted the Developer Tool, and its service takes a
