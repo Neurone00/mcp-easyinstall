@@ -489,6 +489,32 @@ const CLIENTS = {
     },
 };
 
+// Is the assistant actually on this Mac? Setup used to infer it from whether
+// its config folder existed — true of a Mac that once had it, and of
+// ~/.claude.json, which setup itself wrote for Claude Code unconditionally. So
+// a Mac with no assistant at all went through setup without a word, and showed
+// "Connected" for an app that wasn't there.
+const ASSISTANT_DOWNLOADS = {
+    claude: "https://claude.com/download",
+    chatgpt: "https://chatgpt.com/download/",
+};
+function hasApp(name) {
+    return fs.existsSync(path.join("/Applications", name))
+        || fs.existsSync(path.join(HOME, "Applications", name));
+}
+// The command-line versions, where installers usually put them.
+function hasCli(name) {
+    return [path.join(HOME, ".local", "bin", name), path.join(HOME, ".claude", "local", name),
+            "/opt/homebrew/bin/" + name, "/usr/local/bin/" + name,
+            path.join(HOME, ".npm-global", "bin", name)].some((f) => fs.existsSync(f));
+}
+function clientInstalled(id) {
+    if (id === "codex") return hasApp("ChatGPT.app") || hasCli("codex");
+    // The desktop app's Code tab runs Claude Code, so Claude.app covers both.
+    if (id === "claude-code") return hasApp("Claude.app") || hasCli("claude");
+    return hasApp("Claude.app");
+}
+
 // Read-only, and called from /api/status every couple of seconds — a config we
 // can't parse must not take the whole status endpoint down. connectClient is the
 // one that has to be strict, because it writes.
@@ -1632,6 +1658,8 @@ app.get("/api/status", (_req, res) => {
             blurb: c.blurb,
             file: c.file.replace(HOME, "~"),
             connected: wired[id],
+            installed: clientInstalled(id),
+            download: id === "codex" ? "chatgpt" : "claude",
         })),
     });
 });
@@ -2140,6 +2168,14 @@ function openUdtHelp() {
     execFile("/usr/bin/open", ["https://www.adobe.com/download/uxp-developer-tools"]);
 }
 
+// Fixed table: the page names an assistant, never a URL.
+app.post("/api/download/:which", (req, res) => {
+    const url = ASSISTANT_DOWNLOADS[req.params.which];
+    if (!url) return res.status(404).json({ error: "Unknown assistant." });
+    execFile("/usr/bin/open", [url]);
+    res.json({ ok: true });
+});
+
 app.post("/api/uxp-help", (_req, res) => {
     openUdtHelp();
     res.json({ ok: true });
@@ -2223,10 +2259,8 @@ app.post("/api/setup", async (_req, res) => {
         const keys = registerableApps();
         const wired = [];
         for (const id of Object.keys(CLIENTS)) {
-            // Only touch clients the user actually has.
-            const dir = path.dirname(CLIENTS[id].file);
-            const has = fs.existsSync(CLIENTS[id].file) || fs.existsSync(dir);
-            if (!has && id !== "claude-code") continue;
+            // Only assistants that are really installed; see clientInstalled.
+            if (!clientInstalled(id)) continue;
             try {
                 connectClient(id, keys);
                 rememberClient(id, true);
@@ -2243,9 +2277,14 @@ app.post("/api/setup", async (_req, res) => {
             ? `${done.join(" and ")} ready`
             : (todo.length || failed.length ? "Setup didn't finish" : "Nothing to set up");
         const rest = [...todo, ...failed].map((t) => String(t).replace(/\.$/, ""));
+        // Name only the assistants that are there, and say so when none is.
+        const names = [Object.keys(CLIENTS).some((id) => id !== "codex" && clientInstalled(id)) && "Claude",
+                       clientInstalled("codex") && "ChatGPT"].filter(Boolean);
         const body = rest.length
             ? rest.join(". ") + "."
-            : "Restart Claude and ChatGPT and they can drive your apps.";
+            : names.length
+                ? `Restart ${names.join(" and ")} and ${names.length > 1 ? "they" : "it"} can drive your apps.`
+                : "Now install Claude or ChatGPT — the buttons are on this page — and press Set up again.";
         res.json({ ok: true, title, body, restart: wired.length > 0,
                    message: `${title}. ${body}`, done, todo, wired, failed });
     } catch (e) {

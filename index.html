@@ -612,6 +612,8 @@ function clientRows() {
     label: "Claude",
     connected: on.length === claude.length ? on[0].connected : [],
     partial: on.length > 0 && on.length < claude.length,
+    installed: claude.some((c) => c.installed !== false),
+    download: "claude",
   }));
   return rows;
 }
@@ -621,6 +623,18 @@ function clientRow(c) {
   const gpt = c.id === "codex";
   // Codex connected but sandboxed can't actually reach the apps.
   const blocked = gpt && n && !state.codexNetwork;
+
+  if (c.installed === false) {
+    return el(`
+      <div class="row off">
+        <div class="glyph" style="background:${gpt ? "#10a37f" : "#d97757"};color:#fff" aria-hidden="true">
+          ${gpt ? "GPT" : "C"}
+        </div>
+        <div class="meta"><div class="name">${c.label}</div></div>
+        <span class="pill"><span class="dot"></span>Not installed</span>
+        <span class="acts"><button class="suggest" data-download="${c.download}">Download</button></span>
+      </div>`);
+  }
 
   let status = n ? "Connected" : "Not connected";
   let tone = n ? "live" : "";
@@ -716,7 +730,12 @@ function render() {
     heroRow.insertBefore(setupBtn, heroRow.firstChild);
   }
 
-  if (!anyApp) {
+  const anyAssistant = state.clients.some((c) => c.installed !== false);
+  if (!anyAssistant) {
+    said.innerHTML = `Install Claude or ChatGPT first. `
+      + `<button class="suggest" data-download="claude">Get Claude</button> `
+      + `<button class="suggest" data-download="chatgpt">Get ChatGPT</button>`;
+  } else if (!anyApp) {
     said.textContent = "No Adobe apps found in /Applications — there's nothing to set up yet.";
   } else if (building) {
     said.textContent = "First run downloads a small Python runtime — about a minute.";
@@ -758,6 +777,12 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("button");
   if (!b) return;
   if (b.id === "toast-close") { hideToast(); return; }
+  if (b.dataset.download) {
+    api("POST", "/api/download/" + b.dataset.download).catch((e) => toast(e.message));
+    toast(`Opening the ${b.dataset.download === "chatgpt" ? "ChatGPT" : "Claude"} download page. `
+        + "Install it, then press Set up again.");
+    return;
+  }
   const was = b.innerHTML;
   b.disabled = true;
   try {
