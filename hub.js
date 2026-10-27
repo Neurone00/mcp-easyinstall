@@ -388,6 +388,7 @@ function writeJSON(file, data) {
     }
     // Write-then-rename, so an interrupted write can't truncate the real file.
     const tmp = `${file}.adobe-mcp-tmp`;
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
     fs.renameSync(tmp, file);
 }
@@ -609,6 +610,9 @@ function writeTomlChecked(file, text, sectionKey) {
         pruneBackups(file);
     }
     const tmp = `${file}.adobe-mcp-tmp`;
+    // ~/.codex doesn't exist until Codex first runs; ChatGPT being installed
+    // is enough for us to wire it.
+    fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(tmp, text);
     fs.renameSync(tmp, file);
 
@@ -1658,6 +1662,7 @@ app.get("/api/status", (_req, res) => {
         engine,
         uv,
         debugMode: debugModeOn(),
+        setupOnLaunch,
         claudeRunning: claudeRunning(),
         codexNetwork: codexNetworkAllowed(),
         python: { ready: venvReady, building: venvBuilding, error: venvError },
@@ -2223,7 +2228,9 @@ app.post("/api/uxp/:key", async (req, res) => {
 // point at it. This used to fire ensureVenv() without awaiting and reply
 // "Ready", so a fresh Mac got five configs aimed at a binary that was still
 // minutes from existing, and every request failed with no explanation.
+let setupOnLaunch = false;
 app.post("/api/setup", async (_req, res) => {
+    setupOnLaunch = false;
     const done = [];
     const todo = [];
     const failed = [];
@@ -2425,6 +2432,14 @@ server.listen(PORT, "127.0.0.1", () => {
     // item, or reopening the app. The hub never opens a tab on its own.
     console.log(`Moskito Easy MCP ${VERSION}  \u2192  ${URL}`);
     fs.mkdirSync(SUPPORT, { recursive: true });
+    // The .pkg installer leaves this marker: the person double-clicked an
+    // installer and expects to be done, so open the window and let it press
+    // "Set everything up" itself (index.html). One shot — the marker goes now.
+    try {
+        fs.unlinkSync(path.join(SUPPORT, "setup-on-launch"));
+        setupOnLaunch = true;
+        setTimeout(() => fs.writeFileSync(path.join(SUPPORT, "show-window"), String(Date.now())), 3000).unref();
+    } catch {}
     refreshPanels();
     ensureVenv(() => repairClientPaths());
     // Claude Desktop is skipped while it is open, so keep checking: the moment

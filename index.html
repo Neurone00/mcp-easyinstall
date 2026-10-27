@@ -364,6 +364,7 @@ const TINT = {
 const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr" };
 
 let state = null;
+let autoSetupDone = false;
 
 const toastEl = document.getElementById("toast");
 const toastMsg = document.getElementById("toast-msg");
@@ -714,6 +715,11 @@ function render() {
 
   // Setup can't finish before Python exists, so don't invite the click.
   setupBtn.disabled = !!building || !anyApp;
+  // Just installed from the .pkg: press it for them, once, as soon as it can be.
+  if (state.setupOnLaunch && !setupBtn.disabled && !autoSetupDone) {
+    autoSetupDone = true;
+    setTimeout(() => setupBtn.click(), 0);
+  }
   setupBtn.textContent = building ? "Setting up Python…"
     : ready ? "Check everything again" : "Set everything up";
   // Once it works, this is no longer the thing to reach for.

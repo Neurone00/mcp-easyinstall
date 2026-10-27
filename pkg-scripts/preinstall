@@ -1,0 +1,5 @@
+#!/bin/sh
+# Quit a running copy, so the new one replaces it cleanly and starts fresh.
+pkill -f "Moskito Easy MCP.app/Contents/" 2>/dev/null
+sleep 1
+exit 0

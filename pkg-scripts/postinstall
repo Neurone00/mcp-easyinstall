@@ -1,0 +1,18 @@
+#!/bin/sh
+# Runs as root after the app lands in /Applications. Hand it to the person who
+# is logged in, then start it in their session with a marker that tells it to
+# run "Set everything up" by itself.
+APP="/Applications/Moskito Easy MCP.app"
+U=$(stat -f%Su /dev/console)
+[ -z "$U" ] || [ "$U" = root ] && exit 0
+UID_=$(id -u "$U")
+H=$(dscl . -read "/Users/$U" NFSHomeDirectory | awk '{print $2}')
+
+# Owned by root, the in-app updater couldn't replace it later.
+chown -R "$U":staff "$APP"
+xattr -dr com.apple.quarantine "$APP" 2>/dev/null
+
+sudo -u "$U" mkdir -p "$H/Library/Application Support/AdobeMCP"
+sudo -u "$U" touch "$H/Library/Application Support/AdobeMCP/setup-on-launch"
+launchctl asuser "$UID_" sudo -u "$U" open "$APP"
+exit 0

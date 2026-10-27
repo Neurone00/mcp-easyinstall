@@ -440,6 +440,23 @@ if [ "${1:-}" = "--zip" ] || [ "${1:-}" = "--release" ]; then
                  -ov -format UDZO -quiet "$DMG"
   rm -rf "$STAGE"
   say "Disk image: $DMG ($(du -sh "$DMG" | cut -f1))"
+
+  # And a double-click installer: it puts the app in /Applications, opens it,
+  # and the app runs "Set everything up" by itself (pkg-scripts/postinstall).
+  # Not relocatable: Installer otherwise "updates" any copy it finds elsewhere,
+  # such as one left in Downloads, and /Applications stays empty.
+  say "Building the installer"
+  PKG="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.pkg"
+  STAGE="$(mktemp -d)"
+  ditto "$APP" "$STAGE/Moskito Easy MCP.app"
+  pkgbuild --analyze --root "$STAGE" "$STAGE.plist" >/dev/null
+  plutil -replace 0.BundleIsRelocatable -bool NO "$STAGE.plist"
+  rm -f "$PKG"
+  pkgbuild --root "$STAGE" --component-plist "$STAGE.plist" --install-location /Applications \
+           --scripts "$HERE/pkg-scripts" --identifier com.moskitodesign.easymcp \
+           --version "$VER" --quiet "$PKG"
+  rm -rf "$STAGE" "$STAGE.plist"
+  say "Installer: $PKG ($(du -sh "$PKG" | cut -f1))"
 fi
 
 # --------------------------------------------------------------- release ----
@@ -447,13 +464,14 @@ fi
 if [ "${1:-}" = "--release" ]; then
   ZIP="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.zip"
   DMG="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.dmg"
+  PKG="$HERE/dist/Moskito-Easy-MCP-macOS-$ARCH.pkg"
   if gh release view "v$VER" >/dev/null 2>&1; then
     say "Updating release v$VER"
-    gh release upload "v$VER" "$ZIP" "$DMG" --clobber
+    gh release upload "v$VER" "$ZIP" "$DMG" "$PKG" --clobber
   else
     say "Publishing release v$VER"
     git tag -f "v$VER" && git push -q --force origin "v$VER"
-    gh release create "v$VER" "$ZIP" "$DMG" --title "Moskito Easy MCP $VER" --generate-notes
+    gh release create "v$VER" "$ZIP" "$DMG" "$PKG" --title "Moskito Easy MCP $VER" --generate-notes
   fi
   say "Released v$VER"
 fi
