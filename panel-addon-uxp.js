@@ -19,6 +19,7 @@
     var LABELS = {
         photoshop: "Photoshop", premiere: "Premiere Pro",
         illustrator: "Illustrator", aftereffects: "After Effects",
+        indesign: "InDesign",
     };
     var APP = (typeof APPLICATION !== "undefined" && LABELS[APPLICATION]) || "this app";
 

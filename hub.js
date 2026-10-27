@@ -93,10 +93,12 @@ const APPS = {
         appGlob: "Adobe Premiere Pro",
         panelMenu: "Window → UXP Plugins → Moskito Easy MCP",
     },
-    // InDesign is deliberately absent. Its server exposes exactly one tool,
-    // create_document, and no scripting escape hatch — it can make an empty
-    // document and nothing else. Listing it promised a capability that does
-    // not exist, and cost the user the UXP Developer Tool dance for no payoff.
+    indesign: {
+        label: "InDesign",
+        kind: "uxp", uxp: "id", mcp: "id-mcp.py",
+        appGlob: "Adobe InDesign",
+        panelMenu: "Plugins → Moskito Easy MCP",
+    },
 };
 
 // Adobe installs each app inside its own folder — /Applications/Adobe Illustrator
@@ -839,7 +841,7 @@ function refreshPanels() {
 // them, so re-point anything that has drifted.
 // Apps we used to ship. Their entries linger in config files pointing at a
 // server we no longer maintain, so they are removed rather than left to rot.
-const RETIRED = ["indesign"];
+const RETIRED = [];
 
 function removeRetired(id) {
     const c = CLIENTS[id];
@@ -1831,7 +1833,7 @@ app.post("/api/reveal", (req, res) => {
 const UDT_WORKSPACE = path.join(
     HOME, "Library", "Application Support", "Adobe", "Adobe UXP Developer Tool", "plugins_workspace.json"
 );
-const UDT_HOST = { photoshop: "PS", premiere: "premierepro" };
+const UDT_HOST = { photoshop: "PS", premiere: "premierepro", indesign: "ID" };
 // A folder in /Applications with the .app inside it, the way Adobe ships most
 // things. appBundle() unwraps that; a plain path join does not.
 const UDT_GLOB = "Adobe UXP Developer Tool";
@@ -2084,7 +2086,12 @@ async function loadWhenReady(key, tries = 4) {
 app.post("/api/load-uxp/:key", async (req, res) => {
     if (!APPS[req.params.key]) return res.status(404).json({ error: "Unknown app." });
     try {
-        res.json(await loadUxpPlugin(req.params.key));
+        // Pressed straight after setup restarted the Developer Tool, its
+        // service isn't up for a few seconds: one try failed every time.
+        const key = req.params.key;
+        if (!appRunning(key)) throw new Error(`${APPS[key].label} isn't open. Open it, then try again.`);
+        if (!udtRunning()) startUdtHidden();
+        res.json(await loadWhenReady(key, 5));
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -2152,7 +2159,6 @@ async function setupUxp(key) {
     ws.plugins = (ws.plugins || []).filter(
         (p) => p.hostParam !== UDT_HOST[key]
             && p.manifestPath !== manifest
-            && p.hostParam !== "ID"
             && fs.existsSync(p.manifestPath || "")
     );
     ws.plugins.push({ manifestPath: manifest, pluginOptions: { breakOnStart: false }, hostParam: UDT_HOST[key] });

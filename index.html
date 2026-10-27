@@ -220,6 +220,8 @@ code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace;
 #wizard .wz-body { padding: 16px 20px 4px; font-size: 15px; line-height: 1.5; }
 #wizard .wz-body b { font-weight: 640; }
 #wizard .wz-sub { margin-top: 8px; font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+#wizard .wz-err { color: var(--warn); }
+#wizard .wz-err:empty { display: none; }
 #wizard .wz-act { margin-top: 12px; }
 #wizard .wz-foot { display: flex; gap: 8px; align-items: center; padding: 16px 20px 18px; }
 #wizard .wz-foot .sp { flex: 1; }
@@ -360,8 +362,9 @@ const TINT = {
   illustrator: "#330000,#ff9a00",
   aftereffects:"#00005b,#9999ff",
   premiere:    "#2a0634,#ea77ff",
+  indesign:    "#49021f,#ff3366",
 };
-const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr" };
+const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"Pr", indesign:"Id" };
 
 let state = null;
 let autoSetupDone = false;
@@ -436,10 +439,17 @@ function wizard(a, steps) {
     const b = e.target.closest("[data-wz]");
     if (!b) return;
     if (b.dataset.wz === "act") {
+      // Answer inside the dialog: a toast draws behind a modal, so both the
+      // success and the error used to be invisible and the button looked dead.
+      const label = b.textContent;
+      const note = wizEl.querySelector(".wz-err") || b.insertAdjacentElement("afterend",
+        Object.assign(document.createElement("div"), { className: "wz-sub wz-err" }));
       b.disabled = true;
+      b.textContent = "Loading\u2026";
+      note.textContent = "";
       api("POST", b.dataset.path)
-        .catch((err) => toast(err.message))
-        .finally(() => { b.disabled = false; });
+        .then(() => { b.textContent = "Loaded \u2713"; setTimeout(() => { i++; draw(); }, 900); })
+        .catch((err) => { b.textContent = label; b.disabled = false; note.textContent = err.message; });
       return;
     }
     if (b.dataset.wz === "back") { i--; draw(); return; }

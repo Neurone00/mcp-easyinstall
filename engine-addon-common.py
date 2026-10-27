@@ -17,7 +17,7 @@
 
 _WHICH_APP = """
 You may be connected to several Adobe applications at once — Illustrator,
-After Effects, Photoshop, Premiere Pro — each with its own set of tools. This
+After Effects, Photoshop, Premiere Pro, InDesign — each with its own set of tools. This
 server drives {app} and nothing else.
 
 Before the first action of a request, make sure {app} is the application the
@@ -31,7 +31,8 @@ user means. Ask a short question instead of acting when either of these is true:
     it belongs to a different one. Compositions, keyframes, effects and time
     point at After Effects; artboards, paths and swatches at Illustrator;
     sequences, clips and transitions at Premiere Pro; pixel layers, masks and
-    selections at Photoshop. A shift like that is worth one question, even
+    selections at Photoshop; pages, text frames and paragraph styles at
+    InDesign. A shift like that is worth one question, even
     though it interrupts.
 
 Do not ask when the request names the application, when only one connected
@@ -43,7 +44,7 @@ When you do ask, name the options and say nothing else: "Illustrator or After
 Effects?" is enough.
 
 Use this server's tools for all work in {app}. Never operate Premiere Pro,
-Photoshop, Illustrator or After Effects with computer use, AppleScript or a
+Photoshop, Illustrator, After Effects or InDesign with computer use, AppleScript or a
 script for the user to run, even one with no server here. If no tool can do
 what was asked, say which part and stop. If the panel isn't connected, say how
 to open it.
@@ -56,6 +57,7 @@ try:
         "aftereffects": "Adobe After Effects",
         "photoshop": "Adobe Photoshop",
         "premiere": "Adobe Premiere Pro",
+        "indesign": "Adobe InDesign",
     }.get(APPLICATION, APPLICATION)
     _text = _WHICH_APP.format(app=_app_label)
     mcp._mcp_server.instructions = (_existing + "\n\n" + _text).strip()

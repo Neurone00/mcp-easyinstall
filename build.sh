@@ -174,6 +174,10 @@ for d in "$HERE"/engine/uxp/*/; do
   [ -f "$mj" ] || continue
   [ -f "$mj.orig" ] || cp "$mj" "$mj.orig"
   cp "$mj.orig" "$mj"
+  # Connect on launch defaults to OFF upstream, so a panel the hub loads sits
+  # unconnected until someone finds More → Connect. On unless they unticked it.
+  /usr/bin/sed -i '' 's/getItem(CONNECT_ON_LAUNCH)) || false;/getItem(CONNECT_ON_LAUNCH)) ?? true;/' "$mj"
+  grep -q 'CONNECT_ON_LAUNCH)) ?? true' "$mj" || { echo "✗ connect-on-launch patch did not apply to $mj"; exit 1; }
   printf '\n' >> "$mj"
   cat "$HERE/panel-addon-uxp.js" >> "$mj"
 done
@@ -213,12 +217,23 @@ cp "$pc.orig" "$pc"
 printf '\n' >> "$pc"
 cat "$HERE/panel-addon-pr.js" >> "$pc"
 
+# InDesign's: the same handler, plus fixes for two upstream bugs that failed
+# every command on a print document (see the file).
+ic="$HERE/engine/uxp/id/commands/index.js"
+[ -f "$ic.orig" ] || cp "$ic" "$ic.orig"
+cp "$ic.orig" "$ic"
+printf '\n' >> "$ic"
+cat "$HERE/panel-addon-id.js" >> "$ic"
+
 for m in "$HERE"/engine/uxp/*/manifest.json; do
   [ -f "$m" ] || continue
   "$HERE/runtime/node" -e '
     const fs=require("fs"), f=process.argv[1];
     const j=JSON.parse(fs.readFileSync(f,"utf8"));
     j.name = "Moskito Easy MCP";
+    // InDesign lists ["all", "http://localhost:3001"]: inside a list "all" is
+    // just a hostname, so the websocket from the panel to the hub was refused.
+    if (j.requiredPermissions && j.requiredPermissions.network) j.requiredPermissions.network.domains = "all";
     if (Array.isArray(j.entrypoints)) j.entrypoints.forEach(e => { if (e.label) e.label = { default: "Moskito Easy MCP" }; });
 
     // Upstream declares entrypoint icons that are not in the package:
@@ -246,10 +261,11 @@ for m in "$HERE"/engine/uxp/*/manifest.json; do
   ' "$m"
 done
 
-for s in ai ae ps pr; do reset_engine "$s-mcp.py"; done
+for s in ai ae ps pr id; do reset_engine "$s-mcp.py"; done
 add_engine ai-mcp.py engine-addon-ai.py
 add_engine ae-mcp.py engine-addon-ae.py
 add_engine pr-mcp.py engine-addon-pr.py
+add_engine id-mcp.py engine-addon-id.py
 # Upstream's docstring says a tick is 1/254016000000 of a DAY. It is of a
 # second (checked: an 86.68 s clip is 22,018,106,880,000 ticks). The model reads
 # this text, so the wrong unit put every tick-based edit 86,400x off.
@@ -257,7 +273,7 @@ add_engine pr-mcp.py engine-addon-pr.py
 grep -q "of a second" "$HERE/engine/mcp/pr-mcp.py" || { echo "✗ tick docstring patch did not apply"; exit 1; }
 # Every server, not just the two we extended: which app the model should be
 # driving is a question for Photoshop and Premiere too.
-for s in ai ae ps pr; do
+for s in ai ae ps pr id; do
   add_engine "$s-mcp.py" engine-addon-common.py
 done
 
