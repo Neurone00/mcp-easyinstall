@@ -2430,6 +2430,34 @@ setInterval(() => {
     }
 }, 5000).unref();
 
+// `node hub.js --uninstall`, run by uninstall.sh with the app already quit (so
+// repairClientPaths can't put anything back): take out everything we put
+// outside our own folder. Removing that folder and the app is the script's job.
+if (process.argv[2] === "--uninstall") {
+    const step = (what, fn) => { try { fn(); console.log("✓ " + what); }
+                                 catch (e) { console.log(`⚠ ${what}: ${e.message}`); } };
+    for (const id of Object.keys(CLIENTS)) step(CLIENTS[id].label, () => disconnectClient(id));
+    for (const a of Object.values(APPS)) {
+        if (a.cep) step(`${a.label} panel`, () => fs.rmSync(path.join(CEP_DIR, a.cep), { recursive: true, force: true }));
+    }
+    step("UXP Developer Tool list", () => {
+        if (!fs.existsSync(UDT_WORKSPACE)) return;
+        const ws = readJSON(UDT_WORKSPACE, {});
+        ws.plugins = (ws.plugins || []).filter((p) => !/\/Contents\/Resources\/engine\/uxp\//.test(p.manifestPath || ""));
+        writeJSON(UDT_WORKSPACE, ws);
+    });
+    // Last, because every write above leaves one of these beside the file.
+    for (const file of [...Object.values(CLIENTS).map((c) => c.file), UDT_WORKSPACE]) {
+        const prefix = path.basename(file) + ".adobe-mcp-backup-";
+        try {
+            for (const n of fs.readdirSync(path.dirname(file))) {
+                if (n.startsWith(prefix)) fs.rmSync(path.join(path.dirname(file), n), { force: true });
+            }
+        } catch { /* folder isn't there */ }
+    }
+    process.exit(0);
+}
+
 // "127.0.0.1", not the default of every interface: this is a local control
 // surface, and binding publicly also triggers the macOS incoming-connections
 // prompt, which a colleague who clicks Deny can never recover from.

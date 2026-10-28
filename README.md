@@ -42,6 +42,9 @@ also a **⚙** button in the Illustrator and After Effects panels.
 
 Keep it running while you work.
 
+To remove it: menu bar icon → **Uninstall Moskito Easy MCP…**. It takes itself out of
+Claude and ChatGPT, removes its Adobe panels, and deletes the app and its data.
+
 If a panel is open in an Adobe app but hasn't connected, the control panel says so
 and offers a **Connect** button that presses the panel's own Connect for you — and
 sets it to connect by itself from then on.

@@ -120,6 +120,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(title: "Restart Background Service",
                                 action: #selector(restartHub), keyEquivalent: ""))
         menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Uninstall Moskito Easy MCP\u{2026}",
+                                action: #selector(uninstall), keyEquivalent: ""))
         menu.addItem(NSMenuItem(title: "Quit Moskito Easy MCP",
                                 action: #selector(quit), keyEquivalent: "q"))
         self.menu = menu
@@ -573,6 +575,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func quit() {
         NSApp.terminate(nil)
+    }
+
+    // uninstall.sh quits this app itself, so it is started and left running.
+    @objc func uninstall() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Uninstall Moskito Easy MCP?"
+        alert.informativeText = "This removes it from Claude and ChatGPT, takes its panels out of "
+            + "your Adobe apps, and deletes the app and its data. Claude restarts if it's open."
+        alert.addButton(withTitle: "Uninstall")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons[0].hasDestructiveAction = true
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let script = Bundle.main.path(forResource: "uninstall", ofType: "sh") else { return }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/bin/bash")
+        p.arguments = [script, Bundle.main.bundlePath]
+        try? p.run()
     }
 
     // The hub holds port 3001; leaving it running after a quit would block the

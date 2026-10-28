@@ -330,7 +330,7 @@ say "Assembling the app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$RES"
-cp "$HERE/hub.js" "$HERE/index.html" "$HERE/help.html" "$HERE/package.json" "$RES/"
+cp "$HERE/hub.js" "$HERE/index.html" "$HERE/help.html" "$HERE/package.json" "$HERE/uninstall.sh" "$RES/"
 mkdir -p "$RES/brand" && cp "$HERE/brand/mark.svg" "$HERE/brand/mark-animated.svg" "$RES/brand/"
 # A stray .venv from running the engine locally would double the app's size.
 rm -rf "$HERE/engine/mcp/.venv" "$HERE/engine/mcp/__pycache__"
