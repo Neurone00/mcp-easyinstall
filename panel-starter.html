@@ -1,0 +1,6 @@
+<!doctype html>
+<!-- Moskito Easy MCP: an invisible extension that starts with the Adobe app and
+     opens the visible panel, so nobody has to find it in Window > Extensions.
+     It stays running, so it fires once per launch, not on every app switch. -->
+<script src="./lib/CSInterface.js"></script>
+<script>var cs = new CSInterface(); cs.requestOpenExtension(cs.getExtensionID().replace(/\.starter$/, ".mcp"), "");</script>

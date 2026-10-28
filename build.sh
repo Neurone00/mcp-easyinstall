@@ -164,6 +164,27 @@ say "Naming the panels consistently"
 for panel in "$HERE"/engine/cep/*/; do
   /usr/bin/sed -i '' 's|<Menu>[^<]*</Menu>|<Menu>Moskito Easy MCP</Menu>|' "$panel/CSXS/manifest.xml"
   /usr/bin/sed -i '' 's|<title>[^<]*</title>|<title>Moskito Easy MCP</title>|' "$panel/index.html"
+  # Open the panel whenever the app starts, instead of asking people to find it
+  # in Window > Extensions. A visible panel's own StartOn never fired in
+  # Illustrator; an invisible Custom extension's does, and it opens the panel.
+  cp "$HERE/panel-starter.html" "$panel/starter.html"
+  M="$panel/CSXS/manifest.xml" "$HERE/runtime/node" -e '
+    const fs = require("fs"), p = process.env.M;
+    let s = fs.readFileSync(p, "utf8");
+    if (s.includes(".starter\"")) process.exit(0);
+    const [, id, ver] = s.match(/<Extension Id="([\w.]+)\.mcp" Version="([^"]+)"\/>/);
+    s = s.replace(`<Extension Id="${id}.mcp" Version="${ver}"/>`,
+                  `$&\n    <Extension Id="${id}.starter" Version="${ver}"/>`);
+    s = s.replace("</DispatchInfoList>", `  <Extension Id="${id}.starter">
+      <DispatchInfo>
+        <Resources><MainPath>./starter.html</MainPath></Resources>
+        <Lifecycle><AutoVisible>false</AutoVisible><StartOn><Event>com.adobe.csxs.events.ApplicationActivate</Event><Event>applicationActivate</Event></StartOn></Lifecycle>
+        <UI><Type>Custom</Type></UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>`);
+    fs.writeFileSync(p, s);'
+  grep -q '\.starter"' "$panel/CSXS/manifest.xml" || { echo "✗ panel starter did not apply to $panel"; exit 1; }
 done
 # Same pristine-copy rule as the engine servers: append to a kept-clean main.js
 # every build, so editing the add-on actually ships instead of being skipped

@@ -679,11 +679,33 @@ function installPanel(key) {
         if (f) fs.copyFileSync(f, path.join(dest, name + ".png"));
     }
 
+    if (key === "aftereffects") aeStartupScript(true);
+
     // Adobe refuses to load unsigned panels unless debug mode is on.
     for (const v of ["10", "11", "12", "13"]) {
         try {
             execFileSync("/usr/bin/defaults", ["write", `com.adobe.CSXS.${v}`, "PlayerDebugMode", "1"]);
         } catch { /* version not present on this machine */ }
+    }
+}
+
+// After Effects never sends the start event that opens the Illustrator panel
+// at launch (see panel-starter.html), but it runs every script in the per-user
+// Scripts/Startup folder of each version it has been opened as. Opening the
+// panel's menu item when it is already open leaves it open.
+const AE_PREFS = path.join(HOME, "Library", "Preferences", "Adobe", "After Effects");
+function aeStartupScript(on) {
+    let versions = [];
+    try { versions = fs.readdirSync(AE_PREFS).filter((v) => /^\d/.test(v)); } catch { return; }
+    for (const v of versions) {
+        const file = path.join(AE_PREFS, v, "Scripts", "Startup", "Moskito Easy MCP.jsx");
+        try {
+            if (!on) { fs.rmSync(file, { force: true }); continue; }
+            fs.mkdirSync(path.dirname(file), { recursive: true });
+            fs.writeFileSync(file, "// Moskito Easy MCP: open its panel when After Effects starts.\n" +
+                "app.scheduleTask('var id = app.findMenuCommandId(\"Moskito Easy MCP\"); " +
+                "if (id) app.executeCommand(id);', 5000, false);\n");
+        } catch { /* that version's folder isn't writable: the panel opens by hand */ }
     }
 }
 
@@ -2440,6 +2462,7 @@ if (process.argv[2] === "--uninstall") {
     for (const a of Object.values(APPS)) {
         if (a.cep) step(`${a.label} panel`, () => fs.rmSync(path.join(CEP_DIR, a.cep), { recursive: true, force: true }));
     }
+    step("After Effects startup script", () => aeStartupScript(false));
     step("UXP Developer Tool list", () => {
         if (!fs.existsSync(UDT_WORKSPACE)) return;
         const ws = readJSON(UDT_WORKSPACE, {});

@@ -69,7 +69,8 @@ so those are fully automatic.
 
 ## Using it
 
-Open the MCP panel inside the Adobe app and leave it open:
+Open the MCP panel inside the Adobe app and leave it open. In Illustrator and After
+Effects it opens by itself when the app starts; the others are here:
 
 - Illustrator / After Effects → **Window → Extensions → Moskito Easy MCP**
 - Photoshop → **Plugins → Moskito Easy MCP**
