@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Moskito MCP Usage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +13,7 @@
     --card: #ffffff;
     --ink: #10141f;
     --soft: #5d6b84;
-    --faint: #8794a8;
+    --faint: #647086;
     --line: #e1e7f0;
     --accent: #2855ff;
     --accent-soft: #dfe6ff;
@@ -25,7 +27,7 @@
       --card: #171a22;
       --ink: #eef1f7;
       --soft: #98a3b8;
-      --faint: #6d7789;
+      --faint: #858fa2;
       --line: #262b36;
       --accent: #8098ff;
       --accent-soft: #232a45;
@@ -36,7 +38,7 @@
   :root[data-theme="dark"] {
     color-scheme: dark;
     --ground: #0e1016; --card: #171a22; --ink: #eef1f7; --soft: #98a3b8;
-    --faint: #6d7789; --line: #262b36; --accent: #8098ff; --accent-soft: #232a45;
+    --faint: #858fa2; --line: #262b36; --accent: #8098ff; --accent-soft: #232a45;
     --warn: #e09a4e;
     --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 28px rgba(0, 0, 0, .28);
   }
@@ -90,7 +92,7 @@
   .rows { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
           box-shadow: var(--shadow); overflow: hidden; }
   .row {
-    display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center;
+    display: grid; grid-template-columns: 1fr; grid-auto-flow: column; gap: 14px; align-items: center;
     padding: 11px 17px; border-top: 1px solid var(--line);
   }
   .row:first-child { border-top: 0; }
@@ -117,35 +119,79 @@
     border-left: 3px solid var(--warn); border-radius: 10px; padding: 13px 16px;
     font-size: 13.5px; color: var(--soft);
   }
+  /* People: a real table, so versions and dates line up down the list. */
+  .ptable .row { grid-template-columns: minmax(0, 1.7fr) 74px 92px 80px 56px 64px; gap: 10px; }
+  .ptable .head { font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+                  color: var(--faint); font-weight: 620; padding-block: 9px; }
+  .ptable .head .num { color: var(--faint); font-size: 11px; }
+  .old { color: var(--warn); font-weight: 600; }
+  details.more > summary { cursor: pointer; padding: 11px 17px; border-top: 1px solid var(--line);
+                           color: var(--soft); font-size: 14px; list-style: none; }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::before { content: "\25B8  "; color: var(--faint); }
+  details.more[open] > summary::before { content: "\25BE  "; }
+  /* Phones: who, which version, when. The counts are a desktop concern. */
+  @media (max-width: 600px) {
+    .ptable .row { grid-template-columns: minmax(0, 1fr) 60px 84px; }
+    .ptable .row > .num:nth-child(n+4) { display: none; }
+    .rows:not(.ptable) .row { grid-auto-flow: row; grid-template-columns: repeat(3, auto); justify-content: start; gap: 4px 14px; }
+    .rows:not(.ptable) .row .name { grid-column: 1 / -1; }
+    .rows:not(.ptable) .row .num { text-align: left; }
+    .rows:not(.ptable) .row > .num:nth-child(4) { display: none; }
+  }
+
+  .update { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 10px;
+            background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+            padding: 13px 17px; box-shadow: var(--shadow); font-size: 14px; color: var(--soft); }
+  .update span { flex: 1 1 260px; }
+  .update b { color: var(--ink); font-weight: 600; }
+
+  .chart { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+           box-shadow: var(--shadow); padding: 12px 14px 8px; }
+  .chart .days { border: 0; padding: 0; background: none; box-shadow: none; }
+  .days i.today { background: var(--ink); }
+  .axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--faint);
+          margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .chart p { margin: 8px 0 0; font-size: 13px; color: var(--soft); }
+  .signout { font-size: 13.5px; color: var(--soft); text-decoration: none; padding: 6px 2px; }
+  .signout:hover { color: var(--accent); }
+  h2 abbr { text-decoration: none; cursor: help; margin-left: 4px; }
 </style>
 
 <main class="wrap">
   <header>
     <div style="flex:1 1 260px">
-      <h1>Moskito Easy MCP usage</h1>
+      <h1>Moskito Easy MCP</h1>
       <p class="when" id="when">Loading…</p>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button id="push" class="ghost">Push update to everyone</button>
-      <button id="refresh">Refresh</button>
-    </div>
+    <!-- Cloudflare Access's own sign-out: ends the session for this page. -->
+    <a class="signout" href="/cdn-cgi/access/logout">Sign out</a>
   </header>
 
   <div class="summary" id="summary"></div>
 
+  <div class="update" id="update" hidden>
+    <span id="update-text"></span>
+    <button id="push" class="ghost">Push update to everyone</button>
+  </div>
+
   <h2>Daily use</h2>
-  <div class="days" id="daily"></div>
+  <div class="chart">
+    <div class="days" id="daily" role="img"></div>
+    <div class="axis"><span id="axis-from"></span><span id="axis-to"></span></div>
+    <p id="daily-sum"></p>
+  </div>
 
   <h2>People</h2>
-  <div class="rows" id="people"><div class="empty">Loading…</div></div>
+  <div class="rows ptable" id="people"><div class="empty">Loading…</div></div>
 
-  <h2>By assistant</h2>
-  <div class="rows" id="clients"><div class="empty">Loading…</div></div>
-
-  <h2>By app</h2>
+  <h2>By app <abbr title="Tokens: estimated from the size of what the tools sent back, averaged per install. The share of an assistant's context this app takes, not anyone's plan usage.">&#9432;</abbr></h2>
   <div class="rows" id="apps"><div class="empty">Loading…</div></div>
 
-  <h2>Why they fail</h2>
+  <h2>By assistant <abbr title="The same commands as By app, counted by which assistant asked. Versions before 2.30 didn't say, so they show as Unknown.">&#9432;</abbr></h2>
+  <div class="rows" id="clients"><div class="empty">Loading…</div></div>
+
+  <h2>Why they fail <abbr title="Error types only, never the message, which can name a layer or a file. Before 19 October, scripts that threw were counted as successes.">&#9432;</abbr></h2>
   <div class="rows" id="errtypes"><div class="empty">Loading…</div></div>
 
   <h2>Most used commands</h2>
@@ -154,60 +200,53 @@
   <div class="err" id="err" hidden></div>
 
   <p class="note">
-    Last 30 days. Counts only — no document names, prompts, scripts, paths or artwork are
-    collected. People are named by their Mac's name (from 2.55.0); older versions show
-    a random install id. Counted per install, so a reinstall looks like a new one.<br>
-    Tokens are estimated from the size of what the tools sent back: the share of an
-    assistant's context this app is responsible for, not anyone's plan usage.<br>
-    By assistant and by app count the same calls twice over, cut two ways.<br>
-    Failures include scripts that threw inside the Adobe app — before 19 October
-    those were counted as successes, so older figures understate them. Why they
-    fail lists error types only, never the message, which can name a layer or a
-    file.
-    &ldquo;Unlabelled config&rdquo; is a server someone wired up by hand.
+    Last 30 days, counts only: no document names, prompts, scripts, paths or artwork.
+    People are named by their Mac's name from 2.55.0; older versions show a random id,
+    and a reinstall looks like a new person.
   </p>
 </main>
 
 <script>
-  // Same origin as the page, and the key is whatever got us here — so the
-  // page holds no secret of its own and a shared link carries its own access.
+  // Same origin as the page: Cloudflare Access's login cookie goes with it.
   const ENDPOINT = "/usage.json";
-  const KEY = new URLSearchParams(location.search).get("k") || "";
 
   const $ = (id) => document.getElementById(id);
-  const num = (n) => Number(n || 0).toLocaleString();
-  // Versions arrive from each install's report, so they are text, not markup.
+  const num = (n) => Number(n || 0).toLocaleString("en-GB");
+  const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || one + "s"}`;
+  // Versions and names arrive from each install's report: text, not markup.
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+  const utc = (t) => new Date(String(t).replace(" ", "T") + (String(t).includes("Z") ? "" : "Z"));
+  const short = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  function ago(t) {
+    if (!t) return "never";
+    const days = Math.floor((Date.now() - utc(t)) / 864e5);
+    return days < 1 ? "today" : days < 2 ? "yesterday" : days < 14 ? `${days} days ago` : short(utc(t));
+  }
+  function older(v, latest) {
+    const a = String(v).split("."), b = String(latest).split(".");
+    for (let i = 0; i < 3; i++) if ((+a[i] || 0) !== (+b[i] || 0)) return (+a[i] || 0) < (+b[i] || 0);
+    return false;
+  }
 
   const APP_NAMES = {
-    illustrator: "Illustrator",
-    photoshop: "Photoshop",
-    aftereffects: "After Effects",
-    premiere: "Premiere Pro",
-    indesign: "InDesign",
-    "claude-desktop": "Claude Desktop",
-    "claude-code": "Claude Code",
-    codex: "ChatGPT",
+    illustrator: "Illustrator", photoshop: "Photoshop", aftereffects: "After Effects",
+    premiere: "Premiere Pro", indesign: "InDesign",
+    "claude-desktop": "Claude Desktop", "claude-code": "Claude Code", codex: "ChatGPT",
     unknown: "Unlabelled config",
   };
+  // "photoshop.create_pixel_layer" -> "Photoshop · create pixel layer"
+  function command(id) {
+    const [app, tool = ""] = String(id).split(".");
+    const what = /^execute_/.test(tool) ? "custom script" : tool.replace(/_/g, " ");
+    return `${APP_NAMES[app] || app} \u00b7 ${what}`;
+  }
 
-  function row(name, calls, max, right, mono) {
+  function row(name, calls, max, right) {
     const pct = max > 0 ? Math.max(2, Math.round((calls / max) * 100)) : 0;
     const el = document.createElement("div");
     el.className = "row";
-    const label = document.createElement("div");
-    label.className = "name";
-    const text = document.createElement("div");
-    if (mono) text.className = "mono";
-    text.textContent = name;
-    label.appendChild(text);
-    const bar = document.createElement("div");
-    bar.className = "bar";
-    const fill = document.createElement("i");
-    fill.style.width = pct + "%";
-    bar.appendChild(fill);
-    label.appendChild(bar);
-    el.appendChild(label);
+    el.innerHTML = `<div class="name"><div></div><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+    el.querySelector(".name div").textContent = name;
     for (const cell of right) {
       const d = document.createElement("div");
       d.className = "num";
@@ -216,30 +255,28 @@
     }
     return el;
   }
+  const empty = () => Object.assign(document.createElement("div"),
+    { className: "empty", textContent: "Nothing recorded yet." });
 
-  function fill(box, items, installs, withTokens) {
+  // A list showing its top `show` rows, the rest behind "n more".
+  function list(box, items, show, cells, label) {
     box.replaceChildren();
-    if (!items.length) {
-      const e = document.createElement("div");
-      e.className = "empty";
-      e.textContent = "Nothing recorded yet.";
-      box.appendChild(e);
-      return;
-    }
+    if (!items.length) return box.appendChild(empty());
     const max = Math.max(...items.map((i) => i.calls));
-    for (const it of items.slice(0, 20)) {
-      const failed = it.calls ? ((it.errors + (it.scriptErrors || 0)) / it.calls) * 100 : 0;
-      const cells = [
-        `<b>${num(it.calls)}</b> ${it.calls === 1 ? "call" : "calls"}`,
-        failed > 0 ? `<span class="fail">${failed.toFixed(0)}% failed</span>` : "",
-      ];
-      if (withTokens && installs) {
-        cells.push(`${num(Math.round(it.tokens / installs))} tok`);
-      }
-      const name = APP_NAMES[it.name] || it.name;
-      box.appendChild(row(name, it.calls, max, cells, !APP_NAMES[it.name]));
+    const make = (it) => row(label(it), it.calls, max, cells(it));
+    for (const it of items.slice(0, show)) box.appendChild(make(it));
+    if (items.length > show) {
+      const d = document.createElement("details");
+      d.className = "more";
+      d.innerHTML = `<summary>${items.length - show} more</summary>`;
+      for (const it of items.slice(show)) d.appendChild(make(it));
+      box.appendChild(d);
     }
   }
+  const failedCell = (it) => {
+    const f = it.calls ? ((it.errors + (it.scriptErrors || 0)) / it.calls) * 100 : 0;
+    return f > 0 ? `<span class="fail">${f.toFixed(0)}% failed</span>` : "";
+  };
 
   function tile(n, k) {
     const t = document.createElement("div");
@@ -248,76 +285,123 @@
     return t;
   }
 
+  function personRow(p, latest, max) {
+    const failed = p.calls ? (p.errors / p.calls) * 100 : 0;
+    const v = p.version || "?";
+    return row(p.name || `Unnamed \u00b7 ${p.id}`, p.calls, max, [
+      `<span class="${latest && older(v, latest) ? "old" : ""}">${esc(v)}</span>`,
+      ago(p.lastUsed),
+      `<b>${num(p.calls)}</b>`,
+      `<span class="opt">${p.days}</span>`,
+      `<span class="opt">${failed > 0 ? `<span class="fail">${failed.toFixed(0)}%</span>` : "\u2014"}</span>`,
+    ]);
+  }
+
   async function load() {
-    const btn = $("refresh");
-    btn.disabled = true;
-    btn.textContent = "Refreshing…";
     $("err").hidden = true;
     try {
-      const r = await fetch(`${ENDPOINT}?k=${encodeURIComponent(KEY)}`, { cache: "no-store" });
+      const r = await fetch(ENDPOINT, { cache: "no-store" });
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
 
+      const people = d.people || [];
+      const latest = d.latest || "";
+      const week = people.filter((p) => p.lastUsed && Date.now() - utc(p.lastUsed) < 7 * 864e5).length;
+      const behind = latest ? people.filter((p) => p.version && older(p.version, latest)).length : 0;
       const calls = d.apps.reduce((n, a) => n + a.calls, 0);
       const errors = d.apps.reduce((n, a) => n + a.errors + (a.scriptErrors || 0), 0);
+
+      // The two questions the page is for first: who uses it, who's behind.
       $("summary").replaceChildren(
-        tile(num(d.installs), d.installs === 1 ? "install" : "installs"),
+        tile(`${week}<span style="font-size:15px;color:var(--faint);font-weight:500"> of ${people.length}</span>`, "active this week"),
+        tile(behind, behind === 1 ? "mac out of date" : "macs out of date"),
         tile(num(calls), "commands run"),
         tile(calls ? ((errors / calls) * 100).toFixed(0) + "%" : "0%", "failed"),
       );
-      // Each day's calls as a bar, with the number on hover.
+
+      $("update").hidden = !latest;
+      const pushed = d.pushedAt ? `last pushed ${short(new Date(d.pushedAt))}, `
+        + new Date(d.pushedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "never pushed";
+      $("update-text").innerHTML = `Latest release <b>${esc(latest)}</b> \u00b7 `
+        + `${behind ? `<span class="old">${plural(behind, "Mac")} behind</span>` : "everyone is up to date"}`
+        + ` \u00b7 ${pushed}`;
+
+      // Daily: today in ink, dates on the axis, the busiest day in words.
       const days = d.daily || [];
       const top = Math.max(1, ...days.map((x) => x.calls));
-      $("daily").replaceChildren(...(days.length ? days.map((x) => {
+      const today = new Date().toISOString().slice(0, 10);
+      $("daily").replaceChildren(...days.map((x) => {
         const b = document.createElement("i");
         b.style.height = Math.round((x.calls / top) * 100) + "%";
-        b.title = `${x.day}: ${num(x.calls)} calls, ${x.people} ${x.people === 1 ? "person" : "people"}`;
+        if (x.day === today) b.className = "today";
+        b.title = `${short(utc(x.day + " 00:00:00"))}: ${plural(x.calls, "command")}, ${plural(x.people, "person", "people")}`;
         return b;
-      }) : [Object.assign(document.createElement("span"), { className: "lbl", textContent: "Nothing recorded yet." })]));
+      }));
+      const busiest = days.reduce((a, x) => (x.calls > (a ? a.calls : -1) ? x : a), null);
+      $("axis-from").textContent = days.length ? short(utc(days[0].day + " 00:00:00")) : "";
+      $("axis-to").textContent = days.length ? (days[days.length - 1].day === today ? "today" : short(utc(days[days.length - 1].day + " 00:00:00"))) : "";
+      const sum = busiest ? `Busiest: ${short(utc(busiest.day + " 00:00:00"))}, ${plural(busiest.calls, "command")} by ${plural(busiest.people, "person", "people")}.` : "Nothing recorded yet.";
+      $("daily-sum").textContent = sum;
+      $("daily").setAttribute("aria-label", "Commands per day. " + sum);
 
-      // Who: the Mac's name from 2.55.0 on; older versions show their install id.
-      const people = d.people || [];
-      const most = Math.max(0, ...people.map((p) => p.calls));
-      $("people").replaceChildren(...(people.length ? people.map((p) => {
-        const failed = p.calls ? (p.errors / p.calls) * 100 : 0;
-        const seen = p.last ? new Date(p.last.replace(" ", "T") + "Z").toLocaleDateString() : "";
-        return row(p.name || `Unnamed \u00b7 ${p.id}`, p.calls, most, [
-          `<b>${num(p.calls)}</b> calls`,
-          `${p.days} ${p.days === 1 ? "day" : "days"}`,
-          failed > 0 ? `<span class="fail">${failed.toFixed(0)}% failed</span>` : "",
-          `v${esc(p.version || "?")} \u00b7 ${seen}`,
-        ], false);
-      }) : [Object.assign(document.createElement("div"), { className: "empty", textContent: "Nothing recorded yet." })]));
+      // People: those who ran something, then the rest folded away.
+      const used = people.filter((p) => p.calls > 0);
+      const idle = people.filter((p) => !p.calls);
+      const max = Math.max(0, ...used.map((p) => p.calls));
+      const box = $("people");
+      box.replaceChildren();
+      const head = row("Mac", 0, 0, ["Version", "Last used", "Commands", '<span class="opt">Days</span>', '<span class="opt">Failed</span>']);
+      head.classList.add("head");
+      head.querySelector(".bar").remove();
+      box.appendChild(head);
+      for (const p of used) box.appendChild(personRow(p, latest, max));
+      if (idle.length) {
+        const det = document.createElement("details");
+        det.className = "more";
+        det.innerHTML = `<summary>Installed, never used (${idle.length})</summary>`;
+        for (const p of idle) det.appendChild(personRow(p, latest, max));
+        box.appendChild(det);
+      }
+      if (!people.length) box.appendChild(empty());
 
-      fill($("errtypes"), (d.errorTypes || []).map((t) => ({ ...t, errors: 0 })),
-           d.installs, false);
-      fill($("clients"), d.clients || [], d.installs, true);
-      fill($("apps"), d.apps, d.installs, true);
-      fill($("tools"), d.tools, d.installs, false);
-      $("when").textContent = "Updated " + new Date(d.updated).toLocaleString();
+      list($("apps"), d.apps, 10, (it) => [
+        `<b>${num(it.calls)}</b> ${it.calls === 1 ? "command" : "commands"}`, failedCell(it),
+        d.installs ? `${num(Math.round(it.tokens / d.installs))} tokens / install` : "",
+      ], (it) => APP_NAMES[it.name] || it.name);
+
+      // Hide test traffic; what older versions didn't attribute shows as Unknown,
+      // so this list adds up to the same total as By app.
+      const clients = (d.clients || []).filter((c) => c.name !== "test");
+      const unknown = calls - clients.reduce((n, c) => n + c.calls, 0);
+      if (unknown > 0) clients.push({ name: "Unknown (older versions)", calls: unknown, errors: 0 });
+      list($("clients"), clients, 10, (it) => [
+        `<b>${num(it.calls)}</b> ${it.calls === 1 ? "command" : "commands"}`, failedCell(it),
+      ], (it) => APP_NAMES[it.name] || it.name);
+
+      list($("errtypes"), d.errorTypes || [], 10, (it) => [plural(it.calls, "time")], (it) => it.name);
+
+      list($("tools"), d.tools, 8, (it) => [`<b>${num(it.calls)}</b>`], (it) => command(it.name));
+
+      $("when").textContent = "Last 30 days \u00b7 updated "
+        + new Date(d.updated).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     } catch (e) {
       $("err").hidden = false;
       $("err").textContent = "Couldn't load the figures: " + e.message
         + ". Usage is posted every 15 minutes and takes a few more to become "
         + "queryable, so a brand new install will not be here yet.";
       $("when").textContent = "Not loaded";
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Refresh";
     }
   }
 
-  $("refresh").addEventListener("click", load);
-
-  // Every running app checks for an update within five minutes of this, rather
-  // than waiting out its six-hour cache. They still ask before restarting.
+  // Every running app checks for an update within five minutes of this.
   $("push").addEventListener("click", async () => {
-    if (!confirm("Every running copy will check for the latest release within "
-               + "five minutes and offer to restart. Push now?")) return;
+    const what = $("update-text").textContent;
+    if (!confirm(`${what}\n\nEvery running copy checks for the latest release within five `
+               + "minutes, downloads it, and installs it on its next start. Push now?")) return;
     const b = $("push");
     b.disabled = true;
     try {
-      const r = await fetch(`/push?k=${encodeURIComponent(KEY)}`, { method: "POST" });
+      const r = await fetch("/push", { method: "POST" });
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
       b.textContent = "Pushed \u2014 apps check within 5 minutes";

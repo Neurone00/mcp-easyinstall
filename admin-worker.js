@@ -4,11 +4,10 @@
  * Separate from the public Worker because it holds the analytics credentials
  * and the public one does not need them.
  *
- * No Cloudflare Access: Access protects a Worker's whole production URL, so
- * using it here would have meant a Zero Trust team for an audience of one. A
- * long random key in the query string is the whole of the lock instead, which
- * is proportionate — this is one person reading counts about their own tool,
- * and the figures contain nothing about anybody's work.
+ * Behind Cloudflare Access (the "Admin" policy, one-time PIN by email). Access
+ * signs every request it lets through, and the Worker checks that signature
+ * itself: with Access switched off the page answers "Not found" to everyone
+ * rather than falling open.
  *
  * The page ships from here rather than from a claude.ai Artifact because an
  * Artifact has no way to reach an external URL — published pages get no
@@ -29,7 +28,7 @@ export default {
     }
     // Wrong key: the same answer for the page and the data, so the URL tells
     // a stranger nothing about what is behind it.
-    if (!env.USAGE_KEY || url.searchParams.get("k") !== env.USAGE_KEY) {
+    if (!(await signedIn(request))) {
       return page
         ? new Response("Not found.", { status: 404 })
         : json({ error: "not authorised" }, 403);
@@ -51,8 +50,9 @@ export default {
     }
 
     try {
-      const [data, people, daily] = await Promise.all([
-        query(env), sql(env, PEOPLE_SQL), sql(env, DAILY_SQL)]);
+      const [data, people, daily, latest, pushed] = await Promise.all([
+        query(env), sql(env, PEOPLE_SQL), sql(env, DAILY_SQL), latestRelease(),
+        env.SIGNAL.get("push")]);
       // Aggregated here rather than in the page: the page should not need to
       // know the shape of an Analytics Engine row to draw a table.
       const installs = Math.max(0, ...data.map((d) => Number(d.people) || 0));
@@ -71,6 +71,8 @@ export default {
         errorTypes: data.filter((d) => d.kind === "errtype").map(shape),
         tools: data.filter((d) => d.kind === "tool").map(shape),
         people: peopleOf(people),
+        latest,
+        pushedAt: Number(pushed) || 0,
         daily: daily.map((d) => ({ day: d.day, calls: Number(d.calls) || 0, people: Number(d.people) || 0 })),
       });
     } catch (e) {
@@ -107,7 +109,7 @@ function peopleOf(rows) {
   const by = {};
   for (const r of rows) {
     const p = by[r.id] || (by[r.id] = { id: String(r.id).slice(0, 6), name: "", version: "",
-                                       last: "", calls: 0, errors: 0, tokens: 0, days: 0 });
+                                       last: "", lastUsed: "", calls: 0, errors: 0, tokens: 0, days: 0 });
     if (r.kind === "install") {
       // Several rows when the install changed name or version: keep the newest.
       if (String(r.last) >= p.last) {
@@ -120,9 +122,19 @@ function peopleOf(rows) {
       p.errors += (Number(r.errors) || 0) + (Number(r.scriptErrors) || 0);
       p.tokens += Math.round((Number(r.bytes) || 0) / 4);
       p.days = Math.max(p.days, Number(r.days) || 0);
+      if (Number(r.calls) > 0 && String(r.last) > p.lastUsed) p.lastUsed = String(r.last);
     }
   }
   return Object.values(by).sort((a, b) => b.calls - a.calls || (b.last > a.last ? 1 : -1));
+}
+
+// What "out of date" is measured against: the release the apps update to.
+async function latestRelease() {
+  try {
+    const r = await fetch("https://api.github.com/repos/Neurone00/mcp-easyinstall/releases/latest",
+      { headers: { "User-Agent": "moskito-usage", Accept: "application/vnd.github+json" } });
+    return r.ok ? String((await r.json()).tag_name || "").replace(/^v/, "") : "";
+  } catch { return ""; }
 }
 
 async function sql(env, text) {
@@ -156,6 +168,33 @@ async function query(env) {
   if (!r.ok) throw new Error(`query failed (${r.status})`);
   const { data = [] } = await r.json();
   return data;
+}
+
+const TEAM = "https://l-salvioni.cloudflareaccess.com";
+const AUD = "b2e7db7be0f722e1d265636b7ea5ff13568be895f933c15e4911b8a4c8e27681";
+
+// The Cf-Access-Jwt-Assertion header Access adds: signed by the team's keys,
+// for this application, not expired.
+async function signedIn(request) {
+  const token = request.headers.get("cf-access-jwt-assertion");
+  if (!token) return false;
+  try {
+    const [h, p, sig] = token.split(".");
+    const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
+    const header = JSON.parse(new TextDecoder().decode(b64(h)));
+    const claims = JSON.parse(new TextDecoder().decode(b64(p)));
+    const { keys } = await (await fetch(`${TEAM}/cdn-cgi/access/certs`)).json();
+    const jwk = keys.find((k) => k.kid === header.kid);
+    if (!jwk) return false;
+    const key = await crypto.subtle.importKey("jwk", jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    const ok = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64(sig),
+      new TextEncoder().encode(`${h}.${p}`));
+    const aud = [].concat(claims.aud);
+    return ok && aud.includes(AUD) && claims.iss === TEAM && claims.exp * 1000 > Date.now();
+  } catch {
+    return false;
+  }
 }
 
 function json(obj, status = 200) {
