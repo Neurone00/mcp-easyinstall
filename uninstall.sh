@@ -8,7 +8,11 @@ SUPPORT="$HOME/Library/Application Support/AdobeMCP"
 R="$APP/Contents/Resources"
 
 # Stop the app first: while it runs it re-adds itself to the assistants.
-pkill -f "Moskito Easy MCP\.app/Contents/(MacOS|Resources/runtime)/"
+# -a: by default pkill skips its own ancestors, and the menu bar app that
+# started this script is one; left running, it restarted the background
+# service and recreated the data folder.
+pkill -a -f "Moskito Easy MCP\.app/Contents/(MacOS|Resources/runtime)/"
+for _ in $(seq 20); do pgrep -a -f "Moskito Easy MCP\.app/Contents/(MacOS|Resources/runtime)/" >/dev/null || break; sleep 0.5; done
 # Claude Desktop writes its config back when it quits, undoing the edit, and
 # the Developer Tool does the same with its plugin list. Close both first.
 claude=; pgrep -f "/Applications/Claude.app/Contents/MacOS/" >/dev/null && claude=1
