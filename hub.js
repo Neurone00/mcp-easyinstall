@@ -1223,8 +1223,8 @@ async function stageUpdate() {
     return staged;
 }
 
-// Only ever from a deliberate press: the banner's button, or Restart in the
-// menu bar app's prompt.
+// From a press (the banner, or Restart in the menu bar's prompt), or at launch
+// for a version downloaded earlier: see stagedOnDisk.
 function applyUpdate() {
     if (!staged) throw new Error("No update has been downloaded yet.");
     const bundle = path.resolve(HERE, "..", "..");
@@ -1239,9 +1239,16 @@ function applyUpdate() {
     fs.writeFileSync(script, [
         "#!/bin/bash",
         `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.3; done`,
+        // The menu bar app too, or it keeps running the old version (and its
+        // old menu) until someone quits it; it would also restart this hub.
+        ...(process.env.ADOBE_MCP_SUPERVISED === "1" && process.ppid !== 1
+            ? [`kill ${process.ppid} 2>/dev/null; while kill -0 ${process.ppid} 2>/dev/null; do sleep 0.3; done`]
+            : []),
         `OLD=${q(bundle + ".old")}`,
         `rm -rf "$OLD"`,
-        `mv ${q(bundle)} "$OLD" || exit 1`,
+        // Can't move it (permissions): drop the download and reopen this
+        // version, or every launch would try again and quit.
+        `mv ${q(bundle)} "$OLD" || { rm -rf ${q(tmp)} ${q(UPDATE_READY)}; /usr/bin/open ${q(bundle)}; exit 1; }`,
         `if /usr/bin/ditto ${q(staged.path)} ${q(bundle)}; then`,
         `  /usr/bin/xattr -cr ${q(bundle)}`,
         `  rm -rf "$OLD"`,
@@ -1255,6 +1262,21 @@ function applyUpdate() {
     fs.chmodSync(script, 0o755);
     execFile("/bin/bash", [script], { detached: true, stdio: "ignore" }).unref();
     setTimeout(() => process.exit(0), 300);
+}
+
+// A version downloaded in an earlier run and never restarted into. Installed at
+// launch, when nothing is in use yet, so "Later" means the next start rather
+// than never: Macs were sitting on versions weeks old.
+function stagedOnDisk() {
+    try {
+        const name = fs.readdirSync(STAGED_DIR).find((n) => n.endsWith(".app"));
+        if (!name) return null;
+        const app = path.join(STAGED_DIR, name);
+        const v = execFileSync("/usr/libexec/PlistBuddy",
+            ["-c", "Print CFBundleShortVersionString", path.join(app, "Contents", "Info.plist")],
+            { encoding: "utf8" }).trim();
+        return isNewer(v, VERSION) ? { version: v, path: app } : null;
+    } catch { return null; }
 }
 
 /* ----------------------------------------------------------- analytics -- */
@@ -2499,6 +2521,12 @@ if (process.argv[2] === "--uninstall") {
 // surface, and binding publicly also triggers the macOS incoming-connections
 // prompt, which a colleague who clicks Deny can never recover from.
 server.listen(PORT, "127.0.0.1", () => {
+    const pending = stagedOnDisk();
+    if (pending) {
+        console.log(`\u2192 installing ${pending.version}, downloaded earlier`);
+        staged = pending;
+        return applyUpdate();
+    }
     // The menu bar app decides when to show the panel — first run, its menu
     // item, or reopening the app. The hub never opens a tab on its own.
     console.log(`Moskito Easy MCP ${VERSION}  \u2192  ${URL}`);

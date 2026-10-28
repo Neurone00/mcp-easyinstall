@@ -5,6 +5,7 @@
 // the app is invisible once you close its browser tab.
 
 import Cocoa
+import ServiceManagement
 import WebKit
 import ApplicationServices
 
@@ -135,6 +136,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watchForPermissionRequests()
         watchForArrangeRequests()
         watchForFocusRequests()
+
+        // Start with the Mac. Without it nothing ran after a restart until
+        // someone opened the app, so the assistants' Adobe tools quietly failed
+        // and a downloaded update never got installed.
+        // Once: switched off in System Settings later, it stays off.
+        if #available(macOS 13.0, *), !UserDefaults.standard.bool(forKey: "loginItemSet") {
+            UserDefaults.standard.set(true, forKey: "loginItemSet")
+            try? SMAppService.mainApp.register()
+        }
 
         // First run: show the panel so setup isn't hidden behind the menu bar.
         if !UserDefaults.standard.bool(forKey: "hasLaunched") {
@@ -286,7 +296,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = version
         alert.messageText = "An update to Moskito Easy MCP is ready"
         alert.informativeText = "It is already downloaded. Restarting takes a few "
-            + "seconds and ends any open conversation."
+            + "seconds and ends any open conversation. Otherwise it installs itself "
+            + "the next time Moskito Easy MCP starts."
         alert.addButton(withTitle: "Restart now")
         alert.addButton(withTitle: "Later")
         NSApp.activate(ignoringOtherApps: true)
@@ -589,6 +600,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.buttons[0].hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn,
               let script = Bundle.main.path(forResource: "uninstall", ofType: "sh") else { return }
+        if #available(macOS 13.0, *) { try? SMAppService.mainApp.unregister() }
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/bash")
         p.arguments = [script, Bundle.main.bundlePath]
