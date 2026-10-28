@@ -150,6 +150,16 @@
            box-shadow: var(--shadow); padding: 12px 14px 8px; }
   .chart .days { border: 0; padding: 0; background: none; box-shadow: none; }
   .days i.today { background: var(--ink); }
+  .days i { cursor: default; outline: none; transition: opacity .1s; }
+  .days:hover i:not(:hover), .days:focus-within i:not(:focus) { opacity: .45; }
+  .days i.zero { background: var(--line); }
+  .chart { position: relative; }
+  .tip { position: absolute; z-index: 2; pointer-events: none; transform: translate(-50%, -100%);
+         background: var(--ink); color: var(--card); border-radius: 8px; padding: 7px 10px;
+         font-size: 12.5px; line-height: 1.4; white-space: nowrap; box-shadow: var(--shadow); }
+  .tip b { font-weight: 600; }
+  .tip::after { content: ""; position: absolute; left: 50%; bottom: -5px; margin-left: -5px;
+                border: 5px solid transparent; border-bottom: 0; border-top-color: var(--ink); }
   .axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--faint);
           margin-top: 6px; font-variant-numeric: tabular-nums; }
   .chart p { margin: 8px 0 0; font-size: 13px; color: var(--soft); }
@@ -177,7 +187,8 @@
 
   <h2>Daily use</h2>
   <div class="chart">
-    <div class="days" id="daily" role="img"></div>
+    <div class="days" id="daily" role="list"></div>
+    <div class="tip" id="tip" hidden></div>
     <div class="axis"><span id="axis-from"></span><span id="axis-to"></span></div>
     <p id="daily-sum"></p>
   </div>
@@ -326,23 +337,36 @@
         + `${behind ? `<span class="old">${plural(behind, "Mac")} behind</span>` : "everyone is up to date"}`
         + ` \u00b7 ${pushed}`;
 
-      // Daily: today in ink, dates on the axis, the busiest day in words.
-      const days = d.daily || [];
+      // Daily: every one of the 30 days, quiet ones included. Drawing only the
+      // days with data made the gaps vanish and the chart look busier than it was.
+      const byDay = Object.fromEntries((d.daily || []).map((x) => [x.day, x]));
+      const days = [];
+      for (let i = 29; i >= 0; i--) {
+        const day = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+        days.push(byDay[day] || { day, calls: 0, people: 0 });
+      }
       const top = Math.max(1, ...days.map((x) => x.calls));
-      const today = new Date().toISOString().slice(0, 10);
+      const today = days[days.length - 1].day;
+      const label = (x) => x.day === today ? "Today" : utc(x.day + " 00:00:00")
+        .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
       $("daily").replaceChildren(...days.map((x) => {
         const b = document.createElement("i");
-        b.style.height = Math.round((x.calls / top) * 100) + "%";
-        if (x.day === today) b.className = "today";
-        b.title = `${short(utc(x.day + " 00:00:00"))}: ${plural(x.calls, "command")}, ${plural(x.people, "person", "people")}`;
+        b.style.height = x.calls ? Math.max(3, Math.round((x.calls / top) * 100)) + "%" : "2px";
+        b.className = x.day === today ? "today" : x.calls ? "" : "zero";
+        b.tabIndex = 0;
+        b.setAttribute("role", "listitem");
+        b.dataset.tip = `<b>${label(x)}</b><br>${x.calls ? `${plural(x.calls, "command")} \u00b7 `
+          + plural(x.people, "person", "people") : "No commands"}`;
+        b.setAttribute("aria-label", `${label(x)}: ${plural(x.calls, "command")}, ${plural(x.people, "person", "people")}`);
         return b;
       }));
-      const busiest = days.reduce((a, x) => (x.calls > (a ? a.calls : -1) ? x : a), null);
-      $("axis-from").textContent = days.length ? short(utc(days[0].day + " 00:00:00")) : "";
-      $("axis-to").textContent = days.length ? (days[days.length - 1].day === today ? "today" : short(utc(days[days.length - 1].day + " 00:00:00"))) : "";
-      const sum = busiest ? `Busiest: ${short(utc(busiest.day + " 00:00:00"))}, ${plural(busiest.calls, "command")} by ${plural(busiest.people, "person", "people")}.` : "Nothing recorded yet.";
-      $("daily-sum").textContent = sum;
-      $("daily").setAttribute("aria-label", "Commands per day. " + sum);
+      const busiest = days.reduce((a, x) => (x.calls > a.calls ? x : a), days[0]);
+      const active = days.filter((x) => x.calls).length;
+      $("axis-from").textContent = short(utc(days[0].day + " 00:00:00"));
+      $("axis-to").textContent = "today";
+      $("daily-sum").textContent = busiest.calls
+        ? `Used on ${active} of 30 days. Busiest: ${label(busiest)}, ${plural(busiest.calls, "command")} by ${plural(busiest.people, "person", "people")}.`
+        : "Nothing recorded yet.";
 
       // People: those who ran something, then the rest folded away.
       const used = people.filter((p) => p.calls > 0);
@@ -392,6 +416,24 @@
       $("when").textContent = "Not loaded";
     }
   }
+
+  // One tooltip for the chart, on hover, tap or keyboard focus.
+  function showTip(e) {
+    const bar = e.target.closest(".days i");
+    const tip = $("tip");
+    if (!bar) { tip.hidden = true; return; }
+    const box = bar.closest(".chart").getBoundingClientRect();
+    const r = bar.getBoundingClientRect();
+    tip.innerHTML = bar.dataset.tip;
+    tip.hidden = false;
+    // Kept inside the card at the two ends.
+    const half = tip.offsetWidth / 2;
+    const x = Math.min(Math.max(r.left + r.width / 2 - box.left, half + 4), box.width - half - 4);
+    tip.style.left = x + "px";
+    tip.style.top = (r.top - box.top - 8) + "px";
+  }
+  for (const ev of ["pointerover", "pointerdown", "focusin"]) $("daily").addEventListener(ev, showTip);
+  for (const ev of ["pointerleave", "focusout"]) $("daily").addEventListener(ev, () => { $("tip").hidden = true; });
 
   // Every running app checks for an update within five minutes of this.
   $("push").addEventListener("click", async () => {
