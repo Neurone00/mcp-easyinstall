@@ -202,6 +202,7 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
 .hero:not(:has(button)):has(.said:empty) { display: none; }
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
 .hero .said { color: var(--ink-soft); font-size: 13.5px; }
+.hero .said.warn { color: var(--warn); }
 
 .steps { margin: 6px 0 4px; padding-left: 20px; color: var(--ink-soft); font-size: 13.5px; }
 .steps li { margin: 5px 0; }
@@ -368,6 +369,9 @@ const SHORT = { photoshop:"Ps", illustrator:"Ai", aftereffects:"Ae", premiere:"P
 
 let state = null;
 let autoSetupDone = false;
+// Why the last setup didn't finish. The toast saying so is gone in 5s, and the
+// first-run screen then looked exactly as before the click: "stuck".
+let setupNote = "";
 
 const toastEl = document.getElementById("toast");
 const toastMsg = document.getElementById("toast-msg");
@@ -758,8 +762,9 @@ function render() {
   } else if (ready) {
     said.textContent = "";
   } else {
-    said.textContent = "Installs the panels and connects your assistants.";
+    said.textContent = setupNote || "Installs the panels and connects your assistants.";
   }
+  said.classList.toggle("warn", !!setupNote && !ready);
 }
 
 /* --------------------------------------------------------------- actions -- */
@@ -929,9 +934,12 @@ document.addEventListener("click", async (e) => {
       // before any of it reaches them. Offer it here rather than leaving them
       // to find the button.
       toast(r.title ? { title: r.title, body: r.body } : r.message, r.restart);
+      setupNote = r.title === "Setup didn't finish" ? r.body : "";
+      lastJSON = "";
     } else return;
   } catch (err) {
     toast(err.message);
+    if (b.id === "setup-all") { setupNote = err.message; lastJSON = ""; }
   } finally {
     b.disabled = false;
     b.innerHTML = was;
