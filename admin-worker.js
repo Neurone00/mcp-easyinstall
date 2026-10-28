@@ -26,8 +26,7 @@ export default {
     if (!page && !push && url.pathname !== "/usage.json") {
       return new Response("Not found.", { status: 404 });
     }
-    // Wrong key: the same answer for the page and the data, so the URL tells
-    // a stranger nothing about what is behind it.
+    // Not signed in through Access: the same answer for the page and the data.
     if (!(await signedIn(request))) {
       return page
         ? new Response("Not found.", { status: 404 })
@@ -50,11 +49,29 @@ export default {
     }
 
     try {
-      const [data, people, daily, latest, pushed] = await Promise.all([
-        query(env), sql(env, PEOPLE_SQL), sql(env, DAILY_SQL), latestRelease(),
-        env.SIGNAL.get("push")]);
-      // Aggregated here rather than in the page: the page should not need to
-      // know the shape of an Analytics Engine row to draw a table.
+      const { from, to, where } = range(url);
+      const run = (text) => sql(env, text);
+      const [data, people, clients, daily, errlog, latest, pushed] = await Promise.all([
+        run(`SELECT blob2 AS name, blob1 AS kind, SUM(double1) AS calls, SUM(double2) AS errors,
+                    SUM(double3) AS bytes, SUM(double4) AS scriptErrors, COUNT(DISTINCT index1) AS people
+             FROM ${T} WHERE ${where} GROUP BY name, kind ORDER BY calls DESC LIMIT 200`),
+        // One row per install: its latest name and version from the daily report,
+        // joined in code with what it ran (Analytics Engine has no joins).
+        run(`SELECT index1 AS id, blob1 AS kind, blob5 AS name, blob3 AS version,
+                    MAX(timestamp) AS last, SUM(double1) AS calls, SUM(double2) AS errors,
+                    SUM(double4) AS scriptErrors, SUM(double3) AS bytes, COUNT(DISTINCT blob4) AS days
+             FROM ${T} WHERE ${where} AND blob1 IN ('install', 'app')
+             GROUP BY id, kind, name, version LIMIT 2000`),
+        run(`SELECT index1 AS id, blob2 AS client, SUM(double1) AS calls
+             FROM ${T} WHERE ${where} AND blob1 = 'client' GROUP BY id, client LIMIT 2000`),
+        run(`SELECT blob4 AS day, SUM(double1) AS calls, COUNT(DISTINCT index1) AS people
+             FROM ${T} WHERE ${where} AND blob1 = 'app' GROUP BY day ORDER BY day`),
+        run(`SELECT double1 AS at, blob2 AS app, blob3 AS version, blob5 AS name, blob6 AS tool,
+                    blob7 AS type, blob8 AS message, blob9 AS client, index1 AS id
+             FROM ${T} WHERE ${where} AND blob1 = 'errlog' ORDER BY double1 DESC LIMIT 200`),
+        latestRelease(),
+        env.SIGNAL.get("push"),
+      ]);
       const installs = Math.max(0, ...data.map((d) => Number(d.people) || 0));
       const shape = (d) => ({
         name: d.name,
@@ -64,13 +81,16 @@ export default {
         scriptErrors: Number(d.scriptErrors) || 0,
       });
       return json({
-        installs,
+        from, to, installs,
         updated: new Date().toISOString(),
         apps: data.filter((d) => d.kind === "app").map(shape),
         clients: data.filter((d) => d.kind === "client").map(shape),
         errorTypes: data.filter((d) => d.kind === "errtype").map(shape),
         tools: data.filter((d) => d.kind === "tool").map(shape),
-        people: peopleOf(people),
+        people: peopleOf(people, clients),
+        errors: errlog.map((e) => ({ at: Number(e.at) || 0, app: e.app, version: e.version,
+          name: e.name, tool: e.tool, type: e.type, message: e.message, client: e.client,
+          id: String(e.id).slice(0, 6) })),
         latest,
         pushedAt: Number(pushed) || 0,
         daily: daily.map((d) => ({ day: d.day, calls: Number(d.calls) || 0, people: Number(d.people) || 0 })),
@@ -81,35 +101,35 @@ export default {
   },
 };
 
-// Analytics Engine has no DELETE, so the rows written while wiring this up
-// cannot be removed — they are excluded by id instead. Without this the
-// headline read "4 installs" when there was one.
-const NOT_TESTS = `index1 NOT IN ('test-uuid', 'probe-install-id', 'chain-check',
-                                  'split-check', 'heartbeat-check')`;
+const T = "moskito_easy_mcp_usage";
 
-// One row per install: its latest name and version from the daily report,
-// joined in code with what it ran (Analytics Engine has no joins).
-const PEOPLE_SQL = `
-    SELECT index1 AS id, blob1 AS kind, blob5 AS name, blob3 AS version,
-           MAX(timestamp) AS last, SUM(double1) AS calls, SUM(double2) AS errors,
-           SUM(double4) AS scriptErrors, SUM(double3) AS bytes, COUNT(DISTINCT blob4) AS days
-    FROM moskito_easy_mcp_usage
-    WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 IN ('install', 'app') AND ${NOT_TESTS}
-    GROUP BY id, kind, name, version
-    LIMIT 2000`;
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD, both days included; the last 30 days when
+// absent. Analytics Engine keeps three months, so nothing older is asked for.
+// Analytics Engine has no DELETE, so rows written while wiring this up are
+// excluded by id instead.
+function range(url) {
+  const day = (d) => d.toISOString().slice(0, 10);
+  const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && !isNaN(new Date(v));
+  const today = day(new Date());
+  const oldest = day(new Date(Date.now() - 89 * 864e5));
+  let to = ok(url.searchParams.get("to")) ? url.searchParams.get("to") : today;
+  let from = ok(url.searchParams.get("from")) ? url.searchParams.get("from")
+    : day(new Date(Date.parse(to) - 29 * 864e5));
+  if (to > today) to = today;
+  if (from < oldest) from = oldest;
+  if (from > to) from = to;
+  const end = day(new Date(Date.parse(to) + 864e5));
+  return { from, to, where: `timestamp >= toDateTime('${from} 00:00:00')
+    AND timestamp < toDateTime('${end} 00:00:00')
+    AND index1 NOT IN ('test-uuid', 'probe-install-id', 'chain-check', 'split-check', 'heartbeat-check')` };
+}
 
-const DAILY_SQL = `
-    SELECT blob4 AS day, SUM(double1) AS calls, COUNT(DISTINCT index1) AS people
-    FROM moskito_easy_mcp_usage
-    WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'app' AND ${NOT_TESTS}
-    GROUP BY day
-    ORDER BY day`;
-
-function peopleOf(rows) {
+function peopleOf(rows, clients) {
   const by = {};
   for (const r of rows) {
     const p = by[r.id] || (by[r.id] = { id: String(r.id).slice(0, 6), name: "", version: "",
-                                       last: "", lastUsed: "", calls: 0, errors: 0, tokens: 0, days: 0 });
+                                       last: "", lastUsed: "", calls: 0, errors: 0, tokens: 0, days: 0,
+                                       assistants: {} });
     if (r.kind === "install") {
       // Several rows when the install changed name or version: keep the newest.
       if (String(r.last) >= p.last) {
@@ -124,6 +144,10 @@ function peopleOf(rows) {
       p.days = Math.max(p.days, Number(r.days) || 0);
       if (Number(r.calls) > 0 && String(r.last) > p.lastUsed) p.lastUsed = String(r.last);
     }
+  }
+  // Which assistant each install's commands came from, so an unlabelled one shows.
+  for (const c of clients) {
+    if (by[c.id]) by[c.id].assistants[c.client] = (by[c.id].assistants[c.client] || 0) + (Number(c.calls) || 0);
   }
   return Object.values(by).sort((a, b) => b.calls - a.calls || (b.last > a.last ? 1 : -1));
 }
@@ -145,30 +169,6 @@ async function sql(env, text) {
   return (await r.json()).data || [];
 }
 
-async function query(env) {
-  const sql = `
-    SELECT
-      blob2 AS name,
-      blob1 AS kind,
-      SUM(double1) AS calls,
-      SUM(double2) AS errors,
-      SUM(double3) AS bytes,
-      SUM(double4) AS scriptErrors,
-      COUNT(DISTINCT index1) AS people
-    FROM moskito_easy_mcp_usage
-    WHERE timestamp > NOW() - INTERVAL \'30\' DAY
-      AND index1 NOT IN (\'test-uuid\', \'probe-install-id\', \'chain-check\',
-                         \'split-check\', \'heartbeat-check\')
-    GROUP BY name, kind
-    ORDER BY calls DESC
-    LIMIT 100`;
-  const r = await fetch(
-    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`,
-    { method: "POST", headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` }, body: sql });
-  if (!r.ok) throw new Error(`query failed (${r.status})`);
-  const { data = [] } = await r.json();
-  return data;
-}
 
 const TEAM = "https://l-salvioni.cloudflareaccess.com";
 const AUD = "b2e7db7be0f722e1d265636b7ea5ff13568be895f933c15e4911b8a4c8e27681";

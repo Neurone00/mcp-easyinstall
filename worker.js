@@ -87,6 +87,18 @@ async function collect(request, env) {
       indexes: [body.id],
     });
   }
+  // The failures themselves (2.55.0+), already scrubbed of quoted names and
+  // paths on the Mac. One row each, for the usage page's error log.
+  for (const f of (Array.isArray(body.failures) ? body.failures : []).slice(0, 20)) {
+    env.USAGE.writeDataPoint({
+      blobs: ["errlog", String(f.app || "").slice(0, 32), version, day,
+              String(body.name || "").slice(0, 64), String(f.tool || "").slice(0, 64),
+              String(f.type || "").slice(0, 24), String(f.message || "").slice(0, 200),
+              String(f.client || "").slice(0, 32)],
+      doubles: [Number(f.at) || 0],
+      indexes: [body.id],
+    });
+  }
   // What kind of error, from a fixed list of type names — never the message.
   for (const [type, n] of Object.entries(body.errorTypes || {})) {
     env.USAGE.writeDataPoint({

@@ -165,6 +165,23 @@
   .chart p { margin: 8px 0 0; font-size: 13px; color: var(--soft); }
   .signout { font-size: 13.5px; color: var(--soft); text-decoration: none; padding: 6px 2px; }
   .signout:hover { color: var(--accent); }
+  .period { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+  .seg { display: inline-flex; background: var(--card); border: 1px solid var(--line);
+         border-radius: 10px; padding: 3px; box-shadow: var(--shadow); }
+  .seg button { background: none; color: var(--soft); font-weight: 520; padding: 6px 12px;
+                border-radius: 7px; font-size: 13.5px; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .custom { font-size: 13.5px; color: var(--soft); }
+  .custom input { font: inherit; font-size: 13.5px; color: var(--ink); background: var(--card);
+                  border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+  .sub { font-size: 12.5px; color: var(--faint); margin-top: 1px; }
+  .elog { padding: 11px 17px; border-top: 1px solid var(--line); }
+  .elog:first-child { border-top: 0; }
+  .elog .top { display: flex; gap: 10px; justify-content: space-between; font-size: 13.5px; }
+  .elog .top span:last-child { color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .elog .msg { margin-top: 4px; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+               font-size: 12.5px; color: var(--warn); overflow-wrap: anywhere; }
+  .unknown { padding: 10px 17px; border-top: 1px solid var(--line); font-size: 13px; color: var(--faint); }
   h2 abbr { text-decoration: none; cursor: help; margin-left: 4px; }
 </style>
 
@@ -177,6 +194,15 @@
     <!-- Cloudflare Access's own sign-out: ends the session for this page. -->
     <a class="signout" href="/cdn-cgi/access/logout">Sign out</a>
   </header>
+
+  <nav class="period" aria-label="Period">
+    <div class="seg" id="seg">
+      <button data-days="1">Today</button><button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button><button data-days="custom">Custom</button>
+    </div>
+    <span class="custom" id="custom" hidden>
+      <input type="date" id="from" aria-label="From"> &ndash; <input type="date" id="to" aria-label="To">
+    </span>
+  </nav>
 
   <div class="summary" id="summary"></div>
 
@@ -205,13 +231,17 @@
   <h2>Why they fail <abbr title="Error types only, never the message, which can name a layer or a file. Before 19 October, scripts that threw were counted as successes.">&#9432;</abbr></h2>
   <div class="rows" id="errtypes"><div class="empty">Loading…</div></div>
 
+  <h2>Failure log <abbr title="Each failure from 2.55.0 on: when, who, which command, and the error. Names in quotes and file paths are removed on the Mac before anything is sent.">&#9432;</abbr></h2>
+  <div class="rows" id="errlog"><div class="empty">Loading…</div></div>
+
   <h2>Most used commands</h2>
   <div class="rows" id="tools"><div class="empty">Loading…</div></div>
 
   <div class="err" id="err" hidden></div>
 
   <p class="note">
-    Last 30 days, counts only: no document names, prompts, scripts, paths or artwork.
+    No document names, prompts, scripts or artwork are collected; error messages arrive with
+    quoted names and file paths removed. History goes back three months.
     People are named by their Mac's name from 2.55.0; older versions show a random id,
     and a reinstall looks like a new person.
   </p>
@@ -220,6 +250,17 @@
 <script>
   // Same origin as the page: Cloudflare Access's login cookie goes with it.
   const ENDPOINT = "/usage.json";
+
+  // The period lives in the address (#7, #30, #2026-10-01..2026-10-15), so a
+  // reload or a bookmark keeps it.
+  const iso = (d) => d.toISOString().slice(0, 10);
+  function period() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    const m = h.match(/^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/);
+    if (m) return { key: "custom", from: m[1], to: m[2] };
+    const n = [1, 7, 30, 90].includes(+h) ? +h : 30;
+    return { key: String(n), from: iso(new Date(Date.now() - (n - 1) * 864e5)), to: iso(new Date()) };
+  }
 
   const $ = (id) => document.getElementById(id);
   const num = (n) => Number(n || 0).toLocaleString("en-GB");
@@ -299,32 +340,44 @@
   function personRow(p, latest, max) {
     const failed = p.calls ? (p.errors / p.calls) * 100 : 0;
     const v = p.version || "?";
-    return row(p.name || `Unnamed \u00b7 ${p.id}`, p.calls, max, [
+    const r = row(p.name || `Unnamed \u00b7 ${p.id}`, p.calls, max, [
       `<span class="${latest && older(v, latest) ? "old" : ""}">${esc(v)}</span>`,
       ago(p.lastUsed),
       `<b>${num(p.calls)}</b>`,
       `<span class="opt">${p.days}</span>`,
       `<span class="opt">${failed > 0 ? `<span class="fail">${failed.toFixed(0)}%</span>` : "\u2014"}</span>`,
     ]);
+    // Which assistant(s) their commands came from; none means unlabelled.
+    const who = Object.entries(p.assistants || {}).sort((a, b) => b[1] - a[1])
+      .map(([k]) => APP_NAMES[k] || k).join(", ");
+    if (p.calls) r.querySelector(".name").insertBefore(Object.assign(document.createElement("div"),
+      { className: "sub", textContent: who || "Assistant not reported" }), r.querySelector(".bar"));
+    return r;
   }
 
   async function load() {
     $("err").hidden = true;
     try {
-      const r = await fetch(ENDPOINT, { cache: "no-store" });
+      const per = period();
+      for (const b of document.querySelectorAll("#seg button")) b.setAttribute("aria-pressed", String(b.dataset.days === per.key));
+      $("custom").hidden = per.key !== "custom";
+      $("from").value = per.from; $("to").value = per.to;
+      $("from").min = $("to").min = iso(new Date(Date.now() - 89 * 864e5));
+      $("from").max = $("to").max = iso(new Date());
+      const r = await fetch(`${ENDPOINT}?from=${per.from}&to=${per.to}`, { cache: "no-store" });
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
 
       const people = d.people || [];
       const latest = d.latest || "";
-      const week = people.filter((p) => p.lastUsed && Date.now() - utc(p.lastUsed) < 7 * 864e5).length;
+      const active = people.filter((p) => p.calls > 0).length;
       const behind = latest ? people.filter((p) => p.version && older(p.version, latest)).length : 0;
       const calls = d.apps.reduce((n, a) => n + a.calls, 0);
       const errors = d.apps.reduce((n, a) => n + a.errors + (a.scriptErrors || 0), 0);
 
       // The two questions the page is for first: who uses it, who's behind.
       $("summary").replaceChildren(
-        tile(`${week}<span style="font-size:15px;color:var(--faint);font-weight:500"> of ${people.length}</span>`, "active this week"),
+        tile(`${active}<span style="font-size:15px;color:var(--faint);font-weight:500"> of ${people.length}</span>`, "people active"),
         tile(behind, behind === 1 ? "mac out of date" : "macs out of date"),
         tile(num(calls), "commands run"),
         tile(calls ? ((errors / calls) * 100).toFixed(0) + "%" : "0%", "failed"),
@@ -341,12 +394,12 @@
       // days with data made the gaps vanish and the chart look busier than it was.
       const byDay = Object.fromEntries((d.daily || []).map((x) => [x.day, x]));
       const days = [];
-      for (let i = 29; i >= 0; i--) {
-        const day = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10);
+      for (let t = Date.parse(d.from); t <= Date.parse(d.to); t += 864e5) {
+        const day = iso(new Date(t));
         days.push(byDay[day] || { day, calls: 0, people: 0 });
       }
       const top = Math.max(1, ...days.map((x) => x.calls));
-      const today = days[days.length - 1].day;
+      const today = iso(new Date());
       const label = (x) => x.day === today ? "Today" : utc(x.day + " 00:00:00")
         .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
       $("daily").replaceChildren(...days.map((x) => {
@@ -361,11 +414,11 @@
         return b;
       }));
       const busiest = days.reduce((a, x) => (x.calls > a.calls ? x : a), days[0]);
-      const active = days.filter((x) => x.calls).length;
+      const usedDays = days.filter((x) => x.calls).length;
       $("axis-from").textContent = short(utc(days[0].day + " 00:00:00"));
-      $("axis-to").textContent = "today";
+      $("axis-to").textContent = d.to === today ? "today" : short(utc(d.to + " 00:00:00"));
       $("daily-sum").textContent = busiest.calls
-        ? `Used on ${active} of 30 days. Busiest: ${label(busiest)}, ${plural(busiest.calls, "command")} by ${plural(busiest.people, "person", "people")}.`
+        ? `Used on ${usedDays} of ${plural(days.length, "day")}. Busiest: ${label(busiest)}, ${plural(busiest.calls, "command")} by ${plural(busiest.people, "person", "people")}.`
         : "Nothing recorded yet.";
 
       // People: those who ran something, then the rest folded away.
@@ -397,16 +450,44 @@
       // so this list adds up to the same total as By app.
       const clients = (d.clients || []).filter((c) => c.name !== "test");
       const unknown = calls - clients.reduce((n, c) => n + c.calls, 0);
-      if (unknown > 0) clients.push({ name: "Unknown (older versions)", calls: unknown, errors: 0 });
       list($("clients"), clients, 10, (it) => [
         `<b>${num(it.calls)}</b> ${it.calls === 1 ? "command" : "commands"}`, failedCell(it),
       ], (it) => APP_NAMES[it.name] || it.name);
+      if (unknown > 0) $("clients").appendChild(Object.assign(document.createElement("div"),
+        { className: "unknown", textContent: `${plural(unknown, "more command")} didn't say which assistant sent them. People shows whose.` }));
+
+      // The failure log: newest first, fifteen showing.
+      const errs = d.errors || [];
+      const elog = $("errlog");
+      elog.replaceChildren();
+      const entry = (e) => {
+        const div = document.createElement("div");
+        div.className = "elog";
+        const when = new Date(e.at);
+        div.innerHTML = `<div class="top"><span></span><span>${short(when)}, `
+          + `${when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span></div><div class="msg"></div>`;
+        div.querySelector(".top span").textContent = `${e.name || "Unnamed \u00b7 " + e.id} \u00b7 `
+          + (e.tool ? command(`${e.app}.${e.tool}`) : APP_NAMES[e.app] || e.app);
+        div.querySelector(".msg").textContent = e.message || e.type || "No message";
+        return div;
+      };
+      if (!errs.length) elog.appendChild(Object.assign(document.createElement("div"), { className: "empty",
+        textContent: "No failures logged in this period. The log starts with Macs on 2.55.0." }));
+      for (const e of errs.slice(0, 15)) elog.appendChild(entry(e));
+      if (errs.length > 15) {
+        const det = document.createElement("details");
+        det.className = "more";
+        det.innerHTML = `<summary>${errs.length - 15} older</summary>`;
+        for (const e of errs.slice(15)) det.appendChild(entry(e));
+        elog.appendChild(det);
+      }
 
       list($("errtypes"), d.errorTypes || [], 10, (it) => [plural(it.calls, "time")], (it) => it.name);
 
       list($("tools"), d.tools, 8, (it) => [`<b>${num(it.calls)}</b>`], (it) => command(it.name));
 
-      $("when").textContent = "Last 30 days \u00b7 updated "
+      $("when").textContent = (d.from === d.to ? short(utc(d.from + " 00:00:00"))
+        : `${short(utc(d.from + " 00:00:00"))} \u2013 ${short(utc(d.to + " 00:00:00"))}`) + " \u00b7 updated "
         + new Date(d.updated).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     } catch (e) {
       $("err").hidden = false;
@@ -416,6 +497,17 @@
       $("when").textContent = "Not loaded";
     }
   }
+
+  // Period: the buttons and the two dates only change the address; load() reads it.
+  $("seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    location.hash = b.dataset.days === "custom" ? `${$("from").value || iso(new Date(Date.now() - 29 * 864e5))}..${$("to").value || iso(new Date())}` : b.dataset.days;
+  });
+  for (const id of ["from", "to"]) $(id).addEventListener("change", () => {
+    if ($("from").value && $("to").value) location.hash = `${$("from").value}..${$("to").value}`;
+  });
+  addEventListener("hashchange", load);
 
   // One tooltip for the chart, on hover, tap or keyboard focus.
   function showTip(e) {

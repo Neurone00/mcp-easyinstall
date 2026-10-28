@@ -1375,6 +1375,29 @@ const inFlight = new Map();   // senderId -> { app, tool } so the reply can be a
 
 function bump(obj, key, by = 1) { obj[key] = (obj[key] || 0) + by; }
 
+// The failures themselves, for the usage page's error log. Names in quotes and
+// file paths are taken out first: an error can quote a layer, comp or file name,
+// and documents stay private. Twenty per report at most, and only in memory: a
+// quit loses the unsent ones. ponytail: add to PENDING if that ever matters.
+let failures = [];
+function scrub(text) {
+    return String(text || "")
+        // Paths first (they can hold spaces: up to the file's extension, else
+        // the first space), then anything in straight or curly quotes.
+        .replace(/(?:~|\/(?:Users|Volumes|Applications|private|tmp|var|Library))(?:[^\n'"`)]*?\.[A-Za-z0-9]{1,5}\b|[^\s'"`)]*)/g, "<path>")
+        .replace(/(["'`])(?:(?!\1)[^\n]){1,200}\1/g, "$1\u2026$1")
+        .replace(/\u201c[^\u201d\n]{1,200}\u201d/g, "\u201c\u2026\u201d")
+        .replace(/\u2018[^\u2019\n]{1,200}\u2019/g, "\u2018\u2026\u2019")
+        .replace(/\s+/g, " ").trim().slice(0, 200);
+}
+function noteFailure(app, tool, client, message) {
+    if (failures.length >= 20) return;
+    const text = scrub(message);
+    const type = text.split(":")[0].trim();
+    failures.push({ at: Date.now(), app, tool: tool || "", client: client || "",
+                    type: ERROR_TYPES.has(type) ? type : "other", message: text });
+}
+
 function noteCall(app, tool, senderId, client) {
     bump(tally.calls, app);
     if (tool) bump(tally.tools, `${app}.${tool}`);
@@ -1396,8 +1419,11 @@ function noteReply(senderId, packet) {
         bump(tally.bytes, seen.app, size);
         bump(tally.clientBytes, seen.client, size);
     } catch { /* unserialisable: skip the size, keep the count */ }
-    if (packet && packet.status && packet.status !== "SUCCESS") bump(tally.errors, seen.app);
-    noteScriptError(seen.app, packet);
+    if (packet && packet.status && packet.status !== "SUCCESS") {
+        bump(tally.errors, seen.app);
+        noteFailure(seen.app, seen.tool, seen.client, packet.message || (packet.response && packet.response.message));
+    }
+    noteScriptError(seen.app, packet, seen);
 }
 
 // Only the error's TYPE is kept, and only from a fixed list. The message can
@@ -1421,7 +1447,7 @@ function scriptErrorText(packet) {
     return result && typeof result.error === "string" ? result.error : null;
 }
 
-function noteScriptError(app, packet) {
+function noteScriptError(app, packet, seen = {}) {
     try {
         if (!packet || packet.status !== "SUCCESS") return;
         const error = scriptErrorText(packet);
@@ -1429,6 +1455,7 @@ function noteScriptError(app, packet) {
         bump(tally.scriptErrors, app);
         const type = error.split(":")[0].trim();
         bump(tally.errorTypes, ERROR_TYPES.has(type) ? type : "other");
+        noteFailure(app, seen.tool, seen.client, error);
     } catch { /* not JSON, or not an error: nothing to count */ }
 }
 
@@ -1450,7 +1477,9 @@ async function sendAnalytics() {
     const st = analyticsState();
     const payload = tally;
     const today = new Date().toISOString().slice(0, 10);
-    const anything = Object.keys(payload.calls).length || Object.keys(payload.tools).length
+    const sent = failures;
+    failures = [];
+    const anything = sent.length || Object.keys(payload.calls).length || Object.keys(payload.tools).length
         || Object.keys(payload.clients).length || Object.keys(payload.scriptErrors).length;
     if (!anything && pingedOn === today) return;
     pingedOn = today;
@@ -1464,6 +1493,7 @@ async function sendAnalytics() {
             body: JSON.stringify({
                 id: st.id,
                 name: computerName().slice(0, 64),
+                failures: sent,
                 version: VERSION,
                 day: today,
                 ...payload,
@@ -1661,6 +1691,8 @@ io.on("connection", (socket) => {
                 // Answered here, so noteReply never sees it: count it now, or
                 // "the panel wasn't running" never shows up in the figures.
                 bump(tally.errors, application);
+                noteFailure(application, command && command.tool, command && command.client,
+                            `The ${label} panel isn't running. ${e.message}`);
                 inFlight.delete(socket.id);
                 return socket.emit("packet_response", {
                     senderId: socket.id, application, status: "FAILURE",
@@ -1672,6 +1704,8 @@ io.on("connection", (socket) => {
         if (!live || live.size === 0) {
             console.log(`⚠ no panel open for ${application}`);
             bump(tally.errors, application);
+            noteFailure(application, command && command.tool, command && command.client,
+                        `The ${label} panel isn't connected.`);
             inFlight.delete(socket.id);
             return socket.emit("packet_response", {
                 senderId: socket.id,
