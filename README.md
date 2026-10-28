@@ -1,7 +1,7 @@
 # Moskito Easy MCP — easy install
 
 Let **Claude** and **ChatGPT** drive Adobe Illustrator, After Effects, Premiere Pro,
-and Photoshop.
+Photoshop and InDesign.
 
 One app. Nothing else to install — no Node, no Python, no Homebrew, no terminal.
 
@@ -32,7 +32,7 @@ That's it. The window tells you what's connected and what isn't.
 | | |
 |---|---|
 | **Illustrator, After Effects** | Fully automatic. Installs the panel, opens it, done. |
-| **Photoshop, Premiere** | One extra click — see below. |
+| **Photoshop, Premiere, InDesign** | One extra click — see below. |
 | **Claude Desktop, Claude Code** | Connected for you. |
 | **ChatGPT desktop, Codex CLI, IDE extension** | Connected for you. |
 
@@ -54,8 +54,8 @@ out of step with it.
 
 ### The extra click
 
-Adobe only auto-installs plugins that Adobe itself has signed. Photoshop and Premiere
-use that newer plugin system, so their panel loads through Adobe's free
+Adobe only auto-installs plugins that Adobe itself has signed. Photoshop, Premiere and
+InDesign use that newer plugin system, so their panel loads through Adobe's free
 **UXP Developer Tool** (available in Creative Cloud).
 
 Moskito Easy MCP adds the plugin to that tool for you — you press **Load** next to it once.
@@ -71,6 +71,7 @@ Open the MCP panel inside the Adobe app and leave it open:
 - Illustrator / After Effects → **Window → Extensions → Moskito Easy MCP**
 - Photoshop → **Plugins → Moskito Easy MCP**
 - Premiere Pro → **Window → UXP Plugins → Moskito Easy MCP**
+- InDesign → **Plug-Ins → Moskito Easy MCP → Moskito Easy MCP**
 
 Then just ask:
 
