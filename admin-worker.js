@@ -49,30 +49,31 @@ export default {
     }
 
     try {
-      const { from, to, where } = range(url);
-      const run = (text) => sql(env, text);
-      const [data, people, clients, daily, errlog, latest, pushed] = await Promise.all([
-        run(`SELECT blob2 AS name, blob1 AS kind, SUM(double1) AS calls, SUM(double2) AS errors,
-                    SUM(double3) AS bytes, SUM(double4) AS scriptErrors, COUNT(DISTINCT index1) AS people
-             FROM ${T} WHERE ${where} GROUP BY name, kind ORDER BY calls DESC LIMIT 200`),
-        // One row per install: its latest name and version from the daily report,
-        // joined in code with what it ran (Analytics Engine has no joins).
-        run(`SELECT index1 AS id, blob1 AS kind, blob5 AS name, blob3 AS version,
-                    MAX(timestamp) AS last, SUM(double1) AS calls, SUM(double2) AS errors,
-                    SUM(double4) AS scriptErrors, SUM(double3) AS bytes, COUNT(DISTINCT blob4) AS days
-             FROM ${T} WHERE ${where} AND blob1 IN ('install', 'app')
-             GROUP BY id, kind, name, version LIMIT 2000`),
-        run(`SELECT index1 AS id, blob2 AS client, SUM(double1) AS calls
-             FROM ${T} WHERE ${where} AND blob1 = 'client' GROUP BY id, client LIMIT 2000`),
-        run(`SELECT blob4 AS day, SUM(double1) AS calls, COUNT(DISTINCT index1) AS people
-             FROM ${T} WHERE ${where} AND blob1 = 'app' GROUP BY day ORDER BY day`),
-        run(`SELECT double1 AS at, blob2 AS app, blob3 AS version, blob5 AS name, blob6 AS tool,
-                    blob7 AS type, blob8 AS message, blob9 AS client, index1 AS id
-             FROM ${T} WHERE ${where} AND blob1 = 'errlog' ORDER BY double1 DESC LIMIT 200`),
+      await syncFromAE(env);
+      const { from, to, lo, hi } = range(url);
+      const W = `at >= ?1 AND at < ?2 AND install NOT IN ${TESTS}`;
+      const all = (q) => env.DB.prepare(q).bind(lo, hi).all().then((r) => r.results || []);
+      const [data, counted, people, clients, daily, errlog, latest, pushed] = await Promise.all([
+        all(`SELECT name, kind, SUM(calls) AS calls, SUM(errors) AS errors, SUM(bytes) AS bytes,
+                    SUM(script_errors) AS scriptErrors
+             FROM rows WHERE ${W} AND kind IN ('app', 'client', 'tool', 'errtype')
+             GROUP BY name, kind ORDER BY calls DESC`),
+        all(`SELECT COUNT(DISTINCT install) AS n FROM rows WHERE ${W}`),
+        // One row per install and kind: its newest name and version from the
+        // reports, and what it ran; peopleOf puts them together.
+        all(`SELECT install AS id, kind, mac AS name, version, MAX(at) AS last, SUM(calls) AS calls,
+                    SUM(errors) AS errors, SUM(script_errors) AS scriptErrors, SUM(bytes) AS bytes,
+                    COUNT(DISTINCT day) AS days
+             FROM rows WHERE ${W} AND kind IN ('install', 'app') GROUP BY install, kind, mac, version`),
+        all(`SELECT install AS id, name AS client, SUM(calls) AS calls
+             FROM rows WHERE ${W} AND kind = 'client' GROUP BY install, name`),
+        all(`SELECT day, SUM(calls) AS calls, COUNT(DISTINCT install) AS people
+             FROM rows WHERE ${W} AND kind = 'app' GROUP BY day ORDER BY day`),
+        all(`SELECT at, name AS app, version, mac AS name, tool, type, message, client, install AS id
+             FROM rows WHERE ${W} AND kind = 'errlog' ORDER BY at DESC LIMIT 200`),
         latestRelease(),
         env.SIGNAL.get("push"),
       ]);
-      const installs = Math.max(0, ...data.map((d) => Number(d.people) || 0));
       const shape = (d) => ({
         name: d.name,
         calls: Number(d.calls) || 0,
@@ -81,7 +82,8 @@ export default {
         scriptErrors: Number(d.scriptErrors) || 0,
       });
       return json({
-        from, to, installs,
+        from, to,
+        installs: Number(counted[0] && counted[0].n) || 0,
         updated: new Date().toISOString(),
         apps: data.filter((d) => d.kind === "app").map(shape),
         clients: data.filter((d) => d.kind === "client").map(shape),
@@ -101,54 +103,86 @@ export default {
   },
 };
 
-const T = "moskito_easy_mcp_usage";
+// Rows written while wiring this up, kept out of every figure.
+const TESTS = "('test-uuid', 'probe-install-id', 'chain-check', 'split-check', 'heartbeat-check')";
 
-// ?from=YYYY-MM-DD&to=YYYY-MM-DD, both days included; the last 30 days when
-// absent. Analytics Engine keeps three months, so nothing older is asked for.
-// Analytics Engine has no DELETE, so rows written while wiring this up are
-// excluded by id instead.
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD, both days included, in UTC; the last 30 days
+// when absent. A year at most.
 function range(url) {
   const day = (d) => d.toISOString().slice(0, 10);
-  const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && !isNaN(new Date(v));
+  const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || "") && !isNaN(Date.parse(v));
   const today = day(new Date());
-  const oldest = day(new Date(Date.now() - 89 * 864e5));
+  const oldest = day(new Date(Date.now() - 365 * 864e5));
   let to = ok(url.searchParams.get("to")) ? url.searchParams.get("to") : today;
   let from = ok(url.searchParams.get("from")) ? url.searchParams.get("from")
     : day(new Date(Date.parse(to) - 29 * 864e5));
   if (to > today) to = today;
   if (from < oldest) from = oldest;
   if (from > to) from = to;
-  const end = day(new Date(Date.parse(to) + 864e5));
-  return { from, to, where: `timestamp >= toDateTime('${from} 00:00:00')
-    AND timestamp < toDateTime('${end} 00:00:00')
-    AND index1 NOT IN ('test-uuid', 'probe-install-id', 'chain-check', 'split-check', 'heartbeat-check')` };
+  return { from, to, lo: Date.parse(from), hi: Date.parse(to) + 864e5 };
+}
+
+// Until the collector wrote to D1 (2.54.0's release night), usage lived only in
+// Analytics Engine, which forgets after three months. Each page load copies
+// across whatever it has that D1 doesn't, up to the first row the collector
+// wrote to D1 itself, so nothing is counted twice or lost in between. Once
+// that point is reached this costs two small queries.
+async function syncFromAE(env) {
+  const one = (q) => env.DB.prepare(q).first("t");
+  const first = await one("SELECT MIN(at) AS t FROM rows WHERE source = 'collect' AND kind != 'errlog'");
+  const upper = Number(first) || Date.now();
+  const lower = Number(await one("SELECT MAX(at) AS t FROM rows WHERE source = 'ae'")) || 0;
+  if (lower >= upper - 1000) return;
+  // ponytail: second resolution and 10,000 rows a pass; the next load continues.
+  const got = await sql(env, `SELECT timestamp, index1, blob1, blob2, blob3, blob4, blob5, blob6, blob7,
+      blob8, blob9, double1, double2, double3, double4 FROM moskito_easy_mcp_usage
+    WHERE timestamp > toDateTime('${Math.floor(lower / 1000)}')
+      AND timestamp < toDateTime('${Math.floor(upper / 1000)}')
+    ORDER BY timestamp LIMIT 10000`);
+  if (!got.length) return;
+  const ins = env.DB.prepare(`INSERT INTO rows (at, install, kind, name, version, day, mac, tool, type,
+    message, client, calls, errors, bytes, script_errors, source)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'ae')`);
+  const stmts = got.map((r) => {
+    const failure = r.blob1 === "errlog";
+    const at = Date.parse(String(r.timestamp).replace(" ", "T") + "Z");
+    const v = (x) => (x === "" || x === undefined ? null : x);
+    return ins.bind(failure ? Number(r.double1) || at : at, r.index1, r.blob1, v(r.blob2), v(r.blob3),
+      v(r.blob4), v(r.blob5), v(r.blob6), v(r.blob7), v(r.blob8), v(r.blob9),
+      failure ? 0 : Number(r.double1) || 0, Number(r.double2) || 0, Number(r.double3) || 0,
+      Number(r.double4) || 0);
+  });
+  for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
 }
 
 function peopleOf(rows, clients) {
   const by = {};
+  const iso = (ms) => (ms ? new Date(Number(ms)).toISOString() : "");
   for (const r of rows) {
     const p = by[r.id] || (by[r.id] = { id: String(r.id).slice(0, 6), name: "", version: "",
                                        last: "", lastUsed: "", calls: 0, errors: 0, tokens: 0, days: 0,
                                        assistants: {} });
+    const last = iso(r.last);
     if (r.kind === "install") {
       // Several rows when the install changed name or version: keep the newest.
-      if (String(r.last) >= p.last) {
-        p.last = String(r.last);
-        p.version = r.version;
-        if (r.name) p.name = r.name;
+      if (last >= p.last) {
+        p.last = last;
+        if (r.version) p.version = r.version;
       }
+      if (r.name && last >= (p.namedAt || "")) { p.name = r.name; p.namedAt = last; }
     } else {
       p.calls += Number(r.calls) || 0;
       p.errors += (Number(r.errors) || 0) + (Number(r.scriptErrors) || 0);
       p.tokens += Math.round((Number(r.bytes) || 0) / 4);
       p.days = Math.max(p.days, Number(r.days) || 0);
-      if (Number(r.calls) > 0 && String(r.last) > p.lastUsed) p.lastUsed = String(r.last);
+      if (Number(r.calls) > 0 && last > p.lastUsed) p.lastUsed = last;
     }
   }
   // Which assistant each install's commands came from, so an unlabelled one shows.
   for (const c of clients) {
     if (by[c.id]) by[c.id].assistants[c.client] = (by[c.id].assistants[c.client] || 0) + (Number(c.calls) || 0);
   }
+  for (const p of Object.values(by)) delete p.namedAt;
   return Object.values(by).sort((a, b) => b.calls - a.calls || (b.last > a.last ? 1 : -1));
 }
 

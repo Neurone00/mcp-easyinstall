@@ -197,7 +197,7 @@
 
   <nav class="period" aria-label="Period">
     <div class="seg" id="seg">
-      <button data-days="1">Today</button><button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button><button data-days="custom">Custom</button>
+      <button data-days="1">Today</button><button data-days="7">7 days</button><button data-days="30">30 days</button><button data-days="90">90 days</button><button data-days="year">This year</button><button data-days="custom">Custom</button>
     </div>
     <span class="custom" id="custom" hidden>
       <input type="date" id="from" aria-label="From"> &ndash; <input type="date" id="to" aria-label="To">
@@ -241,7 +241,7 @@
 
   <p class="note">
     No document names, prompts, scripts or artwork are collected; error messages arrive with
-    quoted names and file paths removed. History goes back three months.
+    quoted names and file paths removed. History is kept for a year.
     People are named by their Mac's name from 2.55.0; older versions show a random id,
     and a reinstall looks like a new person.
   </p>
@@ -258,6 +258,7 @@
     const h = decodeURIComponent(location.hash.slice(1));
     const m = h.match(/^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/);
     if (m) return { key: "custom", from: m[1], to: m[2] };
+    if (h === "year") return { key: "year", from: `${new Date().getUTCFullYear()}-01-01`, to: iso(new Date()) };
     const n = [1, 7, 30, 90].includes(+h) ? +h : 30;
     return { key: String(n), from: iso(new Date(Date.now() - (n - 1) * 864e5)), to: iso(new Date()) };
   }
@@ -362,7 +363,7 @@
       for (const b of document.querySelectorAll("#seg button")) b.setAttribute("aria-pressed", String(b.dataset.days === per.key));
       $("custom").hidden = per.key !== "custom";
       $("from").value = per.from; $("to").value = per.to;
-      $("from").min = $("to").min = iso(new Date(Date.now() - 89 * 864e5));
+      $("from").min = $("to").min = iso(new Date(Date.now() - 365 * 864e5));
       $("from").max = $("to").max = iso(new Date());
       const r = await fetch(`${ENDPOINT}?from=${per.from}&to=${per.to}`, { cache: "no-store" });
       const d = await r.json();
@@ -400,6 +401,8 @@
       }
       const top = Math.max(1, ...days.map((x) => x.calls));
       const today = iso(new Date());
+      // A year is ~300 bars: the gaps have to shrink or they are all you see.
+      $("daily").style.gap = days.length > 120 ? "0" : days.length > 45 ? "1px" : "";
       const label = (x) => x.day === today ? "Today" : utc(x.day + " 00:00:00")
         .toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
       $("daily").replaceChildren(...days.map((x) => {

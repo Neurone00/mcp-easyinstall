@@ -16,6 +16,11 @@
   // One key, "push": when it changes, every running app skips its six-hour
   // update cache and checks GitHub at once. The admin page writes it; the
   // public Worker serves it at /signal.
+  // Usage rows, read by the admin Worker. Schema: usage-schema.sql.
+  "d1_databases": [
+    { "binding": "DB", "database_name": "moskito-usage", "database_id": "06893cd4-c4a0-4ea0-8b9e-d19085528f9f" }
+  ],
+
   "kv_namespaces": [
     { "binding": "SIGNAL", "id": "24f1e1684eff4ec4a2e871d800fd1951" }
   ]
