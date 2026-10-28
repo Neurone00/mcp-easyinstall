@@ -97,7 +97,7 @@ const APPS = {
         label: "InDesign",
         kind: "uxp", uxp: "id", mcp: "id-mcp.py",
         appGlob: "Adobe InDesign",
-        panelMenu: "Plugins → Moskito Easy MCP",
+        panelMenu: "Plug-Ins → Moskito Easy MCP → Moskito Easy MCP",
     },
 };
 
