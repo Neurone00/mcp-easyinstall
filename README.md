@@ -7,7 +7,7 @@ One app. Nothing else to install — no Node, no Python, no Homebrew, no termina
 
 Usage is measured, the way a company tool normally is: which Adobe apps and which
 commands get used, how often they fail, and how much data the tools send back, against
-a random id rather than a person. Document names, prompts, scripts, file paths and
+this Mac's name (so a team can see who uses it). Document names, prompts, scripts, file paths and
 artwork are never recorded and never leave the machine.
 
 <br>

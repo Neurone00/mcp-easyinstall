@@ -51,8 +51,9 @@ async function collect(request, env) {
   // One row per report, whether or not anything was used. Without it an install
   // only existed once somebody drove an app with it, so the install count was
   // really an active-user count wearing the wrong label.
+  // blob5: the Mac's name, from 2.55.0 on, so the usage page can list people.
   env.USAGE.writeDataPoint({
-    blobs: ["install", "", version, day],
+    blobs: ["install", "", version, day, String(body.name || "").slice(0, 64)],
     doubles: [0, 0, 0],
     indexes: [body.id],
   });

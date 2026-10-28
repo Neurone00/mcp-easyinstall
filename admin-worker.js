@@ -51,7 +51,8 @@ export default {
     }
 
     try {
-      const data = await query(env);
+      const [data, people, daily] = await Promise.all([
+        query(env), sql(env, PEOPLE_SQL), sql(env, DAILY_SQL)]);
       // Aggregated here rather than in the page: the page should not need to
       // know the shape of an Analytics Engine row to draw a table.
       const installs = Math.max(0, ...data.map((d) => Number(d.people) || 0));
@@ -69,6 +70,8 @@ export default {
         clients: data.filter((d) => d.kind === "client").map(shape),
         errorTypes: data.filter((d) => d.kind === "errtype").map(shape),
         tools: data.filter((d) => d.kind === "tool").map(shape),
+        people: peopleOf(people),
+        daily: daily.map((d) => ({ day: d.day, calls: Number(d.calls) || 0, people: Number(d.people) || 0 })),
       });
     } catch (e) {
       return json({ error: String(e.message) }, 502);
@@ -79,6 +82,57 @@ export default {
 // Analytics Engine has no DELETE, so the rows written while wiring this up
 // cannot be removed — they are excluded by id instead. Without this the
 // headline read "4 installs" when there was one.
+const NOT_TESTS = `index1 NOT IN ('test-uuid', 'probe-install-id', 'chain-check',
+                                  'split-check', 'heartbeat-check')`;
+
+// One row per install: its latest name and version from the daily report,
+// joined in code with what it ran (Analytics Engine has no joins).
+const PEOPLE_SQL = `
+    SELECT index1 AS id, blob1 AS kind, blob5 AS name, blob3 AS version,
+           MAX(timestamp) AS last, SUM(double1) AS calls, SUM(double2) AS errors,
+           SUM(double4) AS scriptErrors, SUM(double3) AS bytes, COUNT(DISTINCT blob4) AS days
+    FROM moskito_easy_mcp_usage
+    WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 IN ('install', 'app') AND ${NOT_TESTS}
+    GROUP BY id, kind, name, version
+    LIMIT 2000`;
+
+const DAILY_SQL = `
+    SELECT blob4 AS day, SUM(double1) AS calls, COUNT(DISTINCT index1) AS people
+    FROM moskito_easy_mcp_usage
+    WHERE timestamp > NOW() - INTERVAL '30' DAY AND blob1 = 'app' AND ${NOT_TESTS}
+    GROUP BY day
+    ORDER BY day`;
+
+function peopleOf(rows) {
+  const by = {};
+  for (const r of rows) {
+    const p = by[r.id] || (by[r.id] = { id: String(r.id).slice(0, 6), name: "", version: "",
+                                       last: "", calls: 0, errors: 0, tokens: 0, days: 0 });
+    if (r.kind === "install") {
+      // Several rows when the install changed name or version: keep the newest.
+      if (String(r.last) >= p.last) {
+        p.last = String(r.last);
+        p.version = r.version;
+        if (r.name) p.name = r.name;
+      }
+    } else {
+      p.calls += Number(r.calls) || 0;
+      p.errors += (Number(r.errors) || 0) + (Number(r.scriptErrors) || 0);
+      p.tokens += Math.round((Number(r.bytes) || 0) / 4);
+      p.days = Math.max(p.days, Number(r.days) || 0);
+    }
+  }
+  return Object.values(by).sort((a, b) => b.calls - a.calls || (b.last > a.last ? 1 : -1));
+}
+
+async function sql(env, text) {
+  const r = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`,
+    { method: "POST", headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` }, body: text });
+  if (!r.ok) throw new Error(`query failed (${r.status})`);
+  return (await r.json()).data || [];
+}
+
 async function query(env) {
   const sql = `
     SELECT

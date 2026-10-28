@@ -203,6 +203,10 @@ button:disabled { opacity: .7; cursor: default; }   /* .45 made "Installing…" 
 .hero button { font-size: 15px; padding: 11px 20px; border-radius: 10px; }
 .hero .said { color: var(--ink-soft); font-size: 13.5px; }
 .hero .said.warn { color: var(--warn); }
+.codex-ok { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; max-width: 520px;
+            font-size: 12.5px; line-height: 1.5; color: var(--ink-soft); }
+.codex-ok[hidden] { display: none; }
+.codex-ok input { margin-top: 2px; accent-color: var(--accent); }
 
 .steps { margin: 6px 0 4px; padding-left: 20px; color: var(--ink-soft); font-size: 13.5px; }
 .steps li { margin: 5px 0; }
@@ -315,10 +319,15 @@ button:focus-visible {
     <button class="primary" id="setup-all">Set everything up</button>
     <span class="said" id="setup-said">Installs the panels and connects your assistants.</span>
   </div>
+  <label class="codex-ok" id="codex-ok" hidden>
+    <input type="checkbox" id="codex-ok-box">
+    <span>Let ChatGPT reach your Adobe apps. This switches networking on for the whole
+      Codex sandbox, so other Codex tools can reach the network too.</span>
+  </label>
   <section id="settings" class="settings" hidden aria-label="Settings">
     <h3>Settings</h3>
-    <p class="settings-note">Usage is recorded: which apps and commands, never your
-      documents, prompts or artwork. <a href="/help.html#setup">What setup changes</a></p>
+    <p class="settings-note">Usage is recorded with this Mac's name: which apps and
+      commands, never your documents, prompts or artwork. <a href="/help.html#setup">What setup changes</a></p>
   </section>
 
   <h2 class="deck">Your Adobe apps</h2>
@@ -718,6 +727,11 @@ function render() {
     const el = document.querySelector(sel);
     if (el) el.hidden = firstRun;
   }
+  // Asked before setup rather than as an Allow button found afterwards: without
+  // it every ChatGPT request fails as "cancelled", and nothing says why.
+  const gpt = state.clients.find((c) => c.id === "codex");
+  document.getElementById("codex-ok").hidden =
+    !(firstRun && gpt && gpt.installed !== false && !state.codexNetwork);
 
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
@@ -762,7 +776,10 @@ function render() {
   } else if (ready) {
     said.textContent = "";
   } else {
-    said.textContent = setupNote || "Installs the panels and connects your assistants.";
+    // First run restarts the assistants too, so say so before the click.
+    said.textContent = setupNote || (firstRun
+      ? "Installs the panels, connects your assistants and restarts them."
+      : "Installs the panels and connects your assistants.");
   }
   said.classList.toggle("warn", !!setupNote && !ready);
 }
@@ -929,11 +946,26 @@ document.addEventListener("click", async (e) => {
       return;
     } else if (b.id === "setup-all") {
       b.textContent = "Setting up…";
+      const first = !state.clients.some((c) => c.connected.length);
+      const allowGpt = !document.getElementById("codex-ok").hidden
+        && document.getElementById("codex-ok-box").checked;
       const r = await api("POST", "/api/setup");
+      if (allowGpt && r.wired && r.wired.includes("ChatGPT")) await api("POST", "/api/codex-network");
       // Setup rewrites the config files, so the assistants have to restart
-      // before any of it reaches them. Offer it here rather than leaving them
-      // to find the button.
-      toast(r.title ? { title: r.title, body: r.body } : r.message, r.restart);
+      // before any of it reaches them. The first time, just do it: a 9-second
+      // toast button was the one step between setup and a working assistant.
+      // Afterwards, offer it, since they may be mid-conversation.
+      let restarted = [];
+      if (first && r.restart) {
+        b.textContent = "Restarting\u2026";
+        restarted = (await api("POST", "/api/restart-assistants")).restarted;
+      }
+      // With nothing left to do, the hub's line is "Restart Claude and it can
+      // drive your apps", which is exactly what just happened.
+      const now = `Restarting ${restarted.join(" and ")}`;
+      const body = !restarted.length ? r.body
+        : /^Restart /.test(r.body) ? `${now} \u2014 then just ask.` : `${r.body} ${now}.`;
+      toast(r.title ? { title: r.title, body } : r.message, r.restart && !restarted.length);
       setupNote = r.title === "Setup didn't finish" ? r.body : "";
       lastJSON = "";
     } else return;

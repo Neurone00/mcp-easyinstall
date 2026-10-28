@@ -1416,6 +1416,14 @@ function noteScriptError(app, packet) {
 // with nothing to report, so a quiet install still counts as one.
 let pingedOn = "";
 
+// The Mac's own name ("Luca's MacBook Pro"), so the usage page can say who.
+// Said on the settings page and in the README; the hostname is the fallback.
+const computerName = memo(() => {
+    try {
+        return execFileSync("/usr/sbin/scutil", ["--get", "ComputerName"], { encoding: "utf8" }).trim();
+    } catch { return os.hostname(); }
+}, 24 * 3600 * 1000);
+
 async function sendAnalytics() {
     const st = analyticsState();
     const payload = tally;
@@ -1433,6 +1441,7 @@ async function sendAnalytics() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 id: st.id,
+                name: computerName().slice(0, 64),
                 version: VERSION,
                 day: today,
                 ...payload,
@@ -1817,6 +1826,9 @@ app.post("/api/restart-assistants", async (req, res) => {
         for (let i = 0; i < 40 && bundleRunning(bundle); i++) {
             await new Promise((r) => setTimeout(r, 500));
         }
+        // Claude Desktop writes its whole config back as it quits, dropping
+        // what setup wrote while it was open. Put it back before it starts.
+        repairClientPaths();
         execFile("/usr/bin/open", ["-a", bundle]);
         restarted.push(name);
     }
@@ -2155,7 +2167,10 @@ function appRunning(key) {
     return bundleRunning(appBundle(APPS[key].appGlob));
 }
 
-async function setupUxp(key) {
+// quiet: Set everything up. Register only, and keep the Developer Tool running
+// hidden; the panel then loads by itself whenever the app is opened (see
+// autoLoadUxp). Not quiet: the per-app guide, which wants both on screen.
+async function setupUxp(key, quiet = false) {
     const engine = findEngine();
     if (!engine) throw new Error("Can't find the adb-mcp engine folder.");
     const manifest = path.join(engine, "uxp", APPS[key].uxp, "manifest.json");
@@ -2188,7 +2203,7 @@ async function setupUxp(key) {
 
     // Open the host app now, so it is ready by the time they reach Load.
     const wasClosed = !appRunning(key);
-    if (wasClosed) {
+    if (wasClosed && !quiet) {
         const bundle = appBundle(APPS[key].appGlob);
         if (bundle) execFile("/usr/bin/open", ["-a", bundle]);
     }
@@ -2198,7 +2213,7 @@ async function setupUxp(key) {
         return { ok: true, udtMissing: true, wasClosed,
                  message: "Install Adobe's free UXP Developer Tool from Creative Cloud, then press Set up again." };
     }
-    execFile("/usr/bin/open", ["-a", udt]);
+    if (quiet) startUdtHidden(); else execFile("/usr/bin/open", ["-a", udt]);
     return { ok: true, wasClosed };
 }
 
@@ -2262,6 +2277,8 @@ app.post("/api/setup", async (_req, res) => {
     const done = [];
     const todo = [];
     const failed = [];
+    const udtMissing = [];
+    const notes = [];     // done, but with one thing for them to do
     try {
         await new Promise((resolve) => ensureVenv(() => resolve()));
         if (!venvReady) {
@@ -2270,12 +2287,8 @@ app.post("/api/setup", async (_req, res) => {
                        " Nothing was connected, so you won't get silent failures later.",
             });
         }
-        // Ask for Accessibility now. Arrange windows is otherwise the thing
-        // that springs a system dialog on someone days after they set up.
-        try {
-            fs.mkdirSync(SUPPORT, { recursive: true });
-            fs.writeFileSync(path.join(SUPPORT, "permissions-request"), String(Date.now()));
-        } catch { /* the prompt is a nicety, not the setup */ }
+        // No Accessibility prompt here: it is for Arrange windows only, which
+        // asks on first use, and it was the first thing setup threw up.
 
         // Only what the user has switched on. Setting up an unticked app and
         // then reporting it as unfinished business was asking them to go and
@@ -2286,37 +2299,38 @@ app.post("/api/setup", async (_req, res) => {
             try {
                 if (a.kind === "cep") {
                     installPanel(key);
+                    // CEP reads its panels at launch: an app that is open now
+                    // shows nothing until it is reopened.
                     done.push(a.label);
+                    if (appRunning(key) && !panelLive(key)) notes.push(`Reopen ${a.label} to see its panel`);
                 } else {
-                    const r = await setupUxp(key);
+                    // Nothing is opened. The panel loads by itself the next time
+                    // the app is opened; one that is open now gets it loaded here.
+                    const r = await setupUxp(key, true);
                     if (r.udtMissing) {
-                        // Open the place to get it rather than only naming it:
-                        // they pressed one button to have things done for them.
-                        openUdtHelp();
-                        todo.push(`${a.label} needs Adobe's free UXP Developer Tool. `
-                                + `Adobe's download page is open \u2014 `
-                                + `install it, then press Set up again`);
-                        break;
-                    }
-                    // setupUxp has just launched both of these. Give them time
-                    // to actually be there rather than handing the job back.
-                    await waitFor(() => appRunning(key), 60);
-                    await waitFor(() => udtRunning(), 20);
-                    if (!appRunning(key)) {
-                        todo.push(`${a.label} \u2014 it didn't finish opening, so its `
-                                + `panel couldn't be loaded. Open it and press Set up again`);
+                        udtMissing.push(a.label);
+                    } else if (!appRunning(key)) {
+                        done.push(a.label);
                     } else {
-                        try {
-                            await loadWhenReady(key, 8);
-                            done.push(a.label);
-                        } catch (e) {
-                            todo.push(`${a.label} \u2014 ${String(e.message).replace(/\.$/, "")}`);
-                        }
+                        await waitFor(() => udtRunning(), 20);
+                        done.push(a.label);
+                        try { await loadWhenReady(key, 3); }
+                        catch { notes.push(`Reopen ${a.label} to load its panel`); }
+                    }
+                    if (key === "photoshop" && !panelLive(key) && !r.udtMissing) {
+                        notes.push("Photoshop needs Developer Mode on once: Settings \u2192 Plugins "
+                                + "\u2192 Enable Developer Mode, then reopen it");
                     }
                 }
             } catch (e) {
                 failed.push(`${a.label} (${e.message})`);
             }
+        }
+        // Once, after every app is registered, rather than stopping at the first.
+        if (udtMissing.length) {
+            openUdtHelp();
+            todo.push(`${udtMissing.join(", ")} need${udtMissing.length > 1 ? "" : "s"} Adobe's free `
+                    + "UXP Developer Tool. Its download page is open \u2014 install it, then press Set up again");
         }
         const keys = registerableApps();
         const wired = [];
@@ -2336,9 +2350,9 @@ app.post("/api/setup", async (_req, res) => {
         // four clauses in one paragraph and ended "panel..", because the
         // messages being joined already had their own full stops.
         const title = done.length
-            ? `${done.join(" and ")} ready`
+            ? `${new Intl.ListFormat("en").format(done)} ready`
             : (todo.length || failed.length ? "Setup didn't finish" : "Nothing to set up");
-        const rest = [...todo, ...failed].map((t) => String(t).replace(/\.$/, ""));
+        const rest = [...todo, ...failed, ...notes].map((t) => String(t).replace(/\.$/, ""));
         // Name only the assistants that are there, and say so when none is.
         const names = [Object.keys(CLIENTS).some((id) => id !== "codex" && clientInstalled(id)) && "Claude",
                        clientInstalled("codex") && "ChatGPT"].filter(Boolean);
