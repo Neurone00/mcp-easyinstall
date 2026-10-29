@@ -369,8 +369,6 @@
       const d = await r.json();
       if (!r.ok || d.error) throw new Error(d.error || `HTTP ${r.status}`);
 
-      // Copying the old Analytics Engine history into D1 failed: say so, quietly.
-      if (d.syncError) { $("err").hidden = false; $("err").textContent = "History copy from Analytics Engine failed: " + d.syncError; }
       const people = d.people || [];
       const latest = d.latest || "";
       const active = people.filter((p) => p.calls > 0).length;

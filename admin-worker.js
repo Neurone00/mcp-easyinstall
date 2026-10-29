@@ -49,9 +49,6 @@ export default {
     }
 
     try {
-      // The copy is a side job: if Analytics Engine refuses, the page still works.
-      let syncError = "";
-      try { await syncFromAE(env); } catch (e) { syncError = String(e.message); }
       const { from, to, lo, hi } = range(url);
       const W = `at >= ?1 AND at < ?2 AND install NOT IN ${TESTS}`;
       const all = (q) => env.DB.prepare(q).bind(lo, hi).all().then((r) => r.results || []);
@@ -84,7 +81,7 @@ export default {
         scriptErrors: Number(d.scriptErrors) || 0,
       });
       return json({
-        from, to, syncError,
+        from, to,
         installs: Number(counted[0] && counted[0].n) || 0,
         updated: new Date().toISOString(),
         apps: data.filter((d) => d.kind === "app").map(shape),
@@ -122,41 +119,6 @@ function range(url) {
   if (from < oldest) from = oldest;
   if (from > to) from = to;
   return { from, to, lo: Date.parse(from), hi: Date.parse(to) + 864e5 };
-}
-
-// Until the collector wrote to D1 (2.54.0's release night), usage lived only in
-// Analytics Engine, which forgets after three months. Each page load copies
-// across whatever it has that D1 doesn't, up to the first row the collector
-// wrote to D1 itself, so nothing is counted twice or lost in between. Once
-// that point is reached this costs two small queries.
-async function syncFromAE(env) {
-  const one = (q) => env.DB.prepare(q).first("t");
-  const first = await one("SELECT MIN(at) AS t FROM rows WHERE source = 'collect' AND kind != 'errlog'");
-  const upper = Number(first) || Date.now();
-  const lower = Number(await one("SELECT MAX(at) AS t FROM rows WHERE source = 'ae'")) || 0;
-  if (lower >= upper - 1000) return;
-  // 'YYYY-MM-DD hh:mm:ss' in UTC: a Unix-seconds string was rejected as a type error.
-  const when = (ms) => new Date(ms).toISOString().slice(0, 19).replace("T", " ");
-  // ponytail: second resolution and 10,000 rows a pass; the next load continues.
-  const got = await sql(env, `SELECT timestamp, index1, blob1, blob2, blob3, blob4, blob5, blob6, blob7,
-      blob8, blob9, double1, double2, double3, double4 FROM moskito_easy_mcp_usage
-    WHERE timestamp > ${lower ? `toDateTime('${when(lower)}')` : "NOW() - INTERVAL '90' DAY"}
-      AND timestamp < toDateTime('${when(upper)}')
-    ORDER BY timestamp LIMIT 10000`);
-  if (!got.length) return;
-  const ins = env.DB.prepare(`INSERT INTO rows (at, install, kind, name, version, day, mac, tool, type,
-    message, client, calls, errors, bytes, script_errors, source)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'ae')`);
-  const stmts = got.map((r) => {
-    const failure = r.blob1 === "errlog";
-    const at = Date.parse(String(r.timestamp).replace(" ", "T") + "Z");
-    const v = (x) => (x === "" || x === undefined ? null : x);
-    return ins.bind(failure ? Number(r.double1) || at : at, r.index1, r.blob1, v(r.blob2), v(r.blob3),
-      v(r.blob4), v(r.blob5), v(r.blob6), v(r.blob7), v(r.blob8), v(r.blob9),
-      failure ? 0 : Number(r.double1) || 0, Number(r.double2) || 0, Number(r.double3) || 0,
-      Number(r.double4) || 0);
-  });
-  for (let i = 0; i < stmts.length; i += 100) await env.DB.batch(stmts.slice(i, i + 100));
 }
 
 function peopleOf(rows, clients) {
