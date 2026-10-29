@@ -3,6 +3,8 @@
 # Run by the menu bar's "Uninstall…" item, or by hand: bash uninstall.sh
 # Left alone, because other things use them: Adobe's UXP Developer Tool, the
 # CEP debug-mode setting, and ChatGPT's network_access if you allowed it.
+# Also kept: analytics.json, the Mac's anonymous id, so a reinstall shows on the
+# usage page as the same Mac rather than a new one.
 APP="${1:-/Applications/Moskito Easy MCP.app}"
 SUPPORT="$HOME/Library/Application Support/AdobeMCP"
 R="$APP/Contents/Resources"
@@ -25,7 +27,8 @@ done
 
 [ -x "$R/runtime/node" ] && "$R/runtime/node" "$R/hub.js" --uninstall
 
-rm -rf "$SUPPORT" "$APP"
+find "$SUPPORT" -mindepth 1 -maxdepth 1 ! -name analytics.json -exec rm -rf {} + 2>/dev/null
+rm -rf "$APP"
 tccutil reset All com.moskitodesign.adobemcp >/dev/null 2>&1
 [ -n "$claude" ] && open -a Claude
 echo "Moskito Easy MCP is uninstalled."

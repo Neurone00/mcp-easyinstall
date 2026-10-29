@@ -238,6 +238,22 @@ cp "$pc.orig" "$pc"
 printf '\n' >> "$pc"
 cat "$HERE/panel-addon-pr.js" >> "$pc"
 
+# Photoshop's createDocument found the background layer by its English name, so
+# on an Italian Photoshop ("Sfondo") it threw after making the document, and the
+# model retried into a second one. It also never passed the name it was given.
+psc="$HERE/engine/uxp/ps/commands/core.js"
+[ -f "$psc.orig" ] || cp "$psc" "$psc.orig"
+cp "$psc.orig" "$psc"
+node -e '
+  const fs = require("fs"), f = process.argv[1];
+  let s = fs.readFileSync(f, "utf8");
+  const a = "let background = findLayerByName(\"Background\");", b = "typename: \"DocumentCreateOptions\",";
+  if (!s.includes(a) || !s.includes(b)) { console.error("✗ Photoshop createDocument patch target missing"); process.exit(1); }
+  s = s.replace(a, "let background = app.activeDocument.backgroundLayer || app.activeDocument.layers[0];")
+       .replace(b, b + "\n            name: options.name,");
+  fs.writeFileSync(f, s);
+' "$psc" || exit 1
+
 # InDesign's: the same handler, plus fixes for two upstream bugs that failed
 # every command on a print document (see the file).
 ic="$HERE/engine/uxp/id/commands/index.js"
