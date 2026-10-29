@@ -132,7 +132,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         launched = true
         watchForShowRequests()
-        watchForUpdates()
         watchForPermissionRequests()
         watchForArrangeRequests()
         watchForFocusRequests()
@@ -267,45 +266,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lastSeen = stamp
             DispatchQueue.main.async { self.openPanel() }
         }
-    }
-
-    /// The hub downloads a new version by itself and parks it, then writes the
-    /// version here. Restarting is the part that is never taken without asking:
-    /// it drops the Adobe panels and ends any conversation in progress.
-    ///
-    /// Asked once per version per launch. Someone who says Later is not asked
-    /// again until they reopen the app, and the control panel keeps its banner.
-    func watchForUpdates() {
-        let flag = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/AdobeMCP/update-ready")
-        var asked = ""
-        Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            guard let version = try? String(contentsOf: flag, encoding: .utf8) else { return }
-            let v = version.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !v.isEmpty, v != asked else { return }
-            asked = v
-            DispatchQueue.main.async { self.offerUpdate(v) }
-        }
-    }
-
-    func offerUpdate(_ version: String) {
-        let alert = NSAlert()
-        // The version is what tells us not to ask twice, not something to put in
-        // front of someone: the number means nothing to them.
-        _ = version
-        alert.messageText = "An update to Moskito Easy MCP is ready"
-        alert.informativeText = "It is already downloaded. Restarting takes a few "
-            + "seconds and ends any open conversation. Otherwise it installs itself "
-            + "the next time Moskito Easy MCP starts."
-        alert.addButton(withTitle: "Restart now")
-        alert.addButton(withTitle: "Later")
-        NSApp.activate(ignoringOtherApps: true)
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-
-        var req = URLRequest(url: URL(string: "http://127.0.0.1:3001/api/update")!)
-        req.httpMethod = "POST"
-        URLSession.shared.dataTask(with: req).resume()
     }
 
     /// Bring another application to the front.

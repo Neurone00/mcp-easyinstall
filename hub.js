@@ -1129,6 +1129,11 @@ async function checkForUpdate() {
 // Anything that counts as someone working. Nothing restarts on its own any
 // more, but a download still waits for the first run's setup to finish.
 let lastActivityAt = 0;
+const startedAt = Date.now();
+// The update policy: a downloaded version installs itself once the Adobe tools
+// have gone unused for an hour (counted from launch if never used), or at the
+// next launch, whichever comes first. Nobody is asked.
+const IDLE_BEFORE_UPDATE = 60 * 60 * 1000;
 let autoUpdateAt = 0;
 
 // A version downloaded and verified, waiting for someone to say when.
@@ -1157,6 +1162,10 @@ async function honourPush() {
 }
 
 async function autoUpdate() {
+    if (staged && Date.now() - Math.max(lastActivityAt, startedAt) > IDLE_BEFORE_UPDATE) {
+        console.log(`\u2192 installing ${staged.version}: an hour without use`);
+        return applyUpdate();
+    }
     await honourPush();
     const found = await checkForUpdate();
     if (!found) return;
@@ -1223,8 +1232,8 @@ async function stageUpdate() {
     return staged;
 }
 
-// From a press (the banner, or Restart in the menu bar's prompt), or at launch
-// for a version downloaded earlier: see stagedOnDisk.
+// From the banner's button, after an hour without use (autoUpdate), or at
+// launch for a version downloaded earlier (stagedOnDisk).
 function applyUpdate() {
     if (!staged) throw new Error("No update has been downloaded yet.");
     const bundle = path.resolve(HERE, "..", "..");
@@ -1265,7 +1274,7 @@ function applyUpdate() {
 }
 
 // A version downloaded in an earlier run and never restarted into. Installed at
-// launch, when nothing is in use yet, so "Later" means the next start rather
+// launch, when nothing is in use yet, so an unused download means the next start rather
 // than never: Macs were sitting on versions weeks old.
 function stagedOnDisk() {
     try {

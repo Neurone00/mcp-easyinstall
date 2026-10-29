@@ -222,8 +222,15 @@ _AMCP_SKIP = {"createCommand", "_amcp_tagged", "_run", "sendCommand", "wrapper"}
 # `import os` here once did exactly that, by fooling the build into skipping
 # the import the server itself needed. So no module-level import, and anything
 # that goes wrong reading this leaves the label empty and nothing else.
+#
+# Claude Code (the terminal and the desktop app's Code tab) sets CLAUDECODE=1
+# for every server it starts, and that wins: the Code tab also starts the
+# servers from Claude Desktop's config, which say "claude-desktop", so its
+# work was being counted as chat.
 try:
-    _AMCP_CLIENT = __import__("os").environ.get("MOSKITO_CLIENT", "")
+    _amcp_env = __import__("os").environ
+    _AMCP_CLIENT = ("claude-code" if _amcp_env.get("CLAUDECODE") == "1"
+                    else _amcp_env.get("MOSKITO_CLIENT", ""))
 except Exception:
     _AMCP_CLIENT = ""
 
