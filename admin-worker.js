@@ -49,7 +49,9 @@ export default {
     }
 
     try {
-      await syncFromAE(env);
+      // The copy is a side job: if Analytics Engine refuses, the page still works.
+      let syncError = "";
+      try { await syncFromAE(env); } catch (e) { syncError = String(e.message); }
       const { from, to, lo, hi } = range(url);
       const W = `at >= ?1 AND at < ?2 AND install NOT IN ${TESTS}`;
       const all = (q) => env.DB.prepare(q).bind(lo, hi).all().then((r) => r.results || []);
@@ -82,7 +84,7 @@ export default {
         scriptErrors: Number(d.scriptErrors) || 0,
       });
       return json({
-        from, to,
+        from, to, syncError,
         installs: Number(counted[0] && counted[0].n) || 0,
         updated: new Date().toISOString(),
         apps: data.filter((d) => d.kind === "app").map(shape),
@@ -133,11 +135,13 @@ async function syncFromAE(env) {
   const upper = Number(first) || Date.now();
   const lower = Number(await one("SELECT MAX(at) AS t FROM rows WHERE source = 'ae'")) || 0;
   if (lower >= upper - 1000) return;
+  // 'YYYY-MM-DD hh:mm:ss' in UTC: a Unix-seconds string was rejected as a type error.
+  const when = (ms) => new Date(ms).toISOString().slice(0, 19).replace("T", " ");
   // ponytail: second resolution and 10,000 rows a pass; the next load continues.
   const got = await sql(env, `SELECT timestamp, index1, blob1, blob2, blob3, blob4, blob5, blob6, blob7,
       blob8, blob9, double1, double2, double3, double4 FROM moskito_easy_mcp_usage
-    WHERE timestamp > toDateTime('${Math.floor(lower / 1000)}')
-      AND timestamp < toDateTime('${Math.floor(upper / 1000)}')
+    WHERE timestamp > ${lower ? `toDateTime('${when(lower)}')` : "NOW() - INTERVAL '90' DAY"}
+      AND timestamp < toDateTime('${when(upper)}')
     ORDER BY timestamp LIMIT 10000`);
   if (!got.length) return;
   const ins = env.DB.prepare(`INSERT INTO rows (at, install, kind, name, version, day, mac, tool, type,
@@ -199,7 +203,7 @@ async function sql(env, text) {
   const r = await fetch(
     `https://api.cloudflare.com/client/v4/accounts/${env.CF_ACCOUNT_ID}/analytics_engine/sql`,
     { method: "POST", headers: { Authorization: `Bearer ${env.CF_API_TOKEN}` }, body: text });
-  if (!r.ok) throw new Error(`query failed (${r.status})`);
+  if (!r.ok) throw new Error(`query failed (${r.status}): ${(await r.text()).slice(0, 300)}`);
   return (await r.json()).data || [];
 }
 
