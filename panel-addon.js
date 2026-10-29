@@ -15,6 +15,14 @@
 (function () {
   "use strict";
 
+  // Italian when the Adobe app's own UI is Italian, English otherwise.
+  // CSInterface.js is loaded by index.html before this file. Only what people
+  // read is translated: anything sent to the hub or compared stays English.
+  var LOCALE = "";
+  try { LOCALE = new CSInterface().hostEnvironment.appUILocale || ""; } catch (e) {}
+  var IT = /^it/i.test(LOCALE);
+  function L(en, it) { return IT ? it : en; }
+
   // The page title used to carry the host app's name; it now says "Moskito
   // Easy MCP" like everything else, so the app is read from main.js's own
   // APPLICATION constant instead.
@@ -22,7 +30,7 @@
     illustrator: "Illustrator", aftereffects: "After Effects",
     premiere: "Premiere Pro", photoshop: "Photoshop",
   };
-  var APP = (typeof APPLICATION !== "undefined" && LABELS[APPLICATION]) || "this app";
+  var APP = (typeof APPLICATION !== "undefined" && LABELS[APPLICATION]) || L("this app", "questa app");
   var HUB = "http://localhost:3001/";
 
   function $(id) { return document.getElementById(id); }
@@ -149,22 +157,22 @@
 
   var EXAMPLES = {
     "Illustrator": [
-      "Make a 1080×1920 story with a bold headline",
-      "Recolour everything to our brand palette",
-      "Export each artboard as a 2× PNG"
+      L("Make a 1080×1920 story with a bold headline", "Crea una storia 1080×1920 con un titolo in grassetto"),
+      L("Recolour everything to our brand palette", "Ricolora tutto con la palette del nostro brand"),
+      L("Export each artboard as a 2× PNG", "Esporta ogni tavola da disegno come PNG 2×")
     ],
     "After Effects": [
-      "Add a Gaussian blur to the title and fade it in",
-      "What effects are on this layer?",
-      "Animate the logo's opacity over two seconds"
+      L("Add a Gaussian blur to the title and fade it in", "Aggiungi una sfocatura gaussiana al titolo e fallo apparire in dissolvenza"),
+      L("What effects are on this layer?", "Quali effetti ci sono su questo livello?"),
+      L("Animate the logo's opacity over two seconds", "Anima l'opacità del logo in due secondi")
     ],
     "Premiere Pro": [
-      "Build a rough cut with cross dissolves",
-      "Add a marker every time the speaker changes"
+      L("Build a rough cut with cross dissolves", "Monta un primo montaggio con dissolvenze incrociate"),
+      L("Add a marker every time the speaker changes", "Aggiungi un marcatore ogni volta che cambia chi parla")
     ],
     "Photoshop": [
-      "Make an Instagram post that looks like a Polaroid",
-      "Rename every layer to a consistent format"
+      L("Make an Instagram post that looks like a Polaroid", "Crea un post Instagram che sembri una Polaroid"),
+      L("Rename every layer to a consistent format", "Rinomina tutti i livelli con un formato coerente")
     ]
   };
 
@@ -196,13 +204,13 @@
   }
 
   var claude = document.createElement("button");
-  withIcon(claude, "claude.png", "Ask Claude");
-  claude.title = "Open the Claude desktop app, which can drive " + APP;
+  withIcon(claude, "claude.png", L("Ask Claude", "Chiedi a Claude"));
+  claude.title = L("Open the Claude desktop app, which can drive ", "Apri l'app desktop di Claude, che può controllare ") + APP;
   claude.onclick = function () { askAssistant("Claude", "https://claude.ai/new"); };
 
   var gpt = document.createElement("button");
-  withIcon(gpt, "chatgpt.png", "Ask ChatGPT");
-  gpt.title = "Open the ChatGPT desktop app, which can drive " + APP;
+  withIcon(gpt, "chatgpt.png", L("Ask ChatGPT", "Chiedi a ChatGPT"));
+  gpt.title = L("Open the ChatGPT desktop app, which can drive ", "Apri l'app desktop di ChatGPT, che può controllare ") + APP;
   gpt.onclick = function () { askAssistant("ChatGPT", "https://chatgpt.com/"); };
 
   // Ask the hub, which can actually bring the app to the front: CEP's
@@ -231,16 +239,16 @@
     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4">' +
     '<rect x="1" y="2.5" width="9" height="11" rx="1.5"/>' +
     '<rect x="11.5" y="2.5" width="3.5" height="11" rx="1.2"/></svg>';
-  arrange.appendChild(document.createTextNode("Arrange windows"));
-  arrange.title = APP + " on the left, Claude and ChatGPT on the right";
+  arrange.appendChild(document.createTextNode(L("Arrange windows", "Disponi finestre")));
+  arrange.title = APP + L(" on the left, Claude and ChatGPT on the right", " a sinistra, Claude e ChatGPT a destra");
   arrange.onclick = function () {
     arrange.disabled = true;
-    flash("Arranging\u2026");
+    flash(L("Arranging\u2026", "Disposizione\u2026"));
     bindSocketOnce();
     hubRequest({ type: "arrange", split: 0.8 }, function (r) {
       arrange.disabled = false;
-      if (r && r.ok) return flash("Arranged " + (r.layout || "80/20"));
-      flash((r && r.error) || "Couldn't arrange the windows");
+      if (r && r.ok) return flash(L("Arranged ", "Finestre disposte ") + (r.layout || "80/20"));
+      flash((r && r.error) || L("Couldn't arrange the windows", "Non riesco a disporre le finestre"));
       // One click to the exact pane, rather than a sentence describing where
       // in System Settings to go looking.
       if (r && r.needsAccessibility) hubRequest({ type: "open_accessibility" }, function () {});
@@ -282,18 +290,19 @@
   }
 
   var helpSheet = sheet();
-  var tries = (EXAMPLES[APP] || ["Describe what you want, in plain words"])
+  var tries = (EXAMPLES[APP] || [L("Describe what you want, in plain words", "Descrivi cosa vuoi, con parole semplici")])
     .map(function (t) { return "<li>“" + t + "”</li>"; }).join("");
   helpSheet.innerHTML =
-    "<h4>How to use this</h4>" +
+    "<h4>" + L("How to use this", "Come si usa") + "</h4>" +
     "<ol>" +
-      "<li>Leave this panel open — it is the connection.</li>" +
-      "<li>Open Claude or ChatGPT above.</li>" +
-      "<li>Say what you want. It works on the document you have open.</li>" +
+      "<li>" + L("Leave this panel open — it is the connection.", "Lascia aperto questo pannello: è lui la connessione.") + "</li>" +
+      "<li>" + L("Open Claude or ChatGPT above.", "Apri Claude o ChatGPT qui sopra.") + "</li>" +
+      "<li>" + L("Say what you want. It works on the document you have open.", "Di' cosa vuoi. Lavora sul documento che hai aperto.") + "</li>" +
     "</ol>" +
-    "<div class='ex'>Try asking:<ul>" + tries + "</ul></div>" +
-    "<p class='warn'>Save first. It edits your open document, and not every step " +
-    "can be undone.</p>";
+    "<div class='ex'>" + L("Try asking:", "Prova a chiedere:") + "<ul>" + tries + "</ul></div>" +
+    "<p class='warn'>" + L("Save first. It edits your open document, and not every step " +
+    "can be undone.", "Salva prima. Modifica il documento aperto e non tutti i passaggi " +
+    "si possono annullare.") + "</p>";
 
   var moreSheet = sheet();
 
@@ -321,10 +330,10 @@
     return b;
   }
 
-  var helpBtn = footBtn("?", "How to use this");
-  var logBtn = footBtn("Log", "Connection messages");
-  var gear = footBtn("⚙", "Open the Moskito Easy MCP control panel");
-  var more = footBtn("⋯", "More");
+  var helpBtn = footBtn("?", L("How to use this", "Come si usa"));
+  var logBtn = footBtn(L("Log", "Registro"), L("Connection messages", "Messaggi di connessione"));
+  var gear = footBtn("⚙", L("Open the Moskito Easy MCP control panel", "Apri il pannello di controllo di Moskito Easy MCP"));
+  var more = footBtn("⋯", L("More", "Altro"));
   var spacer = document.createElement("span");
   spacer.className = "sp";
 
@@ -363,7 +372,7 @@
     return b;
   }
 
-  var connLabel = menuItem("Disconnect", function () {
+  var connLabel = menuItem(L("Disconnect", "Scollega"), function () {
     if (connectBtn) connectBtn.click();
     toggle(moreSheet);
   });
@@ -376,15 +385,17 @@
     if (autoChk) { autoChk.checked = autoBox.checked; autoChk.dispatchEvent(new Event("change")); }
   };
   autoLabel.appendChild(autoBox);
-  autoLabel.appendChild(document.createTextNode("Connect automatically when " + APP + " opens"));
+  autoLabel.appendChild(document.createTextNode(IT
+    ? "Collega automaticamente all'apertura di " + APP
+    : "Connect automatically when " + APP + " opens"));
 
-  moreSheet.innerHTML = "<h4>More</h4>";
+  moreSheet.innerHTML = "<h4>" + L("More", "Altro") + "</h4>";
   moreSheet.appendChild(connLabel);
-  moreSheet.appendChild(menuItem("Open the control panel", function () {
+  moreSheet.appendChild(menuItem(L("Open the control panel", "Apri il pannello di controllo"), function () {
     bindSocketOnce();
     hubRequest({ type: "open_panel" }, function (r) { if (!r || !r.ok) openUrl(HUB); });
   }));
-  moreSheet.appendChild(menuItem("Open the control panel in a browser", function () { openUrl(HUB); }));
+  moreSheet.appendChild(menuItem(L("Open the control panel in a browser", "Apri il pannello di controllo nel browser"), function () { openUrl(HUB); }));
   moreSheet.appendChild(autoLabel);
 
   /* ----------------------------------------------------------------- log -- */
@@ -416,12 +427,12 @@
     scratch.select();
     try { document.execCommand("copy"); } catch (e) {}
     scratch.remove();
-    flash("Log copied");
+    flash(L("Log copied", "Registro copiato"));
   }
 
   var logView = document.createElement("div");
   logView.className = "amcp-log";
-  logView.setAttribute("aria-label", "Connection messages");
+  logView.setAttribute("aria-label", L("Connection messages", "Messaggi di connessione"));
 
   function addLogLine(line) {
     var row = document.createElement("div");
@@ -438,11 +449,11 @@
     var logHead = document.createElement("div");
     logHead.className = "amcp-sheet-head";
     var logTitle = document.createElement("h4");
-    logTitle.textContent = "Connection messages";
+    logTitle.textContent = L("Connection messages", "Messaggi di connessione");
     var copyBtn = document.createElement("button");
     copyBtn.className = "linkish";
-    copyBtn.textContent = "Copy";
-    copyBtn.title = "Copy these messages to the clipboard";
+    copyBtn.textContent = L("Copy", "Copia");
+    copyBtn.title = L("Copy these messages to the clipboard", "Copia questi messaggi negli appunti");
     copyBtn.onclick = copyLog;
     logHead.appendChild(logTitle);
     logHead.appendChild(copyBtn);
@@ -500,9 +511,9 @@
       paintBadge();
     }
     var m = line.match(/Received command:\s*(\w+)/);
-    if (m) return flash("<b>" + m[1] + "</b> — just now");
+    if (m) return flash("<b>" + m[1] + "</b> — " + L("just now", "adesso"));
     if (/Response sent/.test(line)) return;
-    if (isError(line)) flash("Connection trouble — see Log", "warn");
+    if (isError(line)) flash(L("Connection trouble — see Log", "Problemi di connessione — vedi Registro"), "warn");
   }
 
   /* --------------------------------------------- requests to the hub -- */
@@ -512,7 +523,7 @@
 
   function hubRequest(payload, done) {
     if (typeof socket === "undefined" || !socket || !socket.connected) {
-      return done({ ok: false, error: "Connect the panel first." });
+      return done({ ok: false, error: L("Connect the panel first.", "Prima collega il pannello.") });
     }
     var id = "r" + (++reqId);
     pending[id] = done;
@@ -520,7 +531,7 @@
     payload.application = (typeof APPLICATION !== "undefined") ? APPLICATION : "";
     socket.emit("app_request", payload);
     setTimeout(function () {
-      if (pending[id]) { delete pending[id]; done({ ok: false, error: "No reply from Adobe MCP." }); }
+      if (pending[id]) { delete pending[id]; done({ ok: false, error: L("No reply from Adobe MCP.", "Nessuna risposta da Adobe MCP.") }); }
     }, 25000);
   }
 
@@ -542,9 +553,11 @@
   // which looks like our bug. Say so on the button instead.
   function setAsk(btn, ok, name) {
     btn.disabled = !ok;
-    btn.title = ok
-      ? "Open the " + name + " desktop app, which can drive " + APP
-      : name + " isn't connected to " + APP + ". Set it up in Moskito Easy MCP.";
+    btn.title = IT
+      ? (ok ? "Apri l'app desktop di " + name + ", che può controllare " + APP
+            : name + " non è collegato a " + APP + ". Configuralo in Moskito Easy MCP.")
+      : (ok ? "Open the " + name + " desktop app, which can drive " + APP
+            : name + " isn't connected to " + APP + ". Set it up in Moskito Easy MCP.");
   }
 
   function pollClients() {
@@ -559,10 +572,21 @@
   // still does the work, from the menu.
   if (connectBtn) connectBtn.style.display = "none";
 
+  // Upstream main.js writes "Connected"/"Disconnected" into #statusText, and
+  // syncStatus below reads that English back. So in Italian the upstream span
+  // stays as it is, only hidden, and a sibling shows the translation.
+  var statusMirror = null;
+  if (IT && $("statusText")) {
+    statusMirror = document.createElement("span");
+    $("statusText").style.display = "none";
+    $("statusText").parentNode.insertBefore(statusMirror, $("statusText").nextSibling);
+  }
+
   function syncStatus() {
     var txt = $("statusText") ? $("statusText").textContent : "";
     var connected = txt === "Connected";
-    connLabel.textContent = connected ? "Disconnect" : "Connect";
+    if (statusMirror) statusMirror.textContent = connected ? "Collegato" : "Scollegato";
+    connLabel.textContent = connected ? L("Disconnect", "Scollega") : L("Connect", "Collega");
     // This line is owned by syncStatus, so it has to clear it too — otherwise
     // "Not connected" sat there stale long after the panel had connected.
     var mine = activity.getAttribute("data-owner") === "status";
@@ -570,7 +594,7 @@
       if (!activity.textContent || mine) {
         activity.setAttribute("data-owner", "status");
         activity.innerHTML = "<span class='spin' style='background:var(--a-soft)'></span>" +
-                             "<span>Not connected — ⋯ › Connect</span>";
+                             "<span>" + L("Not connected — ⋯ › Connect", "Non collegato — ⋯ › Collega") + "</span>";
       }
     } else if (mine) {
       activity.removeAttribute("data-owner");

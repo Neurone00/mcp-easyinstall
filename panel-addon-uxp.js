@@ -16,12 +16,19 @@
 (function () {
     "use strict";
 
+    // Italian when the Adobe app's own UI is Italian, English otherwise. Only
+    // what people read is translated: anything sent to the hub stays English.
+    var LOCALE = "";
+    try { LOCALE = require("uxp").host.uiLocale || ""; } catch (e) {}
+    var IT = /^it/i.test(LOCALE);
+    function L(en, it) { return IT ? it : en; }
+
     var LABELS = {
         photoshop: "Photoshop", premiere: "Premiere Pro",
         illustrator: "Illustrator", aftereffects: "After Effects",
         indesign: "InDesign",
     };
-    var APP = (typeof APPLICATION !== "undefined" && LABELS[APPLICATION]) || "this app";
+    var APP = (typeof APPLICATION !== "undefined" && LABELS[APPLICATION]) || L("this app", "questa app");
 
     /* ------------------------------------------------- talking to the hub -- */
 
@@ -30,7 +37,7 @@
 
     function hubRequest(payload, done) {
         if (typeof socket === "undefined" || !socket || !socket.connected) {
-            return done({ ok: false, error: "Connect the panel first." });
+            return done({ ok: false, error: L("Connect the panel first.", "Prima collega il pannello.") });
         }
         var id = "u" + (++reqId);
         pending[id] = done;
@@ -38,7 +45,7 @@
         payload.application = APPLICATION;
         socket.emit("app_request", payload);
         setTimeout(function () {
-            if (pending[id]) { delete pending[id]; done({ ok: false, error: "No reply from Moskito Easy MCP." }); }
+            if (pending[id]) { delete pending[id]; done({ ok: false, error: L("No reply from Moskito Easy MCP.", "Nessuna risposta da Moskito Easy MCP.") }); }
         }, 25000);
     }
 
@@ -85,8 +92,9 @@
     function paintStatus() {
         if (transient) return;
         status.textContent = connected()
-            ? "\u25cf Connected"
-            : "\u25cb Not connected \u2014 open More and press Connect";
+            ? L("\u25cf Connected", "\u25cf Collegato")
+            : L("\u25cb Not connected \u2014 open More and press Connect",
+                "\u25cb Non collegato \u2014 apri Altro e premi Collega");
         status.setAttribute("style",
             "font-size:11px;margin:0 0 10px;opacity:" + (connected() ? ".75" : ".9"));
     }
@@ -114,8 +122,8 @@
     }
 
     var askRow = el("div", ROW);
-    var claudeBtn = action("Ask Claude", function () { ask("Claude"); });
-    var gptBtn = action("Ask ChatGPT", function () { ask("ChatGPT"); });
+    var claudeBtn = action(L("Ask Claude", "Chiedi a Claude"), function () { ask("Claude"); });
+    var gptBtn = action(L("Ask ChatGPT", "Chiedi a ChatGPT"), function () { ask("ChatGPT"); });
     askRow.appendChild(claudeBtn);
     askRow.appendChild(gptBtn);
 
@@ -124,11 +132,14 @@
     function setAsk(btn, ok, name) {
         if (ok) {
             btn.removeAttribute("disabled");
-            btn.setAttribute("title", "Open " + name + ", which can drive " + APP);
+            btn.setAttribute("title", IT
+                ? "Apri " + name + ", che può controllare " + APP
+                : "Open " + name + ", which can drive " + APP);
         } else {
             btn.setAttribute("disabled", "true");
-            btn.setAttribute("title",
-                name + " isn't connected to " + APP + ". Set it up in Moskito Easy MCP.");
+            btn.setAttribute("title", IT
+                ? name + " non è collegato a " + APP + ". Configuralo in Moskito Easy MCP."
+                : name + " isn't connected to " + APP + ". Set it up in Moskito Easy MCP.");
         }
     }
 
@@ -138,26 +149,26 @@
     setInterval(pollClients, 3000);
 
     function ask(name) {
-        say("Opening " + name + "…");
+        say(L("Opening " + name + "…", "Apertura di " + name + "…"));
         bindSocketOnce();
         hubRequest({ type: "open_assistant", which: name }, function (r) {
-            say(r && r.ok ? "" : (r && r.error) || ("Couldn't open " + name));
+            say(r && r.ok ? "" : (r && r.error) || L("Couldn't open " + name, "Non riesco ad aprire " + name));
         });
     }
 
     var arrangeRow = el("div", ROW);
-    var arrangeBtn = action("Arrange windows", function () {
+    var arrangeBtn = action(L("Arrange windows", "Disponi finestre"), function () {
         arrangeBtn.setAttribute("disabled", "true");
-        say("Arranging…");
+        say(L("Arranging…", "Disposizione…"));
         bindSocketOnce();
         hubRequest({ type: "arrange", split: 0.8 }, function (r) {
             arrangeBtn.removeAttribute("disabled");
-            if (r && r.ok) return say("Arranged " + (r.layout || "80/20"));
-            say((r && r.error) || "Couldn't arrange the windows");
+            if (r && r.ok) return say(L("Arranged ", "Finestre disposte ") + (r.layout || "80/20"));
+            say((r && r.error) || L("Couldn't arrange the windows", "Non riesco a disporre le finestre"));
             if (r && r.needsAccessibility) hubRequest({ type: "open_accessibility" }, function () {});
         });
     });
-    arrangeBtn.setAttribute("title", APP + " on the left, Claude and ChatGPT on the right");
+    arrangeBtn.setAttribute("title", APP + L(" on the left, Claude and ChatGPT on the right", " a sinistra, Claude e ChatGPT a destra"));
     arrangeRow.appendChild(arrangeBtn);
 
     /* --------------------------------------------- the rarely-wanted things -- */
@@ -179,17 +190,17 @@
         return a;
     }
 
-    var moreLink = link("More", function () {
+    var moreLink = link(L("More", "Altro"), function () {
         var open = more.style.display !== "none";
         more.style.display = open ? "none" : "block";
-        moreLink.textContent = open ? "More" : "Less";
+        moreLink.textContent = open ? L("More", "Altro") : L("Less", "Meno");
     });
 
     var links = el("div", "margin:10px 0 0");
-    links.appendChild(link("Settings", function () {
+    links.appendChild(link(L("Settings", "Impostazioni"), function () {
         bindSocketOnce();
         hubRequest({ type: "open_panel" }, function (r) {
-            say(r && r.ok ? "" : "Open Moskito Easy MCP from the menu bar.");
+            say(r && r.ok ? "" : L("Open Moskito Easy MCP from the menu bar.", "Apri Moskito Easy MCP dalla barra dei menu."));
         });
     }));
     links.appendChild(moreLink);
@@ -216,6 +227,21 @@
     var launchBox = document.getElementById("chkConnectOnLaunch");
     move(connectBtn && connectBtn.parentElement, "margin:0 0 8px");
     move(launchBox && launchBox.parentElement, "margin:0 0 10px");
+
+    // The moved upstream controls carry English labels. The checkbox's is
+    // static markup; the button's is rewritten by main.js's module-scope
+    // updateButton on every connect and disconnect, so that is replaced (this
+    // file is appended to main.js, so it shares that scope).
+    if (IT) {
+        if (launchBox) launchBox.textContent = "Collega all'avvio";
+        if (typeof updateButton === "function") {
+            updateButton = function () {
+                var b = document.getElementById("btnStart");
+                if (b) b.textContent = connected() ? "Scollega" : "Collega";
+            };
+            updateButton();
+        }
+    }
 
     // The stylesheet pins the credits with position:fixed, so they sat under
     // the Connect button rather than below it. Put them back in the flow.

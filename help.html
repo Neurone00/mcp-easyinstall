@@ -297,13 +297,13 @@ const CONTENT = {
     setup: {
       id: "setup",
       name: "Cosa cambia la configurazione",
-      blurb: "Non c\u2019\u00e8 niente da fare qui. \u00c8 scritto perch\u00e9 \u00e8 il tuo Mac.",
+      blurb: "Qui non devi fare niente. \u00c8 scritto perch\u00e9 il Mac \u00e8 tuo.",
       can: [
         ["Pannelli", "li copia nella cartella delle estensioni di Adobe"],
         ["Un\u2019impostazione Adobe", "attiva PlayerDebugMode, che permette di caricare pannelli non firmati"],
         ["Claude e ChatGPT", "aggiunge questa app ai loro file di impostazioni, tenendo una copia di backup datata"],
         ["Python", "scarica un piccolo runtime al primo avvio"],
-        ["Utilizzo", "registra quali app e quali comandi vengono usati, con un id casuale \u2014 mai nomi di documenti, prompt, script, percorsi o lavori"],
+        ["Utilizzo", "registra quali app e quali comandi vengono usati, con il nome di questo Mac \u2014 mai nomi di documenti, prompt, script, percorsi o lavori"],
       ],
       say: [],
       cannotLabel: "Non",
@@ -329,10 +329,10 @@ const CONTENT = {
           "Crea una tavola da disegno 1200x630 e centraci il logo",
           "Tutto quello che è arancione su questa tavola, cambialo in #2855ff",
           "Distribuisci queste sei icone a distanze uguali sulla tavola",
-          "Metti il titolo in Inter Semibold a 48pt e stringi la crenatura",
+          "Metti il titolo in Inter Semibold a 48pt e stringi la spaziatura",
           "Esporta questa tavola come PNG a 2x sulla scrivania",
         ],
-        cannot: "<b>Elaborazione tracciati</b> (Pathfinder), <b>Scostamento tracciato</b>, <b>Espandi traccia</b>, tutto il <b>menu Effetto</b> (ombre, distorsioni, sfocature) e il <b>pannello Aspetto</b>. Adobe non dà alcun accesso da script a queste funzioni, quindi nessuno strumento basato su script può raggiungerle — il nostro compreso. L’assistente te lo dirà, invece di produrre qualcosa che sembra giusto e non lo è. Il Ricalco immagine invece funziona.",
+        cannot: "<b>Elaborazione tracciati</b> (Pathfinder), <b>Scostamento tracciato</b>, <b>Traccia contorno</b>, tutto il <b>menu Effetto</b> (ombre, distorsioni, sfocature) e il <b>pannello Aspetto</b>. Adobe non dà alcun accesso da script a queste funzioni, quindi nessuno strumento basato su script può raggiungerle — il nostro compreso. L’assistente te lo dirà, invece di produrre qualcosa che sembra giusto e non lo è. Il Ricalco immagine invece funziona.",
       },
       {
         icon: "aftereffects", name: "After Effects",
@@ -406,7 +406,7 @@ const CONTENT = {
     },
     know: [
       ["Lavora sul documento che hai aperto.", "Non c’è nessuna copia separata e non viene caricato niente. Le modifiche arrivano nel file che hai davanti."],
-      ["Puoi annullare.", "Tutto quello che l’assistente cambia in After Effects sta in un unico annulla. Negli altri, annulla funziona come sempre."],
+      ["Puoi annullare.", "In After Effects tutto quello che cambia l’assistente si annulla in un colpo solo. Nelle altre app Annulla funziona come sempre."],
       ["Può lavorare su più file aperti.", "Photoshop sa elencare quello che hai aperto e passare da un documento all’altro, quindi “fallo su tutti” funziona. Procede un documento alla volta, quindi dieci file richiedono circa dieci volte il tempo di uno — meglio provare con un paio prima di lanciarlo su una cartella intera."],
       ["Non mentre è in corso un rendering.", "Adobe blocca gli script durante il rendering, quindi aspetta che finisca."],
       ["Quando per una cosa non c’è uno strumento", "l’assistente può comunque scrivere direttamente script per Illustrator o After Effects. Copre sfumature, fusioni e tracciati insoliti. È più lento e più facile che serva un secondo tentativo, quindi è un ripiego, non la via normale."],
@@ -608,7 +608,10 @@ function render(lang) {
 let stored = null;
 try { stored = localStorage.getItem("amcp-help-lang"); } catch {}
 const fromUrl = new URLSearchParams(location.search).get("lang");
-const auto = (navigator.language || "en").toLowerCase().startsWith("it") ? "it" : "en";
+// The local server writes lang="it" into the page when the Mac's language is
+// Italian, which a browser set to English would otherwise miss.
+const auto = document.documentElement.lang === "it"
+  || (navigator.language || "en").toLowerCase().startsWith("it") ? "it" : "en";
 render(CONTENT[fromUrl] ? fromUrl : (CONTENT[stored] ? stored : auto));
 </script>
 </body>

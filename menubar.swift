@@ -9,6 +9,11 @@ import ServiceManagement
 import WebKit
 import ApplicationServices
 
+// Italian when the Mac's first language is, English otherwise. The hub is
+// told the same through MOSKITO_LANG, so the menu and the window agree.
+let IT = Locale.preferredLanguages.first?.hasPrefix("it") ?? false
+func L(_ en: String, _ it: String) -> String { IT ? it : en }
+
 let dashboardURL = URL(string: "http://localhost:3001")!
 
 /// The control panel, hosted in the app rather than a browser tab.
@@ -86,13 +91,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // on a read-only volume. Say so once, open the image, and stop.
         if Bundle.main.bundlePath.hasPrefix("/Volumes/") {
             let alert = NSAlert()
-            alert.messageText = "Move Moskito Easy MCP to your Applications folder"
-            alert.informativeText = "It is running from the disk image, which is "
+            alert.messageText = L("Move Moskito Easy MCP to your Applications folder",
+                                  "Sposta Moskito Easy MCP nella cartella Applicazioni")
+            alert.informativeText = L("It is running from the disk image, which is "
                 + "read-only \u{2014} it cannot set itself up or update from there. "
                 + "Drag it onto the Applications shortcut beside it, then open it "
-                + "from Applications."
-            alert.addButton(withTitle: "Show me")
-            alert.addButton(withTitle: "Quit")
+                + "from Applications.",
+                "Lo stai aprendo dall'immagine disco, che è di sola lettura \u{2014} "
+                + "da lì non può configurarsi né aggiornarsi. Trascinalo sulla scorciatoia "
+                + "Applicazioni lì accanto, poi aprilo da Applicazioni.")
+            alert.addButton(withTitle: L("Show me", "Mostrami"))
+            alert.addButton(withTitle: L("Quit", "Esci"))
             if alert.runModal() == .alertFirstButtonReturn {
                 NSWorkspace.shared.open(URL(fileURLWithPath: Bundle.main.bundlePath)
                                             .deletingLastPathComponent())
@@ -112,23 +121,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         header.isEnabled = false
         menu.addItem(header)
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Open Control Panel",
+        menu.addItem(NSMenuItem(title: L("Open Control Panel", "Apri pannello di controllo"),
                                 action: #selector(openPanel), keyEquivalent: "o"))
         // Shown only while a newer version is out; see watchForUpdate.
-        updateItem = NSMenuItem(title: "Update", action: #selector(updateNow), keyEquivalent: "")
+        updateItem = NSMenuItem(title: L("Update", "Aggiorna"), action: #selector(updateNow), keyEquivalent: "")
         updateItem.isHidden = true
         menu.addItem(updateItem)
         menu.addItem(.separator())
         // The log is the app's only diagnostic and was named nowhere in the UI.
-        menu.addItem(NSMenuItem(title: "Open in Browser",
+        menu.addItem(NSMenuItem(title: L("Open in Browser", "Apri nel browser"),
                                 action: #selector(openPanelInBrowser), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Open Log", action: #selector(openLog), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Restart Background Service",
+        menu.addItem(NSMenuItem(title: L("Open Log", "Apri registro"), action: #selector(openLog), keyEquivalent: ""))
+        menu.addItem(NSMenuItem(title: L("Restart Background Service", "Riavvia servizio in background"),
                                 action: #selector(restartHub), keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Uninstall Moskito Easy MCP\u{2026}",
+        menu.addItem(NSMenuItem(title: L("Uninstall Moskito Easy MCP\u{2026}", "Disinstalla Moskito Easy MCP\u{2026}"),
                                 action: #selector(uninstall), keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Quit Moskito Easy MCP",
+        menu.addItem(NSMenuItem(title: L("Quit Moskito Easy MCP", "Esci da Moskito Easy MCP"),
                                 action: #selector(quit), keyEquivalent: "q"))
         self.menu = menu
         item.button?.target = self
@@ -181,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the no-swiftc fallback launcher would otherwise trip that instantly.
         var env = ProcessInfo.processInfo.environment
         env["ADOBE_MCP_SUPERVISED"] = "1"
+        env["MOSKITO_LANG"] = IT ? "it" : "en"
         p.environment = env
         if let handle = try? FileHandle(forWritingTo: log) {
             handle.seekToEndOfFile()
@@ -203,11 +213,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     // than an icon that says something is wrong.
                     self.setIcon(alert: true)
                     let alert = NSAlert()
-                    alert.messageText = "Moskito Easy MCP stopped working"
-                    alert.informativeText = "Its background service failed to start five times. "
-                        + "Open the log to see why, or use Restart Background Service to try again."
-                    alert.addButton(withTitle: "Open Log")
-                    alert.addButton(withTitle: "Later")
+                    alert.messageText = L("Moskito Easy MCP stopped working",
+                                          "Moskito Easy MCP ha smesso di funzionare")
+                    alert.informativeText = L("Its background service failed to start five times. "
+                        + "Open the log to see why, or use Restart Background Service to try again.",
+                        "Il servizio in background non è partito per cinque volte. Apri il registro "
+                        + "per capire perché, o usa Riavvia servizio in background per riprovare.")
+                    alert.addButton(withTitle: L("Open Log", "Apri registro"))
+                    alert.addButton(withTitle: L("Later", "Più tardi"))
                     if alert.runModal() == .alertFirstButtonReturn { self.openLog() }
                     return
                 }
@@ -506,8 +519,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = image
         // The tooltip is the only place right-click is discoverable.
         item.button?.toolTip = alert
-            ? "Moskito Easy MCP — stopped. Click to open, right-click for more."
-            : "Moskito Easy MCP — click to open, right-click for more."
+            ? L("Moskito Easy MCP — stopped. Click to open, right-click for more.",
+                "Moskito Easy MCP — fermo. Clic per aprire, clic destro per altro.")
+            : L("Moskito Easy MCP — click to open, right-click for more.",
+                "Moskito Easy MCP — clic per aprire, clic destro per altro.")
         if item.button?.image == nil { item.button?.title = "MCP" }
         item.button?.appearsDisabled = alert
     }
@@ -546,7 +561,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 let version = (json?["update"] as? [String: Any])?["version"] as? String
                 DispatchQueue.main.async {
                     self?.updateItem.isHidden = version == nil
-                    if let v = version { self?.updateItem.title = "Update to \(v)" }
+                    if let v = version { self?.updateItem.title = L("Update to \(v)", "Aggiorna alla versione \(v)") }
                 }
             }.resume()
         }.fire()
@@ -555,7 +570,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// The control panel's "Update and restart": downloads first if the
     /// background download never happened, then installs and relaunches.
     @objc func updateNow() {
-        updateItem.title = "Updating\u{2026}"
+        updateItem.title = L("Updating\u{2026}", "Aggiornamento\u{2026}")
         var req = URLRequest(url: URL(string: "http://127.0.0.1:3001/api/update")!)
         req.httpMethod = "POST"
         URLSession.shared.dataTask(with: req).resume()
@@ -583,11 +598,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func uninstall() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Uninstall Moskito Easy MCP?"
-        alert.informativeText = "This removes it from Claude and ChatGPT, takes its panels out of "
-            + "your Adobe apps, and deletes the app and its data. Claude restarts if it's open."
-        alert.addButton(withTitle: "Uninstall")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Uninstall Moskito Easy MCP?", "Disinstallare Moskito Easy MCP?")
+        alert.informativeText = L("This removes it from Claude and ChatGPT, takes its panels out of "
+            + "your Adobe apps, and deletes the app and its data. Claude restarts if it's open.",
+            "Lo toglie da Claude e ChatGPT, rimuove i suoi pannelli dalle app Adobe "
+            + "ed elimina l'app e i suoi dati. Se Claude è aperto, si riavvia.")
+        alert.addButton(withTitle: L("Uninstall", "Disinstalla"))
+        alert.addButton(withTitle: L("Cancel", "Annulla"))
         alert.buttons[0].hasDestructiveAction = true
         guard alert.runModal() == .alertFirstButtonReturn,
               let script = Bundle.main.path(forResource: "uninstall", ofType: "sh") else { return }

@@ -309,35 +309,39 @@ button:focus-visible {
       <h1><img src="brand/mark-animated.svg" alt="" width="30" height="30"
            style="vertical-align:-6px;margin-right:9px;border-radius:7px">Moskito&nbsp;Easy&nbsp;MCP</h1>
       <button id="gear" class="gearbtn" aria-expanded="false"
-              aria-controls="settings" title="Settings">&#9881;</button>
+              aria-controls="settings" title="Settings" data-it-title="Impostazioni">&#9881;</button>
     </div>
-    <p class="sub">Let Claude and ChatGPT drive your Adobe apps.
+    <p class="sub" data-it='Fai usare a Claude e ChatGPT le tue app Adobe.
+      <a class="whatcan" href="/help.html">Cosa posso farci?</a>'>Let Claude and ChatGPT drive your Adobe apps.
       <a class="whatcan" href="/help.html">What can I do with this?</a></p>
   </header>
 
   <div class="hero">
-    <button class="primary" id="setup-all">Set everything up</button>
-    <span class="said" id="setup-said">Installs the panels and connects your assistants.</span>
+    <button class="primary" id="setup-all" data-it="Configura tutto">Set everything up</button>
+    <span class="said" id="setup-said" data-it="Installa i pannelli e collega i tuoi assistenti.">Installs the panels and connects your assistants.</span>
   </div>
   <label class="codex-ok" id="codex-ok" hidden>
     <input type="checkbox" id="codex-ok-box">
-    <span>Let ChatGPT reach your Adobe apps. This switches networking on for the whole
+    <span data-it="Lascia che ChatGPT raggiunga le tue app Adobe. Attiva la rete per tutta la sandbox
+      di Codex, quindi anche gli altri strumenti di Codex potranno usarla.">Let ChatGPT reach your Adobe apps. This switches networking on for the whole
       Codex sandbox, so other Codex tools can reach the network too.</span>
   </label>
   <section id="settings" class="settings" hidden aria-label="Settings">
-    <h3>Settings</h3>
-    <p class="settings-note">Usage is recorded with this Mac's name: which apps and
+    <h3 data-it="Impostazioni">Settings</h3>
+    <p class="settings-note" data-it='L&rsquo;uso viene registrato con il nome di questo Mac: quali app e
+      comandi, mai i tuoi documenti, prompt o grafiche. <a href="/help.html#setup">Cosa cambia la configurazione</a>'>Usage is recorded with this Mac's name: which apps and
       commands, never your documents, prompts or artwork. <a href="/help.html#setup">What setup changes</a></p>
   </section>
 
-  <h2 class="deck">Your Adobe apps</h2>
-  <p class="note">Switch off the apps you don't use &mdash; each one takes up space
+  <h2 class="deck" data-it="Le tue app Adobe">Your Adobe apps</h2>
+  <p class="note" data-it="Disattiva le app che non usi &mdash; ognuna occupa spazio
+    in ogni messaggio dei tuoi assistenti.">Switch off the apps you don't use &mdash; each one takes up space
     in every message your assistants send.</p>
   <div class="list" id="apps"></div>
 
   <div class="h2row">
-    <h2>Your AI assistants</h2>
-    <button type="button" data-restartall="1">Restart assistants
+    <h2 data-it="I tuoi assistenti AI">Your AI assistants</h2>
+    <button type="button" data-restartall="1"><span data-it="Riavvia gli assistenti">Restart assistants</span>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1.06 6.67 2.9L21 8"/>
@@ -356,17 +360,28 @@ button:focus-visible {
     <span id="toast-msg"></span>
   </div>
   <button id="toast-action" type="button" class="hidden" data-restartall="1">
-    Restart assistants
+    <span data-it="Riavvia gli assistenti">Restart assistants</span>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
          stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1.06 6.67 2.9L21 8"/>
       <path d="M21 3v5h-5"/>
     </svg>
   </button>
-  <button id="toast-close" type="button" aria-label="Dismiss">&#10005;</button>
+  <button id="toast-close" type="button" aria-label="Dismiss" data-it-label="Chiudi">&#10005;</button>
 </div>
 
 <script>
+// The hub sets <html lang> from the Mac's language: Italian, or English for
+// anything else. Static text carries its Italian in data-it.
+const IT = document.documentElement.lang === "it";
+const L = (en, it) => (IT ? it : en);
+const and = (list) => new Intl.ListFormat(L("en", "it")).format(list);
+if (IT) {
+  for (const e of document.querySelectorAll("[data-it]")) e.innerHTML = e.dataset.it;
+  for (const e of document.querySelectorAll("[data-it-title]")) e.title = e.dataset.itTitle;
+  for (const e of document.querySelectorAll("[data-it-label]")) e.setAttribute("aria-label", e.dataset.itLabel);
+}
+
 const TINT = {
   photoshop:   "#001e36,#31a8ff",
   illustrator: "#330000,#ff9a00",
@@ -431,8 +446,8 @@ function wizard(a, steps) {
             <img src="/api/icon/${a.key}" alt="" width="30" height="30"
                  onerror="this.replaceWith(document.createTextNode('${SHORT[a.key]}'))">
           </div>
-          <div class="name" id="wz-title">Set up ${a.label}</div>
-          <div class="of">Step ${i + 1} of ${steps.length}</div>
+          <div class="name" id="wz-title">${L("Set up", "Configura")} ${a.label}</div>
+          <div class="of">${L("Step", "Passo")} ${i + 1} ${L("of", "di")} ${steps.length}</div>
         </div>
         <div class="wz-body">
           <div>${st.text}</div>
@@ -441,10 +456,10 @@ function wizard(a, steps) {
                  data-wz="act" data-path="${st.action.path}">${st.action.label}</button>` : ""}
         </div>
         <div class="wz-foot">
-          <button class="quiet" type="button" data-wz="back" ${i ? "" : "disabled"}>Back</button>
+          <button class="quiet" type="button" data-wz="back" ${i ? "" : "disabled"}>${L("Back", "Indietro")}</button>
           <span class="sp"></span>
-          <button class="quiet" type="submit" value="cancel">Close</button>
-          <button class="primary" type="button" data-wz="next">${last ? "Done" : st.ok}</button>
+          <button class="quiet" type="submit" value="cancel">${L("Close", "Chiudi")}</button>
+          <button class="primary" type="button" data-wz="next">${last ? L("Done", "Fatto") : st.ok}</button>
         </div>
       </form>`));
     wizEl.querySelector('[data-wz="next"]').focus();
@@ -460,10 +475,10 @@ function wizard(a, steps) {
       const note = wizEl.querySelector(".wz-err") || b.insertAdjacentElement("afterend",
         Object.assign(document.createElement("div"), { className: "wz-sub wz-err" }));
       b.disabled = true;
-      b.textContent = "Loading\u2026";
+      b.textContent = L("Loading\u2026", "Caricamento\u2026");
       note.textContent = "";
       api("POST", b.dataset.path)
-        .then(() => { b.textContent = "Loaded \u2713"; setTimeout(() => { i++; draw(); }, 900); })
+        .then(() => { b.textContent = L("Loaded \u2713", "Caricato \u2713"); setTimeout(() => { i++; draw(); }, 900); })
         .catch((err) => { b.textContent = label; b.disabled = false; note.textContent = err.message; });
       return;
     }
@@ -474,8 +489,9 @@ function wizard(a, steps) {
     refresh().then(() => {
       const now = state && state.apps.find((x) => x.key === a.key);
       toast(now && now.live
-        ? `${a.label} is ready.`
-        : `${a.label} isn't connected. Press Set up to run through it again.`);
+        ? L(`${a.label} is ready.`, `${a.label} è pronto.`)
+        : L(`${a.label} isn't connected. Press Set up to run through it again.`,
+            `${a.label} non è collegato. Premi Configura per ripetere i passaggi.`));
     });
   };
 
@@ -490,7 +506,7 @@ async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || "Something went wrong");
+  if (!r.ok) throw new Error(data.error || L("Something went wrong", "Qualcosa è andato storto"));
   return data;
 }
 
@@ -510,34 +526,41 @@ function renderBanner() {
   let title, body, action = null, news = false, waiting = false, actionKind = "update";
 
   if (!state.engine) {
-    title = "Can't find the Adobe MCP engine";
-    body = "The app can't locate its own files. Re-download Moskito Easy MCP and try again.";
+    title = L("Can't find the Adobe MCP engine", "Non trovo il motore di Adobe MCP");
+    body = L("The app can't locate its own files. Re-download Moskito Easy MCP and try again.",
+             "L'app non trova i propri file. Scarica di nuovo Moskito Easy MCP e riprova.");
   } else if (!state.uv) {
-    title = "Missing the Python runner";
-    body = "The bundled <code>uv</code> runtime wasn't found. Re-download Moskito Easy MCP.";
+    title = L("Missing the Python runner", "Manca l'esecutore Python");
+    body = L("The bundled <code>uv</code> runtime wasn't found. Re-download Moskito Easy MCP.",
+             "Non trovo il runtime <code>uv</code> incluso. Scarica di nuovo Moskito Easy MCP.");
   } else if (state.python && state.python.building) {
     news = true;
-    title = "Setting up Python…";
-    body = "First run only — this downloads a small Python runtime and takes about a " +
-           "minute. Everything else can wait until it finishes.";
+    title = L("Setting up Python…", "Preparo Python…");
+    body = L("First run only — this downloads a small Python runtime and takes about a " +
+             "minute. Everything else can wait until it finishes.",
+             "Solo la prima volta: scarica un piccolo runtime Python e ci mette circa un " +
+             "minuto. Il resto può aspettare che finisca.");
   } else if (state.python && state.python.error) {
-    title = "Python setup didn't finish";
+    title = L("Python setup didn't finish", "La preparazione di Python non è finita");
     body = escapeHtml(state.python.error) +
-           " Your apps aren't connected, so nothing will fail silently later.";
-    action = "Try again";
+           L(" Your apps aren't connected, so nothing will fail silently later.",
+             " Le tue app non sono collegate, così niente fallirà in silenzio dopo.");
+    action = L("Try again", "Riprova");
     actionKind = "rebuild-python";
   } else if (state.update && state.update.ready) {
     // No version number: it means nothing to the person reading it. What they
     // need is that there is one, and what pressing the button will cost.
     waiting = true;
-    title = "An update is ready";
-    body = "It installs itself after an hour without use. Or now: restarting takes a few seconds.";
-    action = "Update and restart";
+    title = L("An update is ready", "C'è un aggiornamento pronto");
+    body = L("It installs itself after an hour without use. Or now: restarting takes a few seconds.",
+             "Si installa da solo dopo un'ora senza uso. Oppure ora: il riavvio richiede pochi secondi.");
+    action = L("Update and restart", "Aggiorna e riavvia");
   } else if (state.update) {
     waiting = true;
-    title = "An update is available";
-    body = "Downloading takes a moment, then the app restarts itself.";
-    action = "Update and restart";
+    title = L("An update is available", "C'è un aggiornamento disponibile");
+    body = L("Downloading takes a moment, then the app restarts itself.",
+             "Il download richiede un attimo, poi l'app si riavvia da sola.");
+    action = L("Update and restart", "Aggiorna e riavvia");
   }
 
   b.classList.toggle("hidden", !title);
@@ -572,28 +595,28 @@ function appRow(a) {
   // isn't running is not a problem to be fixed.
   let status, tone, action = "";
   if (!a.installed) {
-    status = "Unavailable"; tone = "";
+    status = L("Unavailable", "Non disponibile"); tone = "";
   } else if (off) {
     // Untick an app and its server is not registered at all, so Set up and
     // Open would both be inviting a click that cannot lead anywhere.
-    status = "Off"; tone = "";
+    status = L("Off", "Disattivato"); tone = "";
   } else if (a.live) {
-    status = "Ready"; tone = "live";
-    action = `<button class="quiet" data-open="${a.key}">Open</button>`;
+    status = L("Ready", "Pronto"); tone = "live";
+    action = `<button class="quiet" data-open="${a.key}">${L("Open", "Apri")}</button>`;
   } else if (needsPanel) {
-    status = "Not set up"; tone = "";
-    action = `<button class="primary" data-panel="${a.key}">Install panel</button>`;
+    status = L("Not set up", "Da configurare"); tone = "";
+    action = `<button class="primary" data-panel="${a.key}">${L("Install panel", "Installa pannello")}</button>`;
   } else if (a.kind === "cep" && a.panelOpen) {
-    status = "Idle"; tone = "part";
-    action = `<button class="primary" data-connectpanel="${a.key}">Connect</button>`;
+    status = L("Idle", "In attesa"); tone = "part";
+    action = `<button class="primary" data-connectpanel="${a.key}">${L("Connect", "Collega")}</button>`;
   } else if (a.kind === "cep") {
-    status = "Panel closed"; tone = "";
+    status = L("Panel closed", "Pannello chiuso"); tone = "";
     // Just "Open": the row already says which app, and repeating it made the
     // button as wide as the name it repeated.
-    action = `<button class="suggest" data-open="${a.key}">Open</button>`;
+    action = `<button class="suggest" data-open="${a.key}">${L("Open", "Apri")}</button>`;
   } else {
-    status = "Not set up"; tone = "";
-    action = `<button class="primary" data-uxp="${a.key}">Set up</button>`;
+    status = L("Not set up", "Da configurare"); tone = "";
+    action = `<button class="primary" data-uxp="${a.key}">${L("Set up", "Configura")}</button>`;
   }
 
   const row = el(`
@@ -601,7 +624,7 @@ function appRow(a) {
       ${a.installed
         ? `<input type="checkbox" class="tick" data-appon="${a.key}"
              ${a.enabled ? "checked" : ""}
-             aria-label="Let your assistants drive ${a.label}">`
+             aria-label="${L("Let your assistants drive", "Fai usare ai tuoi assistenti")} ${a.label}">`
         : `<span class="tick"></span>`}
       <div class="glyph" style="background:${bg};color:${fg}" aria-hidden="true">
         <img src="/api/icon/${a.key}" alt="" width="34" height="34"
@@ -657,15 +680,15 @@ function clientRow(c) {
           ${gpt ? "GPT" : "C"}
         </div>
         <div class="meta"><div class="name">${c.label}</div></div>
-        <span class="pill"><span class="dot"></span>Not installed</span>
-        <span class="acts"><button class="suggest" data-download="${c.download}">Download</button></span>
+        <span class="pill"><span class="dot"></span>${L("Not installed", "Non installato")}</span>
+        <span class="acts"><button class="suggest" data-download="${c.download}">${L("Download", "Scarica")}</button></span>
       </div>`);
   }
 
-  let status = n ? "Connected" : "Not connected";
+  let status = n ? L("Connected", "Collegato") : L("Not connected", "Non collegato");
   let tone = n ? "live" : "";
-  if (c.partial) { status = "Partly connected"; tone = "part"; }
-  if (blocked) { status = "Blocked"; tone = "part"; }
+  if (c.partial) { status = L("Partly connected", "Collegato in parte"); tone = "part"; }
+  if (blocked) { status = L("Blocked", "Bloccato"); tone = "part"; }
 
   const row = el(`
     <div class="row">
@@ -677,8 +700,8 @@ function clientRow(c) {
       </div>
       <span class="pill ${tone}"><span class="dot"></span>${status}</span>
       <span class="acts">
-        ${n ? `<button class="quiet" data-disconnect="${c.id}">Disconnect</button>`
-            : `<button class="primary" data-connect="${c.id}">Connect</button>`}
+        ${n ? `<button class="quiet" data-disconnect="${c.id}">${L("Disconnect", "Scollega")}</button>`
+            : `<button class="primary" data-connect="${c.id}">${L("Connect", "Collega")}</button>`}
       </span>
     </div>`);
 
@@ -686,16 +709,19 @@ function clientRow(c) {
   // Claude Desktop could not be disconnected without first quitting Claude.
   const acts = row.querySelector(".acts");
   if (blocked) {
-    acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-codexnet="1">Allow</button> `);
+    acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-codexnet="1">${L("Allow", "Consenti")}</button> `);
     row.querySelector(".meta").appendChild(el(
-      `<div class="consent">
-         <b>Allow</b> lets ChatGPT and Codex reach your Adobe apps on this Mac. It switches
+      `<div class="consent">${L(
+         `<b>Allow</b> lets ChatGPT and Codex reach your Adobe apps on this Mac. It switches
          networking on for the whole Codex sandbox, so other Codex tools can reach the
-         network too. Your call &mdash; a backup of the config is kept either way.
+         network too. Your call &mdash; a backup of the config is kept either way.`,
+         `<b>Consenti</b> permette a ChatGPT e Codex di raggiungere le tue app Adobe su questo Mac.
+         Attiva la rete per tutta la sandbox di Codex, quindi anche gli altri strumenti di Codex
+         potranno usarla. Decidi tu &mdash; in ogni caso resta una copia della configurazione.`)}
        </div>`));
   }
   if ((c.ids || [c.id]).includes("claude-desktop") && state.claudeRunning && !n) {
-    acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-restart="1">Quit &amp; connect</button> `);
+    acts.insertAdjacentHTML("afterbegin", `<button class="primary" data-restart="1">${L("Quit &amp; connect", "Esci e collega")}</button> `);
   }
   return row;
 }
@@ -741,7 +767,7 @@ function render() {
     const done = state.apps.find((x) => x.key === wizKey);
     wizKey = null;
     wizEl.close();
-    toast(`${done.label} is ready.`);
+    toast(L(`${done.label} is ready.`, `${done.label} è pronto.`));
   }
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
@@ -758,8 +784,8 @@ function render() {
     autoSetupDone = true;
     setTimeout(() => setupBtn.click(), 0);
   }
-  setupBtn.textContent = building ? "Setting up Python…"
-    : ready ? "Check everything again" : "Set everything up";
+  setupBtn.textContent = building ? L("Setting up Python…", "Preparo Python…")
+    : ready ? L("Check everything again", "Ricontrolla tutto") : L("Set everything up", "Configura tutto");
   // Once it works, this is no longer the thing to reach for.
   setupBtn.classList.toggle("primary", !ready);
 
@@ -776,20 +802,24 @@ function render() {
 
   const anyAssistant = state.clients.some((c) => c.installed !== false);
   if (!anyAssistant) {
-    said.innerHTML = `Install Claude or ChatGPT first. `
-      + `<button class="suggest" data-download="claude">Get Claude</button> `
-      + `<button class="suggest" data-download="chatgpt">Get ChatGPT</button>`;
+    said.innerHTML = L("Install Claude or ChatGPT first. ", "Prima installa Claude o ChatGPT. ")
+      + `<button class="suggest" data-download="claude">${L("Get Claude", "Scarica Claude")}</button> `
+      + `<button class="suggest" data-download="chatgpt">${L("Get ChatGPT", "Scarica ChatGPT")}</button>`;
   } else if (!anyApp) {
-    said.textContent = "No Adobe apps found in /Applications — there's nothing to set up yet.";
+    said.textContent = L("No Adobe apps found in /Applications — there's nothing to set up yet.",
+                         "Nessuna app Adobe in Applicazioni — per ora non c'è niente da configurare.");
   } else if (building) {
-    said.textContent = "First run downloads a small Python runtime — about a minute.";
+    said.textContent = L("First run downloads a small Python runtime — about a minute.",
+                         "La prima volta scarica un piccolo runtime Python — circa un minuto.");
   } else if (ready) {
     said.textContent = "";
   } else {
     // First run restarts the assistants too, so say so before the click.
     said.textContent = setupNote || (firstRun
-      ? "Installs the panels, connects your assistants and restarts them."
-      : "Installs the panels and connects your assistants.");
+      ? L("Installs the panels, connects your assistants and restarts them.",
+          "Installa i pannelli, collega i tuoi assistenti e li riavvia.")
+      : L("Installs the panels and connects your assistants.",
+          "Installa i pannelli e collega i tuoi assistenti."));
   }
   said.classList.toggle("warn", !!setupNote && !ready);
 }
@@ -807,10 +837,10 @@ document.addEventListener("change", async (e) => {
     // calling them "your assistants".
     const label = (state.apps.find((a) => a.key === key) || {}).label || key;
     toast({
-      title: `${label} ${box.checked ? "enabled" : "disabled"}`,
+      title: `${label} ${box.checked ? L("enabled", "attivato") : L("disabled", "disattivato")}`,
       // Enabling gives you something to do; disabling only takes effect.
-      body: box.checked ? "Restart your assistants to start creating."
-                        : "Restart your assistants to apply the change.",
+      body: box.checked ? L("Restart your assistants to start creating.", "Riavvia i tuoi assistenti per iniziare a creare.")
+                        : L("Restart your assistants to apply the change.", "Riavvia i tuoi assistenti per applicare la modifica."),
     }, true);
     await refresh();
   } catch (err) {
@@ -827,21 +857,24 @@ document.addEventListener("click", async (e) => {
   if (b.id === "toast-close") { hideToast(); return; }
   if (b.dataset.download) {
     api("POST", "/api/download/" + b.dataset.download).catch((e) => toast(e.message));
-    toast(`Opening the ${b.dataset.download === "chatgpt" ? "ChatGPT" : "Claude"} download page. `
-        + "Install it, then press Set up again.");
+    const who = b.dataset.download === "chatgpt" ? "ChatGPT" : "Claude";
+    toast(L(`Opening the ${who} download page. Install it, then press Set up again.`,
+            `Apro la pagina per scaricare ${who}. Installalo, poi premi di nuovo Configura tutto.`));
     return;
   }
   const was = b.innerHTML;
   b.disabled = true;
   try {
     if (b.dataset.panel) {
-      b.textContent = "Installing…";
+      b.textContent = L("Installing…", "Installazione…");
       await api("POST", "/api/panel/" + b.dataset.panel);
-      toast("Panel installed. Now open the app and show the MCP panel.");
+      toast(L("Panel installed. Now open the app and show the MCP panel.",
+              "Pannello installato. Ora apri l'app e mostra il pannello MCP."));
     } else if (b.dataset.connectpanel) {
-      b.textContent = "Connecting\u2026";
+      b.textContent = L("Connecting\u2026", "Collegamento\u2026");
       await api("POST", "/api/connect-panel/" + b.dataset.connectpanel);
-      toast("Connected \u2014 and set to connect by itself from now on.");
+      toast(L("Connected \u2014 and set to connect by itself from now on.",
+              "Collegato \u2014 e d'ora in poi si collegherà da solo."));
     } else if (b.dataset.uxp) {
       const a = state.apps.find((x) => x.key === b.dataset.uxp);
       const r = await api("POST", "/api/uxp/" + b.dataset.uxp);
@@ -852,22 +885,28 @@ document.addEventListener("click", async (e) => {
       // be there. Ask them to install it, and only then start the steps.
       if (r.udtMissing) {
         steps.push({
-          text: "Adobe's free <b>UXP Developer Tool</b> isn't installed. "
+          text: L("Adobe's free <b>UXP Developer Tool</b> isn't installed. "
               + `It is what loads the panel into ${a.label}.`,
-          sub: "Adobe's download page installs it, with Creative Cloud if you need that too.",
-          action: { label: "Download it from Adobe", path: "/api/uxp-help" },
-          ok: "I've installed it",
+              "Manca <b>UXP Developer Tool</b>, gratuito, di Adobe. "
+              + `È quello che carica il pannello in ${a.label}.`),
+          sub: L("Adobe's download page installs it, with Creative Cloud if you need that too.",
+                 "La pagina di download di Adobe lo installa, insieme a Creative Cloud se serve."),
+          action: { label: L("Download it from Adobe", "Scaricalo da Adobe"), path: "/api/uxp-help" },
+          ok: L("I've installed it", "L'ho installato"),
         });
       }
       // Load fails with a bare "Plugin Load Failed" when the app is closed, and
       // Adobe's tool gives no reason. Wait for it before we get there.
       if (r.wasClosed) {
         steps.push({
-          text: `${a.label} is opening. Wait until it has finished.`,
-          sub: "The Developer Tool is open behind it. Loading the panel into an "
+          text: L(`${a.label} is opening. Wait until it has finished.`,
+                  `${a.label} si sta aprendo. Aspetta che abbia finito.`),
+          sub: L("The Developer Tool is open behind it. Loading the panel into an "
              + "app that isn't running fails without saying why.",
+                 "Developer Tool è aperto dietro. Caricare il pannello in un'app "
+             + "che non è in esecuzione fallisce senza dire perché."),
           focus: "/api/open/" + a.key,
-          ok: `${a.label} is ready`,
+          ok: L(`${a.label} is ready`, `${a.label} è pronto`),
         });
       }
       // The real blocker, and the one Adobe's tool refuses to name: without
@@ -882,31 +921,43 @@ document.addEventListener("click", async (e) => {
       // need a restart if they were already running before the tool: one we
       // just opened started after it, and joins by itself.
       if (a.key === "photoshop" || !r.wasClosed) steps.push(a.key === "photoshop"
-        ? { text: "In Photoshop: <b>Photoshop \u2192 Settings \u2192 Plugins</b>, and turn on "
+        ? { text: L("In Photoshop: <b>Photoshop \u2192 Settings \u2192 Plugins</b>, and turn on "
               + "<b>Enable Developer Mode</b>.",
-            sub: "Already on? Go straight on. If you just turned it on, quit "
+                    "In Photoshop: <b>Photoshop \u2192 Impostazioni \u2192 Plug-in</b>, e attiva "
+              + "<b>Abilita modalità sviluppatore</b>."),
+            sub: L("Already on? Go straight on. If you just turned it on, quit "
                + "Photoshop and open it again \u2014 it only connects at startup.",
+                   "È già attiva? Vai avanti. Se l'hai appena attivata, esci da "
+               + "Photoshop e riaprilo \u2014 si collega solo all'avvio."),
             focus: "/api/open/" + a.key,
-            ok: "Developer Mode is on" }
-        : { text: `Quit ${a.label} and open it again.`,
-            sub: `${a.label} only joins Adobe's Developer Tool if the tool was `
+            ok: L("Developer Mode is on", "La modalità sviluppatore è attiva") }
+        : { text: L(`Quit ${a.label} and open it again.`, `Esci da ${a.label} e riaprilo.`),
+            sub: L(`${a.label} only joins Adobe's Developer Tool if the tool was `
                + "already running when it started, and it has no setting for this. "
                + "If it asks to enable developer mode later, say yes.",
+                   `${a.label} si collega a Developer Tool di Adobe solo se lo strumento `
+               + "era già aperto quando è partito, e non c'è un'impostazione per questo. "
+               + "Se più avanti chiede di attivare la modalità sviluppatore, rispondi di sì."),
             focus: "/api/open/" + a.key,
-            ok: `${a.label} has been restarted` });
+            ok: L(`${a.label} has been restarted`, `${a.label} è stato riavviato`) });
       wizard(a, steps.concat([
-        { text: "In the <b>UXP Developer Tool</b>, find the row <b>Moskito Easy MCP</b>.",
-          sub: "Brought to the front for you.",
+        { text: L("In the <b>UXP Developer Tool</b>, find the row <b>Moskito Easy MCP</b>.",
+                  "In <b>UXP Developer Tool</b>, trova la riga <b>Moskito Easy MCP</b>."),
+          sub: L("Brought to the front for you.", "L'ho portato in primo piano."),
           focus: "/api/focus-uxp",
-          ok: "Found it" },
-        { text: "Click <b>Load</b>, at the right-hand end of that row.",
-          sub: "Its state changes from Not loaded to Loaded. Or let this do it "
+          ok: L("Found it", "Trovata") },
+        { text: L("Click <b>Load</b>, at the right-hand end of that row.",
+                  "Fai clic su <b>Load</b>, all'estremità destra della riga."),
+          sub: L("Its state changes from Not loaded to Loaded. Or let this do it "
              + "for you \u2014 same thing, one click.",
-          action: { label: "Load it for me", path: "/api/load-uxp/" + a.key },
+                 "Lo stato passa da Not loaded a Loaded. Oppure lascia fare a me "
+             + "\u2014 stessa cosa, un clic."),
+          action: { label: L("Load it for me", "Caricalo tu"), path: "/api/load-uxp/" + a.key },
           focus: "/api/focus-uxp",
-          ok: "Done" },
-        { text: `Back in ${a.label}, open <b>${a.panelMenu}</b>.`,
-          sub: "The panel appears and connects by itself.",
+          ok: L("Done", "Fatto") },
+        { text: L(`Back in ${a.label}, open <b>${a.panelMenu}</b>.`,
+                  `Torna in ${a.label} e apri <b>${a.panelMenu}</b>.`),
+          sub: L("The panel appears and connects by itself.", "Il pannello compare e si collega da solo."),
           focus: "/api/open/" + a.key },
       ]));
     } else if (b.dataset.open) {
@@ -915,41 +966,43 @@ document.addEventListener("click", async (e) => {
       // The one thing the second line carried alone was where the panel is.
       // It arrives when you press Open now, not before.
       toast(a && a.kind === "cep" && !a.live
-        ? `Opening — then ${a.panelMenu}`
-        : "Opening…");
+        ? L(`Opening — then ${a.panelMenu}`, `Apertura in corso — poi ${a.panelMenu}`)
+        : L("Opening…", "Apertura…"));
     } else if (b.dataset.connect) {
-      b.textContent = "Connecting…";
+      b.textContent = L("Connecting…", "Collegamento…");
       const ids = b.dataset.connect.split(",");
       let apps = 0;
       for (const id of ids) apps = (await api("POST", "/api/client/" + id)).connected.length;
-      toast(`Connected ${apps} apps.`, ids.includes("claude-desktop"));
+      toast(L(`Connected ${apps} apps.`, `${apps} app collegate.`), ids.includes("claude-desktop"));
     } else if (b.dataset.disconnect) {
       for (const id of b.dataset.disconnect.split(",")) {
         await api("DELETE", "/api/client/" + id);
       }
-      toast("Disconnected.");
+      toast(L("Disconnected.", "Scollegato."));
     } else if (b.dataset.codexnet) {
       await api("POST", "/api/codex-network");
-      toast("Done. Restart ChatGPT or Codex to pick it up.");
+      toast(L("Done. Restart ChatGPT or Codex to pick it up.", "Fatto. Riavvia ChatGPT o Codex perché lo veda."));
     } else if (b.dataset.restartall) {
-      b.textContent = "Restarting\u2026";
+      b.textContent = L("Restarting\u2026", "Riavvio\u2026");
       const r = await api("POST", "/api/restart-assistants");
       toast(r.restarted.length
-        ? `Restarting ${r.restarted.join(" and ")}\u2026`
-        : "Neither Claude nor ChatGPT is running.");
+        ? L(`Restarting ${and(r.restarted)}\u2026`, `Riavvio ${and(r.restarted)}\u2026`)
+        : L("Neither Claude nor ChatGPT is running.", "Né Claude né ChatGPT sono aperti."));
     } else if (b.dataset.restart) {
       await api("POST", "/api/restart-claude");
-      toast("Restarting Claude…");
+      toast(L("Restarting Claude…", "Riavvio Claude…"));
     } else if (b.id === "banner-action" && b.dataset.kind === "rebuild-python") {
-      b.textContent = "Rebuilding\u2026";
+      b.textContent = L("Rebuilding\u2026", "Ricostruzione\u2026");
       await api("POST", "/api/rebuild-python");
-      toast("Rebuilding the Python environment\u2026");
+      toast(L("Rebuilding the Python environment\u2026", "Ricostruisco l'ambiente Python\u2026"));
     } else if (b.id === "banner-action") {
-      b.textContent = "Downloading\u2026";
+      b.textContent = L("Downloading\u2026", "Download\u2026");
       await api("POST", "/api/update");
-      document.body.innerHTML =
+      document.body.innerHTML = L(
         '<div class="wrap"><h1>Updating\u2026</h1>' +
-        '<p class="sub">Adobe MCP will reopen in a moment. You can close this tab.</p></div>';
+        '<p class="sub">Moskito Easy MCP will reopen in a moment. You can close this tab.</p></div>',
+        '<div class="wrap"><h1>Aggiornamento\u2026</h1>' +
+        '<p class="sub">Moskito Easy MCP si riaprirà tra un attimo. Puoi chiudere questa scheda.</p></div>');
       return;
     } else if (b.id === "gear") {
       const panel = document.getElementById("settings");
@@ -958,7 +1011,7 @@ document.addEventListener("click", async (e) => {
       b.setAttribute("aria-expanded", String(open));
       return;
     } else if (b.id === "setup-all") {
-      b.textContent = "Setting up…";
+      b.textContent = L("Setting up…", "Configurazione…");
       const first = !state.clients.some((c) => c.connected.length);
       const allowGpt = !document.getElementById("codex-ok").hidden
         && document.getElementById("codex-ok-box").checked;
@@ -970,16 +1023,16 @@ document.addEventListener("click", async (e) => {
       // Afterwards, offer it, since they may be mid-conversation.
       let restarted = [];
       if (first && r.restart) {
-        b.textContent = "Restarting\u2026";
+        b.textContent = L("Restarting\u2026", "Riavvio\u2026");
         restarted = (await api("POST", "/api/restart-assistants")).restarted;
       }
       // With nothing left to do, the hub's line is "Restart Claude and it can
       // drive your apps", which is exactly what just happened.
-      const now = `Restarting ${restarted.join(" and ")}`;
+      const now = L(`Restarting ${and(restarted)}`, `Riavvio ${and(restarted)}`);
       const body = !restarted.length ? r.body
-        : /^Restart /.test(r.body) ? `${now} \u2014 then just ask.` : `${r.body} ${now}.`;
+        : r.onlyRestart ? `${now} \u2014 ${L("then just ask.", "poi chiedi pure.")}` : `${r.body} ${now}.`;
       toast(r.title ? { title: r.title, body } : r.message, r.restart && !restarted.length);
-      setupNote = r.title === "Setup didn't finish" ? r.body : "";
+      setupNote = r.incomplete ? r.body : "";
       lastJSON = "";
     } else return;
   } catch (err) {
@@ -1009,7 +1062,7 @@ async function refresh() {
   } catch {
     lastJSON = "";
     document.getElementById("setup-said").textContent =
-      "Lost contact with Moskito Easy MCP — retrying…";
+      L("Lost contact with Moskito Easy MCP — retrying…", "Contatto perso con Moskito Easy MCP — riprovo…");
   }
 }
 refresh();

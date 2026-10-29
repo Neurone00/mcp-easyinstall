@@ -26,6 +26,18 @@ const VERSION = require("./package.json").version;
 const HERE = __dirname;
 const SETTINGS = path.join(HERE, "settings.json");
 
+// Italian when the Mac's first language is, English for everything else. The
+// menu bar app passes its own reading (so `-AppleLanguages (it)` tests both);
+// a bare `node hub.js` asks macOS. Only what people read is translated: what
+// goes to the assistants stays English.
+const IT = /^it/i.test(process.env.MOSKITO_LANG || (() => {
+    try {
+        return execFileSync("/usr/bin/defaults", ["read", "-g", "AppleLanguages"], { encoding: "utf8" })
+            .match(/[a-z]{2}/i)[0];
+    } catch { return ""; }
+})());
+const L = (en, it) => (IT ? it : en);
+
 /* ---------------------------------------------------------------- engine -- */
 
 // Where the adb-mcp checkout lives. Remembered in settings.json once found.
@@ -74,30 +86,35 @@ const APPS = {
         kind: "uxp", uxp: "ps", mcp: "ps-mcp.py",
         appGlob: "Adobe Photoshop",
         panelMenu: "Plugins → Moskito Easy MCP",
+        panelMenuIt: "Plug-in → Moskito Easy MCP",
     },
     illustrator: {
         label: "Illustrator",
         kind: "cep", cep: "com.mikechambers.ai", mcp: "ai-mcp.py",
         appGlob: "Adobe Illustrator",
         panelMenu: "Window → Extensions → Moskito Easy MCP",
+        panelMenuIt: "Finestra → Estensioni → Moskito Easy MCP",
     },
     aftereffects: {
         label: "After Effects",
         kind: "cep", cep: "com.mikechambers.ae", mcp: "ae-mcp.py",
         appGlob: "Adobe After Effects",
         panelMenu: "Window → Extensions → Moskito Easy MCP",
+        panelMenuIt: "Finestra → Estensioni → Moskito Easy MCP",
     },
     premiere: {
         label: "Premiere Pro",
         kind: "uxp", uxp: "pr", mcp: "pr-mcp.py",
         appGlob: "Adobe Premiere Pro",
         panelMenu: "Window → UXP Plugins → Moskito Easy MCP",
+        panelMenuIt: "Finestra → Plug-in UXP → Moskito Easy MCP",
     },
     indesign: {
         label: "InDesign",
         kind: "uxp", uxp: "id", mcp: "id-mcp.py",
         appGlob: "Adobe InDesign",
         panelMenu: "Plug-Ins → Moskito Easy MCP → Moskito Easy MCP",
+        panelMenuIt: "Plug-in → Moskito Easy MCP → Moskito Easy MCP",
     },
 };
 
@@ -168,7 +185,7 @@ function focusApp(bundle) {
 
 async function arrangeWindows(appKey, split) {
     const bundle = appBundle(APPS[appKey].appGlob);
-    if (!bundle) throw new Error(`${APPS[appKey].label} isn't installed.`);
+    if (!bundle) throw new Error(L(`${APPS[appKey].label} isn't installed.`, `${APPS[appKey].label} non è installato.`));
 
     fs.mkdirSync(SUPPORT, { recursive: true });
     try { fs.unlinkSync(ARRANGE_RES); } catch { /* no previous answer to clear */ }
@@ -197,9 +214,10 @@ async function arrangeWindows(appKey, split) {
         if (answer.startsWith("ok")) {
             return { ok: true, layout: `${Math.round(split * 100)}/${100 - Math.round(split * 100)}` };
         }
-        throw new Error(`Couldn't arrange the windows — ${answer}.`);
+        throw new Error(L(`Couldn't arrange the windows — ${answer}.`, `Non riesco a disporre le finestre — ${answer}.`));
     }
-    throw new Error("Moskito Easy MCP didn't answer. Try Restart Background Service from its menu.");
+    throw new Error(L("Moskito Easy MCP didn't answer. Try Restart Background Service from its menu.",
+        "Moskito Easy MCP non risponde. Prova Riavvia servizio in background dal suo menu."));
 }
 
 /* ------------------------------------------------------------- caching -- */
@@ -282,7 +300,8 @@ async function connectPanel(key) {
     const target = await cdpTarget(key);
     if (!target) {
         throw new Error(
-            `The ${APPS[key].label} panel isn't open. In ${APPS[key].label}: ${APPS[key].panelMenu}.`
+            L(`The ${APPS[key].label} panel isn't open. In ${APPS[key].label}: ${APPS[key].panelMenu}.`,
+              `Il pannello di ${APPS[key].label} non è aperto. In ${APPS[key].label}: ${APPS[key].panelMenuIt}.`)
         );
     }
     const WebSocket = require("ws");
@@ -768,7 +787,8 @@ function ensureVenv(done = () => {}) {
 
     const uv = findUv();
     if (!uv) {
-        venvError = "The bundled uv runtime is missing \u2014 reinstall Adobe MCP.";
+        venvError = L("The bundled uv runtime is missing \u2014 reinstall Adobe MCP.",
+            "Manca il runtime uv incluso \u2014 reinstalla Moskito Easy MCP.");
         return done(new Error(venvError));
     }
 
@@ -1189,9 +1209,9 @@ async function autoUpdate() {
 // app depends on, so this is safe to do at any moment — it ends with a verified
 // copy parked in Application Support and `staged` pointing at it.
 async function stageUpdate() {
-    if (!update) throw new Error("No update available.");
+    if (!update) throw new Error(L("No update available.", "Nessun aggiornamento disponibile."));
     const bundle = path.resolve(HERE, "..", "..");
-    if (!bundle.endsWith(".app")) throw new Error("Updates only work on the installed app.");
+    if (!bundle.endsWith(".app")) throw new Error(L("Updates only work on the installed app.", "Gli aggiornamenti funzionano solo sull'app installata."));
 
     // Not os.tmpdir(): macOS prunes it, and this copy may sit for days waiting
     // for someone to restart.
@@ -1203,22 +1223,22 @@ async function stageUpdate() {
         redirect: "follow",
         signal: AbortSignal.timeout(10 * 60 * 1000),   // a stalled download used to hang forever
     });
-    if (!r.ok) throw new Error(`Download failed (${r.status}).`);
+    if (!r.ok) throw new Error(L(`Download failed (${r.status}).`, `Download non riuscito (${r.status}).`));
     fs.writeFileSync(zip, Buffer.from(await r.arrayBuffer()));
 
     execFileSync("/usr/bin/ditto", ["-x", "-k", zip, tmp]);
     fs.rmSync(zip, { force: true });            // 112MB we no longer need
     const fresh = fs.readdirSync(tmp).find((n) => n.endsWith(".app"));
-    if (!fresh) throw new Error("That download didn't contain an app.");
+    if (!fresh) throw new Error(L("That download didn't contain an app.", "Il download non conteneva l'app."));
 
     // Check it before trusting it: an app for the wrong architecture is exactly
     // what the old first-zip-wins picker used to hand out.
     const freshBin = path.join(tmp, fresh, "Contents", "MacOS", "AdobeMCP");
-    if (!fs.existsSync(freshBin)) throw new Error("That download isn't a working Adobe MCP app.");
+    if (!fs.existsSync(freshBin)) throw new Error(L("That download isn't a working Adobe MCP app.", "Il download non è un'app Moskito Easy MCP funzionante."));
     try {
         const archs = execFileSync("/usr/bin/lipo", ["-archs", freshBin], { encoding: "utf8" });
         if (!archs.includes(process.arch === "arm64" ? "arm64" : "x86_64")) {
-            throw new Error(`That build is for ${archs.trim()}, which this Mac can't run.`);
+            throw new Error(L(`That build is for ${archs.trim()}, which this Mac can't run.`, `Questa versione è per ${archs.trim()}, che questo Mac non può eseguire.`));
         }
     } catch (e) {
         if (/can't run/.test(e.message)) throw e;   // our own check — surface it
@@ -1235,9 +1255,9 @@ async function stageUpdate() {
 // From the banner's button, after an hour without use (autoUpdate), or at
 // launch for a version downloaded earlier (stagedOnDisk).
 function applyUpdate() {
-    if (!staged) throw new Error("No update has been downloaded yet.");
+    if (!staged) throw new Error(L("No update has been downloaded yet.", "Nessun aggiornamento ancora scaricato."));
     const bundle = path.resolve(HERE, "..", "..");
-    if (!bundle.endsWith(".app")) throw new Error("Updates only work on the installed app.");
+    if (!bundle.endsWith(".app")) throw new Error(L("Updates only work on the installed app.", "Gli aggiornamenti funzionano solo sull'app installata."));
     const tmp = STAGED_DIR;
 
     // Move the old app aside rather than deleting it, and put it back if the
@@ -1763,6 +1783,7 @@ app.get("/api/status", (_req, res) => {
         setupOnLaunch,
         claudeRunning: claudeRunning(),
         codexNetwork: codexNetworkAllowed(),
+        lang: L("en", "it"),
         python: { ready: venvReady, building: venvBuilding, error: venvError },
         version: VERSION,
         // `ready` tells the page whether pressing the button restarts right away
@@ -1772,7 +1793,7 @@ app.get("/api/status", (_req, res) => {
             key,
             label: a.label,
             kind: a.kind,
-            panelMenu: a.panelMenu,
+            panelMenu: IT ? a.panelMenuIt : a.panelMenu,
             installed: appInstalled(a.appGlob),
             enabled: registerableApps().includes(key),
             panelInstalled: panelInstalled(key),
@@ -1832,8 +1853,8 @@ app.post("/api/client/:id", (req, res) => {
     try {
         const keys = registerableApps();
         // Used to reach serverDef(undefined) and put a raw TypeError in a toast.
-        if (!keys.length) throw new Error("No Adobe apps found in /Applications, so there's nothing to connect.");
-        if (!serverDef(keys[0])) throw new Error("Engine or uv not found — run Setup first.");
+        if (!keys.length) throw new Error(L("No Adobe apps found in /Applications, so there's nothing to connect.", "Nessuna app Adobe in Applicazioni: non c'è niente da collegare."));
+        if (!serverDef(keys[0])) throw new Error(L("Engine or uv not found — run Setup first.", "Motore o uv non trovati — prima premi Configura tutto."));
         connectClient(req.params.id, keys);
         rememberClient(req.params.id, true);
         res.json({ ok: true, connected: keys });
@@ -1857,7 +1878,7 @@ app.post("/api/open/:key", (req, res) => {
     const a = APPS[req.params.key];
     if (!a) return res.status(404).json({ error: "unknown app" });
     const bundle = appBundle(a.appGlob);
-    if (!bundle) return res.status(404).json({ error: `${a.label} isn't installed` });
+    if (!bundle) return res.status(404).json({ error: L(`${a.label} isn't installed`, `${a.label} non è installato`) });
     execFile("/usr/bin/open", ["-a", bundle]);
     focusApp(bundle);
     res.json({ ok: true });
@@ -2188,7 +2209,7 @@ app.post("/api/load-uxp/:key", async (req, res) => {
         // Pressed straight after setup restarted the Developer Tool, its
         // service isn't up for a few seconds: one try failed every time.
         const key = req.params.key;
-        if (!appRunning(key)) throw new Error(`${APPS[key].label} isn't open. Open it, then try again.`);
+        if (!appRunning(key)) throw new Error(L(`${APPS[key].label} isn't open. Open it, then try again.`, `${APPS[key].label} non è aperto. Aprilo e riprova.`));
         if (!udtRunning()) startUdtHidden();
         res.json(await loadWhenReady(key, 5));
     } catch (e) {
@@ -2280,7 +2301,8 @@ async function setupUxp(key, quiet = false) {
     }
     if (!udt) {
         return { ok: true, udtMissing: true, wasClosed,
-                 message: "Install Adobe's free UXP Developer Tool from Creative Cloud, then press Set up again." };
+                 message: L("Install Adobe's free UXP Developer Tool from Creative Cloud, then press Set up again.",
+                            "Installa UXP Developer Tool, gratuito, da Creative Cloud, poi premi di nuovo Configura.") };
     }
     return { ok: true, wasClosed };
 }
@@ -2293,7 +2315,7 @@ async function setupUxp(key, quiet = false) {
 // the window they need is behind the one they are told to ignore.
 app.post("/api/focus-uxp", (_req, res) => {
     const bundle = appBundle(UDT_GLOB);
-    if (!bundle) return res.status(404).json({ error: "The UXP Developer Tool isn't installed." });
+    if (!bundle) return res.status(404).json({ error: L("The UXP Developer Tool isn't installed.", "UXP Developer Tool non è installato.") });
     execFile("/usr/bin/open", ["-a", bundle]);   // launches it if it is closed
     focusApp(bundle);                            // and this is what fronts it
     res.json({ ok: true });
@@ -2351,8 +2373,9 @@ app.post("/api/setup", async (_req, res) => {
         await new Promise((resolve) => ensureVenv(() => resolve()));
         if (!venvReady) {
             return res.status(500).json({
-                error: (venvError || "The Python environment isn't ready.") +
-                       " Nothing was connected, so you won't get silent failures later.",
+                error: (venvError || L("The Python environment isn't ready.", "L'ambiente Python non è pronto.")) +
+                       L(" Nothing was connected, so you won't get silent failures later.",
+                         " Non è stato collegato niente, così non avrai errori silenziosi dopo."),
             });
         }
         // No Accessibility prompt here: it is for Arrange windows only, which
@@ -2370,7 +2393,7 @@ app.post("/api/setup", async (_req, res) => {
                     // CEP reads its panels at launch: an app that is open now
                     // shows nothing until it is reopened.
                     done.push(a.label);
-                    if (appRunning(key) && !panelLive(key)) notes.push(`Reopen ${a.label} to see its panel`);
+                    if (appRunning(key) && !panelLive(key)) notes.push(L(`Reopen ${a.label} to see its panel`, `Riapri ${a.label} per vedere il pannello`));
                 } else {
                     // Nothing is opened. The panel loads by itself the next time
                     // the app is opened; one that is open now gets it loaded here.
@@ -2383,11 +2406,13 @@ app.post("/api/setup", async (_req, res) => {
                         await waitFor(() => udtRunning(), 20);
                         done.push(a.label);
                         try { await loadWhenReady(key, 3); }
-                        catch { notes.push(`Reopen ${a.label} to load its panel`); }
+                        catch { notes.push(L(`Reopen ${a.label} to load its panel`, `Riapri ${a.label} per caricare il pannello`)); }
                     }
                     if (key === "photoshop" && !panelLive(key) && !r.udtMissing) {
-                        notes.push("Photoshop needs Developer Mode on once: Settings \u2192 Plugins "
-                                + "\u2192 Enable Developer Mode, then reopen it");
+                        notes.push(L("Photoshop needs Developer Mode on once: Settings \u2192 Plugins "
+                                + "\u2192 Enable Developer Mode, then reopen it",
+                                "Photoshop vuole la modalità sviluppatore attiva, una volta sola: Impostazioni "
+                                + "\u2192 Plug-in \u2192 Abilita modalità sviluppatore, poi riaprilo"));
                     }
                 }
             } catch (e) {
@@ -2397,8 +2422,10 @@ app.post("/api/setup", async (_req, res) => {
         // Once, after every app is registered, rather than stopping at the first.
         if (udtMissing.length) {
             openUdtHelp();
-            todo.push(`${udtMissing.join(", ")} need${udtMissing.length > 1 ? "" : "s"} Adobe's free `
-                    + "UXP Developer Tool. Its download page is open \u2014 install it, then press Set up again");
+            todo.push(L(`${udtMissing.join(", ")} need${udtMissing.length > 1 ? "" : "s"} Adobe's free `
+                    + "UXP Developer Tool. Its download page is open \u2014 install it, then press Set up again",
+                    `Per ${udtMissing.join(", ")} serve UXP Developer Tool, gratuito, di Adobe. `
+                    + "La pagina per scaricarlo è aperta \u2014 installalo, poi premi di nuovo Configura tutto"));
         }
         const keys = registerableApps();
         const wired = [];
@@ -2417,9 +2444,12 @@ app.post("/api/setup", async (_req, res) => {
         // happened, then anything still outstanding. The old single string put
         // four clauses in one paragraph and ended "panel..", because the
         // messages being joined already had their own full stops.
+        const and = (list) => new Intl.ListFormat(L("en", "it")).format(list);
+        const incomplete = !done.length && (todo.length || failed.length) > 0;
         const title = done.length
-            ? `${new Intl.ListFormat("en").format(done)} ready`
-            : (todo.length || failed.length ? "Setup didn't finish" : "Nothing to set up");
+            ? L(`${and(done)} ready`, `${and(done)}: ${done.length > 1 ? "pronti" : "pronto"}`)
+            : incomplete ? L("Setup didn't finish", "Configurazione non completata")
+                : L("Nothing to set up", "Niente da configurare");
         const rest = [...todo, ...failed, ...notes].map((t) => String(t).replace(/\.$/, ""));
         // Name only the assistants that are there, and say so when none is.
         const names = [Object.keys(CLIENTS).some((id) => id !== "codex" && clientInstalled(id)) && "Claude",
@@ -2427,9 +2457,13 @@ app.post("/api/setup", async (_req, res) => {
         const body = rest.length
             ? rest.join(". ") + "."
             : names.length
-                ? `Restart ${names.join(" and ")} and ${names.length > 1 ? "they" : "it"} can drive your apps.`
-                : "Now install Claude or ChatGPT — the buttons are on this page — and press Set up again.";
-        res.json({ ok: true, title, body, restart: wired.length > 0,
+                ? L(`Restart ${and(names)} and ${names.length > 1 ? "they" : "it"} can drive your apps.`,
+                    `Riavvia ${and(names)} e ${names.length > 1 ? "potranno" : "potrà"} usare le tue app.`)
+                : L("Now install Claude or ChatGPT — the buttons are on this page — and press Set up again.",
+                    "Ora installa Claude o ChatGPT — i pulsanti sono in questa pagina — e premi di nuovo Configura tutto.");
+        // The page reads these rather than matching words that are now in two languages.
+        res.json({ ok: true, title, body, incomplete, onlyRestart: !rest.length && names.length > 0,
+                   restart: wired.length > 0,
                    message: `${title}. ${body}`, done, todo, wired, failed });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -2477,7 +2511,7 @@ app.post("/api/rebuild-python", (_req, res) => {
     try {
         fs.rmSync(VENV, { recursive: true, force: true });
     } catch (e) {
-        return res.status(500).json({ error: "Couldn't remove the old environment: " + e.message });
+        return res.status(500).json({ error: L("Couldn't remove the old environment: ", "Non riesco a rimuovere il vecchio ambiente: ") + e.message });
     }
     venvReady = false;
     venvError = null;
@@ -2496,6 +2530,14 @@ app.post("/api/quit", (_req, res) => {
             (err) => { if (err) process.exit(0); });   // no wrapper (dev run): just stop
         setTimeout(() => process.exit(0), 3000);
     }, 200);
+});
+
+// The two pages learn their language from <html lang>, set here, so their
+// first paint is already in it.
+app.get(["/", "/index.html", "/help.html"], (req, res) => {
+    const file = req.path === "/help.html" ? "help.html" : "index.html";
+    res.set("Cache-Control", "no-store").type("html")
+        .send(fs.readFileSync(path.join(HERE, file), "utf8").replace('<html lang="en">', `<html lang="${L("en", "it")}">`));
 });
 
 // No caching: the control window is a long-lived WKWebView, and a cached
