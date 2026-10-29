@@ -2257,19 +2257,22 @@ async function setupUxp(key, quiet = false) {
     ws.plugins.push({ manifestPath: manifest, pluginOptions: { breakOnStart: false }, hostParam: UDT_HOST[key] });
     writeJSON(UDT_WORKSPACE, ws);
 
-    // Open the host app now, so it is ready by the time they reach Load.
+    // The tool first, then the app: the app only joins a Developer Tool that
+    // was already running when it started, so this order needs no restart.
+    const udt = appBundle(UDT_GLOB);
+    if (udt) {
+        if (quiet) startUdtHidden(); else execFile("/usr/bin/open", ["-a", udt]);
+    }
     const wasClosed = !appRunning(key);
     if (wasClosed && !quiet) {
+        await waitFor(() => udtRunning(), 15);
         const bundle = appBundle(APPS[key].appGlob);
         if (bundle) execFile("/usr/bin/open", ["-a", bundle]);
     }
-
-    const udt = appBundle(UDT_GLOB);
     if (!udt) {
         return { ok: true, udtMissing: true, wasClosed,
                  message: "Install Adobe's free UXP Developer Tool from Creative Cloud, then press Set up again." };
     }
-    if (quiet) startUdtHidden(); else execFile("/usr/bin/open", ["-a", udt]);
     return { ok: true, wasClosed };
 }
 

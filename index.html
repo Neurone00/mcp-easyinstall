@@ -415,8 +415,10 @@ function toast(msg, restart) {
 // trap, the Esc key and the backdrop for free.
 const wizEl = document.getElementById("wizard");
 
+let wizKey = null;   // the app the open guide is for, so render() can close it
 function wizard(a, steps) {
   let i = 0;
+  wizKey = a.key;
   const [bg, fg] = TINT[a.key].split(",");
 
   function draw() {
@@ -733,6 +735,14 @@ function render() {
   document.getElementById("codex-ok").hidden =
     !(firstRun && gpt && gpt.installed !== false && !state.codexNetwork);
 
+  // The guide's job is done the moment its app connects, whichever step it is
+  // on: leaving it open asked people to restart an app that was already ready.
+  if (wizEl.open && wizKey && state.apps.some((x) => x.key === wizKey && x.live)) {
+    const done = state.apps.find((x) => x.key === wizKey);
+    wizKey = null;
+    wizEl.close();
+    toast(`${done.label} is ready.`);
+  }
   const live = state.apps.filter((a) => a.live).length;
   const wired = state.clients.filter((c) => c.connected.length).length;
   const anyApp = state.apps.some((a) => a.installed);
@@ -868,7 +878,10 @@ document.addEventListener("click", async (e) => {
       // Photoshop has a Developer Mode switch; Premiere has none and asks when
       // a load is attempted. Either way the app has to have STARTED after the
       // Developer Tool, or it never connects to it and shows no row at all.
-      steps.push(a.key === "photoshop"
+      // Photoshop needs Developer Mode whichever way it started. The others only
+      // need a restart if they were already running before the tool: one we
+      // just opened started after it, and joins by itself.
+      if (a.key === "photoshop" || !r.wasClosed) steps.push(a.key === "photoshop"
         ? { text: "In Photoshop: <b>Photoshop \u2192 Settings \u2192 Plugins</b>, and turn on "
               + "<b>Enable Developer Mode</b>.",
             sub: "Already on? Go straight on. If you just turned it on, quit "
