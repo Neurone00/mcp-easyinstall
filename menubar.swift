@@ -76,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// click, so the button's own action never runs and there is no way to
     /// tell a click on the icon from a click that opened a menu.
     var menu: NSMenu!
+    var updateItem: NSMenuItem!
     var hub: Process?
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -113,6 +114,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Open Control Panel",
                                 action: #selector(openPanel), keyEquivalent: "o"))
+        // Shown only while a newer version is out; see watchForUpdate.
+        updateItem = NSMenuItem(title: "Update", action: #selector(updateNow), keyEquivalent: "")
+        updateItem.isHidden = true
+        menu.addItem(updateItem)
         menu.addItem(.separator())
         // The log is the app's only diagnostic and was named nowhere in the UI.
         menu.addItem(NSMenuItem(title: "Open in Browser",
@@ -135,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         watchForPermissionRequests()
         watchForArrangeRequests()
         watchForFocusRequests()
+        watchForUpdate()
 
         // Start with the Mac. Without it nothing ran after a restart until
         // someone opened the app, so the assistants' Adobe tools quietly failed
@@ -528,6 +534,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             openPanel()
         }
+    }
+
+    /// Updates install themselves after an hour unused; this is the way to do
+    /// it now when one hasn't. The hub's status says whether there is one.
+    func watchForUpdate() {
+        Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            guard let url = URL(string: "http://127.0.0.1:3001/api/status") else { return }
+            URLSession.shared.dataTask(with: url) { data, _, _ in
+                let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+                let version = (json?["update"] as? [String: Any])?["version"] as? String
+                DispatchQueue.main.async {
+                    self?.updateItem.isHidden = version == nil
+                    if let v = version { self?.updateItem.title = "Update to \(v)" }
+                }
+            }.resume()
+        }.fire()
+    }
+
+    /// The control panel's "Update and restart": downloads first if the
+    /// background download never happened, then installs and relaunches.
+    @objc func updateNow() {
+        updateItem.title = "Updating\u{2026}"
+        var req = URLRequest(url: URL(string: "http://127.0.0.1:3001/api/update")!)
+        req.httpMethod = "POST"
+        URLSession.shared.dataTask(with: req).resume()
     }
 
     @objc func openLog() {
