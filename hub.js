@@ -1127,7 +1127,7 @@ async function checkForUpdate() {
                       // Only fall back to an unlabelled zip; never to one that
                       // explicitly names the other architecture.
                       zips.find((a) => !/arm64|aarch64|x64|x86_64|intel/i.test(a.name));
-        update = (latest && asset && isNewer(latest, VERSION))
+        update = (latest && asset && isNewer(latest, VERSION) && latest !== failedUpdate())
             ? { version: latest, url: asset.browser_download_url, notes: d.body || "" }
             : null;
     } catch {
@@ -1160,6 +1160,10 @@ let autoUpdateAt = 0;
 let staged = null;                                          // { version, path }
 const STAGED_DIR = path.join(SUPPORT, "staged-update");
 const UPDATE_READY = path.join(SUPPORT, "update-ready");    // the menu bar app watches this
+// Written by the swap when it couldn't replace the app: that version is not
+// offered again (a newer one is), and the failure is reported once.
+const UPDATE_FAILED = path.join(SUPPORT, "update-failed");
+const failedUpdate = () => { try { return fs.readFileSync(UPDATE_FAILED, "utf8").trim(); } catch { return ""; } };
 
 // The override. The admin page writes a timestamp to the Worker; when it is
 // newer than the last one this process saw, the six-hour cache is dropped and
@@ -1273,17 +1277,21 @@ function applyUpdate() {
         ...(process.env.ADOBE_MCP_SUPERVISED === "1" && process.ppid !== 1
             ? [`kill ${process.ppid} 2>/dev/null; while kill -0 ${process.ppid} 2>/dev/null; do sleep 0.3; done`]
             : []),
-        `OLD=${q(bundle + ".old")}`,
-        `rm -rf "$OLD"`,
-        // Can't move it (permissions): drop the download and reopen this
-        // version, or every launch would try again and quit.
-        `mv ${q(bundle)} "$OLD" || { rm -rf ${q(tmp)} ${q(UPDATE_READY)}; /usr/bin/open ${q(bundle)}; exit 1; }`,
-        `if /usr/bin/ditto ${q(staged.path)} ${q(bundle)}; then`,
+        // Swap Contents, not the bundle: renaming the bundle needs write access
+        // to /Applications, which a standard (non-admin) user doesn't have, so
+        // on their Macs every update reopened the old version and the banner
+        // came straight back. The bundle itself is theirs (the .pkg hands it over).
+        `C=${q(bundle + "/Contents")}`,
+        `rm -rf "$C.old"`,
+        // Can't move it either: drop the download, remember the version so it
+        // isn't fetched and offered again, and reopen this one.
+        `mv "$C" "$C.old" || { echo ${q(staged.version)} > ${q(UPDATE_FAILED)}; rm -rf ${q(tmp)} ${q(UPDATE_READY)}; /usr/bin/open ${q(bundle)}; exit 1; }`,
+        `if /usr/bin/ditto ${q(staged.path + "/Contents")} "$C"; then`,
         `  /usr/bin/xattr -cr ${q(bundle)}`,
-        `  rm -rf "$OLD"`,
+        `  rm -rf "$C.old"`,
         `else`,
-        `  rm -rf ${q(bundle)}`,
-        `  mv "$OLD" ${q(bundle)}`,   // put the working version back
+        `  rm -rf "$C"`,
+        `  mv "$C.old" "$C"`,   // put the working version back
         `fi`,
         `/usr/bin/open ${q(bundle)}`,
         `rm -rf ${q(tmp)} ${q(UPDATE_READY)}`,
@@ -2619,6 +2627,12 @@ server.listen(PORT, "127.0.0.1", () => {
     // item, or reopening the app. The hub never opens a tab on its own.
     console.log(`Moskito Easy MCP ${VERSION}  \u2192  ${URL}`);
     fs.mkdirSync(SUPPORT, { recursive: true });
+    const failed = failedUpdate();
+    if (failed && (() => { try { return fs.readFileSync(UPDATE_FAILED + "-reported", "utf8"); } catch { return ""; } })() !== failed) {
+        noteFailure("app", "update", "", `Update to ${failed} failed: couldn't replace the app (owner ${
+            fs.statSync(path.resolve(HERE, "..", "..")).uid === process.getuid() ? "is" : "is not"} this user)`);
+        fs.writeFileSync(UPDATE_FAILED + "-reported", failed);
+    }
     // The .pkg installer leaves this marker: the person double-clicked an
     // installer and expects to be done, so open the window and let it press
     // "Set everything up" itself (index.html). One shot — the marker goes now.
