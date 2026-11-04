@@ -18,6 +18,7 @@
     --accent: #2855ff;
     --accent-soft: #dfe6ff;
     --warn: #b4530a;
+    --c-code: #7c3aed; --c-gpt: #15935a; --c-none: #b7c0cf;
     --shadow: 0 1px 2px rgba(16, 20, 31, .05), 0 10px 28px rgba(16, 20, 31, .05);
   }
   @media (prefers-color-scheme: dark) {
@@ -32,6 +33,7 @@
       --accent: #8098ff;
       --accent-soft: #232a45;
       --warn: #e09a4e;
+      --c-code: #a98bf5; --c-gpt: #4cc38a; --c-none: #4a5265;
       --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 28px rgba(0, 0, 0, .28);
     }
   }
@@ -40,6 +42,7 @@
     --ground: #0e1016; --card: #171a22; --ink: #eef1f7; --soft: #98a3b8;
     --faint: #858fa2; --line: #262b36; --accent: #8098ff; --accent-soft: #232a45;
     --warn: #e09a4e;
+    --c-code: #a98bf5; --c-gpt: #4cc38a; --c-none: #4a5265;
     --shadow: 0 1px 2px rgba(0, 0, 0, .35), 0 10px 28px rgba(0, 0, 0, .28);
   }
 
@@ -125,6 +128,32 @@
                   color: var(--faint); font-weight: 620; padding-block: 9px; }
   .ptable .head .num { color: var(--faint); font-size: 11px; }
   .old { color: var(--warn); font-weight: 600; }
+  /* A Mac's bar split by assistant; the row opens to show where its commands went. */
+  .bar > span { display: flex; gap: 2px; height: 100%; }
+  .bar > span > i { min-width: 3px; }
+  .chat { background: var(--accent) !important; } .code { background: var(--c-code) !important; }
+  .gpt { background: var(--c-gpt) !important; } .none { background: var(--c-none) !important; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .sub .src { margin-right: 12px; white-space: nowrap; }
+  .person { border-top: 1px solid var(--line); }
+  .person > summary { list-style: none; cursor: pointer; }
+  .person > summary::-webkit-details-marker { display: none; }
+  .person > summary .row { border-top: 0; }
+  .person > summary:hover { background: var(--ground); }
+  .person > summary .name > div:first-child::before { content: "\25B8  "; color: var(--faint); }
+  .person[open] > summary .name > div:first-child::before { content: "\25BE  "; }
+  .pdet { display: grid; grid-template-columns: 1fr 1.3fr 1.4fr; gap: 14px 28px; padding: 4px 17px 16px; }
+  .pdet h3 { margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+             color: var(--faint); font-weight: 620; }
+  .pdet p { display: flex; justify-content: space-between; gap: 10px; margin: 0; padding: 3px 0;
+            font-size: 13px; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .pdet p > span:last-child { white-space: nowrap; color: var(--ink); }
+  .pdet small { color: var(--faint); font-size: 12px; margin-left: 4px; }
+  .pdet .wide { grid-column: 1 / -1; }
+  .pdet .wide p { display: block; }
+  .pdet .wide p > span:last-child { display: block; white-space: normal; color: var(--soft);
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 12px; }
+  @media (max-width: 640px) { .pdet { grid-template-columns: 1fr; } }
   details.more > summary { cursor: pointer; padding: 11px 17px; border-top: 1px solid var(--line);
                            color: var(--soft); font-size: 14px; list-style: none; }
   details.more > summary::-webkit-details-marker { display: none; }
@@ -179,6 +208,13 @@
   .elog:first-child { border-top: 0; }
   .elog .top { display: flex; gap: 10px; justify-content: space-between; font-size: 13.5px; }
   .elog .top span:last-child { color: var(--faint); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .elog > summary { list-style: none; cursor: pointer; }
+  .elog > summary::-webkit-details-marker { display: none; }
+  .elog > summary .top span:first-child::before { content: "\25B8  "; color: var(--faint); }
+  .elog[open] > summary .top span:first-child::before { content: "\25BE  "; }
+  .elog .sub { margin-top: 3px; }
+  .elog .occ { font-size: 12.5px; color: var(--soft); padding: 3px 0 0 14px; font-variant-numeric: tabular-nums; }
+  .elog .occ:first-of-type { margin-top: 6px; }
   .elog .msg { margin-top: 4px; font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
                font-size: 12.5px; color: var(--warn); overflow-wrap: anywhere; }
   .unknown { padding: 10px 17px; border-top: 1px solid var(--line); font-size: 13px; color: var(--faint); }
@@ -270,6 +306,8 @@
   const esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
   const utc = (t) => new Date(String(t).replace(" ", "T") + (String(t).includes("Z") ? "" : "Z"));
   const short = (d) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const when = (t) => { const w = new Date(t);
+    return `${short(w)}, ${w.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`; };
   function ago(t) {
     if (!t) return "never";
     const days = Math.floor((Date.now() - utc(t)) / 864e5);
@@ -289,10 +327,10 @@
     unknown: "Unlabelled config",
   };
   // "photoshop.create_pixel_layer" -> "Photoshop · create pixel layer"
+  const what = (tool) => /^execute_/.test(tool) ? "custom script" : tool.replace(/_/g, " ");
   function command(id) {
     const [app, tool = ""] = String(id).split(".");
-    const what = /^execute_/.test(tool) ? "custom script" : tool.replace(/_/g, " ");
-    return `${APP_NAMES[app] || app} \u00b7 ${what}`;
+    return `${APP_NAMES[app] || app} \u00b7 ${what(tool)}`;
   }
 
   function row(name, calls, max, right) {
@@ -339,22 +377,60 @@
     return t;
   }
 
-  function personRow(p, latest, max) {
+  // Where a Mac's commands came from, biggest first; what no assistant claimed is "?".
+  const ASSIST = { "claude-desktop": "chat", "claude-code": "code", codex: "gpt" };
+  const source = (k) => k === "?" ? "Not reported" : APP_NAMES[k] || k;
+  const dot = (k) => `<i class="dot ${ASSIST[k] || "none"}"></i>`;
+  function sources(p) {
+    const s = Object.entries(p.assistants || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]);
+    const rest = p.calls - s.reduce((n, [, c]) => n + c, 0);
+    if (rest > 0) s.push(["?", rest]);
+    return s;
+  }
+
+  function personRow(p, latest, max, errs) {
     const failed = p.calls ? (p.errors / p.calls) * 100 : 0;
     const v = p.version || "?";
-    const r = row(p.name || `Unnamed \u00b7 ${p.id}`, p.calls, max, [
+    const r = row(p.name || `Unnamed · ${p.id}`, p.calls, max, [
       `<span class="${latest && older(v, latest) ? "old" : ""}">${esc(v)}</span>`,
       ago(p.lastUsed),
       `<b>${num(p.calls)}</b>`,
       `<span class="opt">${p.days}</span>`,
-      `<span class="opt">${failed > 0 ? `<span class="fail">${failed.toFixed(0)}%</span>` : "\u2014"}</span>`,
+      `<span class="opt">${failed > 0 ? `<span class="fail">${failed.toFixed(0)}%</span>` : "—"}</span>`,
     ]);
-    // Which assistant(s) their commands came from; none means unlabelled.
-    const who = Object.entries(p.assistants || {}).sort((a, b) => b[1] - a[1])
-      .map(([k]) => APP_NAMES[k] || k).join(", ");
-    if (p.calls) r.querySelector(".name").insertBefore(Object.assign(document.createElement("div"),
-      { className: "sub", textContent: who || "Assistant not reported" }), r.querySelector(".bar"));
-    return r;
+    if (!p.calls) return r;
+    const src = sources(p);
+    const bar = r.querySelector(".bar");
+    bar.innerHTML = `<span style="width:${bar.firstChild.style.width}">`
+      + src.map(([k, n]) => `<i class="${ASSIST[k] || "none"}" style="flex:${n}"></i>`).join("") + "</span>";
+    r.querySelector(".name").insertBefore(Object.assign(document.createElement("div"), { className: "sub",
+      innerHTML: src.map(([k, n]) => `<span class="src">${dot(k)}${esc(source(k))} ${num(n)}</span>`).join("") }), bar);
+    const det = document.createElement("details");
+    det.className = "person";
+    det.appendChild(document.createElement("summary")).appendChild(r);
+    det.appendChild(personDetail(p, src, errs));
+    return det;
+  }
+
+  // Opened row: by assistant, by app, most used commands, latest failures.
+  function personDetail(p, src, errs) {
+    const line = (l, r) => `<p><span>${l}</span><span>${r}</span></p>`;
+    const share = (n) => `${num(n)}<small>${Math.round((n / p.calls) * 100)}%</small>`;
+    const col = (title, lines, cls = "") => `<div class="${cls}"><h3>${title}</h3>${lines.join("")
+      || "<p>Not reported by this version</p>"}</div>`;
+    const apps = Object.entries(p.apps || {}).sort((a, b) => b[1].calls - a[1].calls);
+    const tools = Object.entries(p.tools || {}).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const mine = errs.filter((e) => e.id === p.id).slice(0, 5);
+    const box = document.createElement("div");
+    box.className = "pdet";
+    box.innerHTML = col("Assistant", src.map(([k, n]) => line(dot(k) + esc(source(k)), share(n))))
+      + col("App", apps.map(([k, a]) => line(esc(APP_NAMES[k] || k), share(a.calls)
+        + (a.errors ? ` <span class="fail">${num(a.errors)} failed</span>` : ""))))
+      + col("Most used", tools.map(([k, n]) => line(esc(command(k)), num(n))))
+      + (mine.length ? col("Latest failures", mine.map((e) => line(
+        esc(`${when(e.at)} · ${APP_NAMES[e.app] || e.app}${e.tool ? " · " + what(e.tool) : ""}`),
+        esc(e.message || e.type || ""))), "wide") : "");
+    return box;
   }
 
   async function load() {
@@ -435,12 +511,12 @@
       head.classList.add("head");
       head.querySelector(".bar").remove();
       box.appendChild(head);
-      for (const p of used) box.appendChild(personRow(p, latest, max));
+      for (const p of used) box.appendChild(personRow(p, latest, max, d.errors || []));
       if (idle.length) {
         const det = document.createElement("details");
         det.className = "more";
         det.innerHTML = `<summary>Installed, never used (${idle.length})</summary>`;
-        for (const p of idle) det.appendChild(personRow(p, latest, max));
+        for (const p of idle) det.appendChild(personRow(p, latest, max, d.errors || []));
         box.appendChild(det);
       }
       if (!people.length) box.appendChild(empty());
@@ -460,29 +536,43 @@
       if (unknown > 0) $("clients").appendChild(Object.assign(document.createElement("div"),
         { className: "unknown", textContent: `${plural(unknown, "more command")} didn't say which assistant sent them. People shows whose.` }));
 
-      // The failure log: newest first, fifteen showing.
+      // The failure log: one row per problem (same app, same message), newest
+      // first, five showing. The single failures are one click away.
       const errs = d.errors || [];
       const elog = $("errlog");
       elog.replaceChildren();
-      const entry = (e) => {
-        const div = document.createElement("div");
-        div.className = "elog";
-        const when = new Date(e.at);
-        div.innerHTML = `<div class="top"><span></span><span>${short(when)}, `
-          + `${when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span></div><div class="msg"></div>`;
-        div.querySelector(".top span").textContent = `${e.name || "Unnamed \u00b7 " + e.id} \u00b7 `
-          + (e.tool ? command(`${e.app}.${e.tool}`) : APP_NAMES[e.app] || e.app);
-        div.querySelector(".msg").textContent = e.message || e.type || "No message";
-        return div;
+      const who = (e) => e.name || "Unnamed \u00b7 " + e.id;
+      const groups = new Map();
+      for (const e of errs) {   // already newest first, so each group's first entry is its latest
+        const k = `${e.app}\n${e.message || e.type}`;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k).push(e);
+      }
+      const problem = (list) => {
+        const e = list[0];
+        const det = document.createElement("details");
+        det.className = "elog";
+        const tools = [...new Set(list.map((x) => x.tool && what(x.tool)).filter(Boolean))];
+        const macs = [...new Set(list.map(who))];
+        det.innerHTML = `<summary><div class="top"><span></span><span></span></div><div class="msg"></div>`
+          + `<div class="sub"></div></summary>`;
+        det.querySelector(".top span").textContent = [APP_NAMES[e.app] || e.app, ...tools].join(" \u00b7 ");
+        det.querySelector(".top span:last-child").textContent = `${list.length > 1 ? list.length + "\u00d7 \u00b7 " : ""}${when(e.at)}`;
+        det.querySelector(".msg").textContent = e.message || e.type || "No message";
+        det.querySelector(".sub").textContent = macs.join(", ");
+        for (const x of list) det.appendChild(Object.assign(document.createElement("div"), { className: "occ",
+          textContent: `${when(x.at)} \u00b7 ${who(x)}${x.tool ? " \u00b7 " + what(x.tool) : ""} \u00b7 ${x.version || "?"}` }));
+        return det;
       };
-      if (!errs.length) elog.appendChild(Object.assign(document.createElement("div"), { className: "empty",
+      const all = [...groups.values()];
+      if (!all.length) elog.appendChild(Object.assign(document.createElement("div"), { className: "empty",
         textContent: "No failures logged in this period. The log starts with Macs on 2.55.0." }));
-      for (const e of errs.slice(0, 15)) elog.appendChild(entry(e));
-      if (errs.length > 15) {
+      for (const g of all.slice(0, 5)) elog.appendChild(problem(g));
+      if (all.length > 5) {
         const det = document.createElement("details");
         det.className = "more";
-        det.innerHTML = `<summary>${errs.length - 15} older</summary>`;
-        for (const e of errs.slice(15)) det.appendChild(entry(e));
+        det.innerHTML = `<summary>${plural(all.length - 5, "more problem")}</summary>`;
+        for (const g of all.slice(5)) det.appendChild(problem(g));
         elog.appendChild(det);
       }
 

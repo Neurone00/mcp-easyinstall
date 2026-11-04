@@ -52,7 +52,7 @@ export default {
       const { from, to, lo, hi } = range(url);
       const W = `at >= ?1 AND at < ?2 AND install NOT IN ${TESTS}`;
       const all = (q) => env.DB.prepare(q).bind(lo, hi).all().then((r) => r.results || []);
-      const [data, counted, people, clients, daily, errlog, latest, pushed] = await Promise.all([
+      const [data, counted, people, clients, detail, daily, errlog, latest, pushed] = await Promise.all([
         all(`SELECT name, kind, SUM(calls) AS calls, SUM(errors) AS errors, SUM(bytes) AS bytes,
                     SUM(script_errors) AS scriptErrors
              FROM rows WHERE ${W} AND kind IN ('app', 'client', 'tool', 'errtype')
@@ -66,6 +66,10 @@ export default {
              FROM rows WHERE ${W} AND kind IN ('install', 'app') GROUP BY install, kind, mac, version`),
         all(`SELECT install AS id, name AS client, SUM(calls) AS calls
              FROM rows WHERE ${W} AND kind = 'client' GROUP BY install, name`),
+        // Each install's apps and commands, for the detail under its row.
+        all(`SELECT install AS id, kind, name, SUM(calls) AS calls,
+                    SUM(errors) + SUM(script_errors) AS errors
+             FROM rows WHERE ${W} AND kind IN ('app', 'tool') GROUP BY install, kind, name`),
         all(`SELECT day, SUM(calls) AS calls, COUNT(DISTINCT install) AS people
              FROM rows WHERE ${W} AND kind = 'app' GROUP BY day ORDER BY day`),
         all(`SELECT at, name AS app, version, mac AS name, tool, type, message, client, install AS id
@@ -88,7 +92,7 @@ export default {
         clients: data.filter((d) => d.kind === "client").map(shape),
         errorTypes: data.filter((d) => d.kind === "errtype").map(shape),
         tools: data.filter((d) => d.kind === "tool").map(shape),
-        people: peopleOf(people, clients),
+        people: peopleOf(people, clients, detail),
         errors: errlog.map((e) => ({ at: Number(e.at) || 0, app: e.app, version: e.version,
           name: e.name, tool: e.tool, type: e.type, message: e.message, client: e.client,
           id: String(e.id).slice(0, 6) })),
@@ -121,13 +125,13 @@ function range(url) {
   return { from, to, lo: Date.parse(from), hi: Date.parse(to) + 864e5 };
 }
 
-function peopleOf(rows, clients) {
+function peopleOf(rows, clients, detail) {
   const by = {};
   const iso = (ms) => (ms ? new Date(Number(ms)).toISOString() : "");
   for (const r of rows) {
     const p = by[r.id] || (by[r.id] = { id: String(r.id).slice(0, 6), name: "", version: "",
                                        last: "", lastUsed: "", calls: 0, errors: 0, tokens: 0, days: 0,
-                                       assistants: {} });
+                                       assistants: {}, apps: {}, tools: {} });
     const last = iso(r.last);
     if (r.kind === "install") {
       // Several rows when the install changed name or version: keep the newest.
@@ -147,6 +151,12 @@ function peopleOf(rows, clients) {
   // Which assistant each install's commands came from, so an unlabelled one shows.
   for (const c of clients) {
     if (by[c.id]) by[c.id].assistants[c.client] = (by[c.id].assistants[c.client] || 0) + (Number(c.calls) || 0);
+  }
+  for (const d of detail) {
+    const p = by[d.id];
+    if (!p || !(Number(d.calls) > 0)) continue;
+    if (d.kind === "app") p.apps[d.name] = { calls: Number(d.calls), errors: Number(d.errors) || 0 };
+    else p.tools[d.name] = Number(d.calls);
   }
   for (const p of Object.values(by)) delete p.namedAt;
   return Object.values(by).sort((a, b) => b.calls - a.calls || (b.last > a.last ? 1 : -1));
