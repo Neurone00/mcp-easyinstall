@@ -712,6 +712,11 @@ function installPanel(key) {
 // at launch (see panel-starter.html), but it runs every script in the per-user
 // Scripts/Startup folder of each version it has been opened as. Opening the
 // panel's menu item when it is already open leaves it open.
+// So does aerendercore, the windowless After Effects that Premiere and Media
+// Encoder start through Dynamic Link to show an AE comp: there a menu command
+// crashes it (CEggApp::UpdateMenus), Dynamic Link restarts it, and it crashes
+// again every ~10 s, taking the comps offline. RENDER_ENGINE keeps it out.
+const RENDER_ENGINE = "(app.isRenderEngine || /aerendercore/i.test(Folder.appPackage.fsName))";
 const AE_PREFS = path.join(HOME, "Library", "Preferences", "Adobe", "After Effects");
 function aeStartupScript(on) {
     let versions = [];
@@ -721,9 +726,10 @@ function aeStartupScript(on) {
         try {
             if (!on) { fs.rmSync(file, { force: true }); continue; }
             fs.mkdirSync(path.dirname(file), { recursive: true });
-            fs.writeFileSync(file, "// Moskito Easy MCP: open its panel when After Effects starts.\n" +
-                "app.scheduleTask('var id = app.findMenuCommandId(\"Moskito Easy MCP\"); " +
-                "if (id) app.executeCommand(id);', 5000, false);\n");
+            fs.writeFileSync(file, "// Moskito Easy MCP: open its panel when After Effects starts,\n" +
+                "// never in the Dynamic Link render engine (it crashes there).\n" +
+                `if (!${RENDER_ENGINE}) app.scheduleTask('var id = app.findMenuCommandId("Moskito Easy MCP"); ` +
+                `if (id && !${RENDER_ENGINE}) app.executeCommand(id);', 5000, false);\n`);
         } catch { /* that version's folder isn't writable: the panel opens by hand */ }
     }
 }

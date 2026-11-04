@@ -1,6 +1,11 @@
 <!doctype html>
 <!-- Moskito Easy MCP: an invisible extension that starts with the Adobe app and
      opens the visible panel, so nobody has to find it in Window > Extensions.
-     It stays running, so it fires once per launch, not on every app switch. -->
+     It stays running, so it fires once per launch, not on every app switch.
+     Not inside aerendercore, the windowless After Effects that Premiere starts
+     through Dynamic Link: a panel there takes commands meant for the real one. -->
 <script src="./lib/CSInterface.js"></script>
-<script>var cs = new CSInterface(); cs.requestOpenExtension(cs.getExtensionID().replace(/\.starter$/, ".mcp"), "");</script>
+<script>var cs = new CSInterface();
+cs.evalScript("String(app.isRenderEngine === true || /aerendercore/i.test(Folder.appPackage.fsName))", function (r) {
+  if (r !== "true") cs.requestOpenExtension(cs.getExtensionID().replace(/\.starter$/, ".mcp"), "");
+});</script>

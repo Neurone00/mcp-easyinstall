@@ -524,7 +524,9 @@ if [ "${1:-}" = "--release" ]; then
   else
     say "Publishing release v$VER"
     git tag -f "v$VER" && git push -q --force origin "v$VER"
-    gh release create "v$VER" "$ZIP" "$DMG" "$PKG" --title "Moskito Easy MCP $VER" --generate-notes
+    # PRERELEASE=1 holds it back: the apps' update check reads releases/latest,
+    # which skips pre-releases. Promote with: gh release edit vX --prerelease=false --latest
+    gh release create "v$VER" "$ZIP" "$DMG" "$PKG" --title "Moskito Easy MCP $VER" --generate-notes ${PRERELEASE:+--prerelease}
   fi
   say "Released v$VER"
 fi
