@@ -148,6 +148,12 @@
     "  background:transparent;border-color:transparent;font-weight:500}",
     ".amcp-sheet .menuitem:hover{background:var(--a-line)}",
     ".amcp-sheet label{display:flex;gap:7px;align-items:flex-start;cursor:pointer}",
+    // Shown only while disconnected: people couldn't find Connect inside ⋯.
+    ".amcp-connect{margin:0 0 10px}",
+    ".amcp-connect[hidden]{display:none}",
+    ".amcp .amcp-connect button{width:100%;margin:0 0 8px;background:var(--a-accent);",
+    "  border-color:var(--a-accent);color:#fff}",
+    ".amcp-connect label{display:flex;gap:7px;align-items:flex-start;cursor:pointer;font-size:11px}",
   ].join("");
   document.head.appendChild(css);
   applyTheme();
@@ -398,6 +404,15 @@
   moreSheet.appendChild(menuItem(L("Open the control panel in a browser", "Apri il pannello di controllo nel browser"), function () { openUrl(HUB); }));
   moreSheet.appendChild(autoLabel);
 
+  // While disconnected, Connect and the launch preference sit at the top of
+  // the panel; once connected they go back into ⋯ (see syncStatus).
+  var connectCard = document.createElement("div");
+  connectCard.className = "amcp-connect";
+  var connectNow = document.createElement("button");
+  connectNow.textContent = L("Connect", "Collega");
+  connectNow.onclick = function () { if (connectBtn) connectBtn.click(); };
+  connectCard.appendChild(connectNow);
+
   /* ----------------------------------------------------------------- log -- */
 
   // The log stays — it is genuinely useful when something is wrong — but it
@@ -587,6 +602,9 @@
     var connected = txt === "Connected";
     if (statusMirror) statusMirror.textContent = connected ? "Collegato" : "Scollegato";
     connLabel.textContent = connected ? L("Disconnect", "Scollega") : L("Connect", "Collega");
+    connectCard.hidden = connected;
+    var autoHome = connected ? moreSheet : connectCard;
+    if (autoLabel.parentNode !== autoHome) autoHome.appendChild(autoLabel);
     // This line is owned by syncStatus, so it has to clear it too — otherwise
     // "Not connected" sat there stale long after the panel had connected.
     var mine = activity.getAttribute("data-owner") === "status";
@@ -594,7 +612,7 @@
       if (!activity.textContent || mine) {
         activity.setAttribute("data-owner", "status");
         activity.innerHTML = "<span class='spin' style='background:var(--a-soft)'></span>" +
-                             "<span>" + L("Not connected — ⋯ › Connect", "Non collegato — ⋯ › Collega") + "</span>";
+                             "<span>" + L("Not connected", "Non collegato") + "</span>";
       }
     } else if (mine) {
       activity.removeAttribute("data-owner");
@@ -609,6 +627,7 @@
   // The icon row goes FIRST in the panel, but it is built further down, so it
   // is inserted rather than appended.
   ui.insertBefore(foot, ui.firstChild);
+  ui.insertBefore(connectCard, foot.nextSibling);
   ui.appendChild(helpSheet);
   ui.appendChild(logSheet);
   ui.appendChild(moreSheet);

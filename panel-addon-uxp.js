@@ -93,8 +93,7 @@
         if (transient) return;
         status.textContent = connected()
             ? L("\u25cf Connected", "\u25cf Collegato")
-            : L("\u25cb Not connected \u2014 open More and press Connect",
-                "\u25cb Non collegato \u2014 apri Altro e premi Collega");
+            : L("\u25cb Not connected", "\u25cb Non collegato");
         status.setAttribute("style",
             "font-size:11px;margin:0 0 10px;opacity:" + (connected() ? ".75" : ".9"));
     }
@@ -205,6 +204,9 @@
     }));
     links.appendChild(moreLink);
 
+    // Connect and the launch preference while disconnected; see placeConnect.
+    var connectBox = el("div", "margin:0 0 10px");
+    ui.appendChild(connectBox);
     ui.appendChild(askRow);
     ui.appendChild(arrangeRow);
     ui.appendChild(status);
@@ -227,6 +229,23 @@
     var launchBox = document.getElementById("chkConnectOnLaunch");
     move(connectBtn && connectBtn.parentElement, "margin:0 0 8px");
     move(launchBox && launchBox.parentElement, "margin:0 0 10px");
+
+    // People couldn't find Connect inside More, so while disconnected it and
+    // the launch preference sit at the top, Connect as the main button; once
+    // connected they go back into More, ahead of the credits.
+    var placed = null;
+    function placeConnect() {
+        var on = !!connected();
+        if (on === placed) return;
+        placed = on;
+        var nodes = [connectBtn && connectBtn.parentElement, launchBox && launchBox.parentElement];
+        if (on) nodes.reverse().forEach(function (n) { if (n) more.insertBefore(n, more.firstChild); });
+        else nodes.forEach(function (n) { if (n) connectBox.appendChild(n); });
+        connectBox.style.display = on ? "none" : "block";
+        if (connectBtn) connectBtn.setAttribute("variant", on ? "secondary" : "cta");
+    }
+    setInterval(placeConnect, 1000);
+    placeConnect();
 
     // The moved upstream controls carry English labels. The checkbox's is
     // static markup; the button's is rewritten by main.js's module-scope
