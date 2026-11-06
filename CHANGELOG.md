@@ -2,6 +2,9 @@
 
 What changed in each release of Moskito Easy MCP, newest first.
 
+## 2.59.0 · 6 Nov 2026
+- Adobe panels: when a panel isn't connected, the Connect button and "connect automatically" sit at the top, instead of inside the More menu.
+
 ## 2.58.0 · 4 Nov 2026
 - Premiere and Media Encoder: After Effects comps no longer go offline. The hidden After Effects that Premiere uses to show them crashed every ten seconds, because the script that opens our panel at launch also ran in there. It now stays out.
 
